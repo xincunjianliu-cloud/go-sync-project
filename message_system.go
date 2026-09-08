@@ -228,7 +228,6 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 	if m.WindowImg != nil {
 		winOp := &ebiten.DrawImageOptions{}
 		winOp.GeoM.Translate(0, 0)
-		winOp.ColorScale.Scale(1.0, 1.0, 1.0, alpha)
 		winOp.Filter = ebiten.FilterNearest
 		screen.DrawImage(m.WindowImg, winOp)
 	} else {
