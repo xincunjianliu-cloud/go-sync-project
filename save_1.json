@@ -1,0 +1,58 @@
+{
+  "slot_id": 1,
+  "location_name": "ダンジョンA",
+  "current_map": "assets/maps/ダンジョンA.tmj",
+  "player_x": 608,
+  "player_y": 368,
+  "player_dir": 3,
+  "player_hp": [
+    120,
+    90,
+    130,
+    110
+  ],
+  "player_max_hp": [
+    120,
+    90,
+    130,
+    110
+  ],
+  "player_mp": [
+    25,
+    50,
+    30,
+    20
+  ],
+  "player_max_mp": [
+    25,
+    50,
+    30,
+    20
+  ],
+  "player_atk": [
+    21,
+    14,
+    18,
+    19
+  ],
+  "player_lv": [
+    3,
+    3,
+    3,
+    3
+  ],
+  "player_exp": [
+    50,
+    50,
+    50,
+    50
+  ],
+  "player_next_exp": [
+    150,
+    150,
+    150,
+    150
+  ],
+  "play_time": 108.74999999999511,
+  "saved_at": "2026/09/06"
+}

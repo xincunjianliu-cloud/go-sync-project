@@ -1,0 +1,58 @@
+{
+  "slot_id": 5,
+  "location_name": "理科室",
+  "current_map": "assets/maps/School_Map_1.tmj",
+  "player_x": 1408,
+  "player_y": 3136,
+  "player_dir": 3,
+  "player_hp": [
+    100,
+    70,
+    110,
+    90
+  ],
+  "player_max_hp": [
+    100,
+    70,
+    110,
+    90
+  ],
+  "player_mp": [
+    15,
+    40,
+    20,
+    10
+  ],
+  "player_max_mp": [
+    15,
+    40,
+    20,
+    10
+  ],
+  "player_atk": [
+    15,
+    8,
+    12,
+    13
+  ],
+  "player_lv": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "player_exp": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "player_next_exp": [
+    10,
+    10,
+    10,
+    10
+  ],
+  "play_time": 12.90000000000022,
+  "saved_at": "2026/08/23"
+}

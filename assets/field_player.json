@@ -1,0 +1,29 @@
+{
+    "sprite": "assets/images/player_walk.png",
+    "frameWidth": 64,
+    "frameHeight": 96,
+    "scale": 1,
+    "directions": [
+      { "idleRow": 0, "walkRow": 4, "dashRow": 8, "frames": 4 },
+      { "idleRow": 1, "walkRow": 5, "dashRow": 9, "frames": 4 },
+      { "idleRow": 2, "walkRow": 6, "dashRow": 10, "frames": 4 },
+      { "idleRow": 3, "walkRow": 7, "dashRow": 11, "frames": 4 }
+    ],
+    "draw": {
+      "footOffsetX": 16,
+      "footOffsetY": 10
+    },
+    "collision": {
+      "width": 20,
+      "height": 12,
+      "offsetX": 0,
+      "offsetY": -4
+    },
+    "camera": {
+      "offsetX": 0,
+      "offsetY": -14
+    },
+    "animFramesPerStep": 10,
+    "moveSpeed": 300,
+    "dashSpeedMultiplier": 1.8
+  }

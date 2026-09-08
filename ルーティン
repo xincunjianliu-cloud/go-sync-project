@@ -1,0 +1,8 @@
+/ git pull origin main
+（クラウドから最新の状態をダウンロードして手元に合体させる）
+
+
+git add .
+git commit -m "コードを書いたよ"
+git push origin main
+（手元の変更をクラウドにアップロードする）

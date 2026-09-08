@@ -1,0 +1,53 @@
+{
+  "current_map": "assets/maps/School_Map_1.tmj",
+  "player_x": 416,
+  "player_y": 128,
+  "player_hp": [
+    120,
+    90,
+    130,
+    110
+  ],
+  "player_max_hp": [
+    120,
+    90,
+    130,
+    110
+  ],
+  "player_mp": [
+    25,
+    50,
+    30,
+    20
+  ],
+  "player_max_mp": [
+    25,
+    50,
+    30,
+    20
+  ],
+  "player_atk": [
+    21,
+    14,
+    18,
+    19
+  ],
+  "player_lv": [
+    3,
+    3,
+    3,
+    3
+  ],
+  "player_exp": [
+    15,
+    15,
+    15,
+    15
+  ],
+  "player_next_exp": [
+    150,
+    150,
+    150,
+    150
+  ]
+}

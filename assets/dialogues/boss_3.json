@@ -1,0 +1,18 @@
+{
+  "battle": {
+    "commands": [
+      { "speaker": "boss3", "text": "" }
+    ],
+    "speakerSlots": {
+      "boss3": 1
+    }
+  },
+  "clear": {
+    "commands": [
+      { "speaker": "boss3", "text": "" }
+    ],
+    "speakerSlots": {
+      "boss3": 1
+    }
+  }
+}

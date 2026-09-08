@@ -1,0 +1,13 @@
+# コンパイルされたバイナリファイル（Windows用、Mac/Linux用）
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 開発中に生成されるバイナリ（プロジェクト名と同名のファイルなど）
+/go-sync-project
+
+# ツールや環境ごとの一時ファイル
+.DS_Store
+.vscode/
