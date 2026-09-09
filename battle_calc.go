@@ -2,6 +2,8 @@ package main
 
 // battle_calc.go: ゲージ・ダメージ/回復量・ステータス補正など戦闘計算まわり
 import (
+	"math/rand"
+
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -65,6 +67,28 @@ func (s *BattleScene) effectiveMPCost(base int) int {
 		return (base + 1) / 2
 	}
 	return base
+}
+
+// ── 運（Luck）による会心・回避判定 ─────────────────────────
+// 味方は運ステータスを持つが、敵は運を持たない
+//（＝敵の攻撃は会心しない。味方の回避判定は味方自身の運のみで決まる）。
+
+// rollIsCrit は luck から算出した会心率で判定する。
+func (s *BattleScene) rollIsCrit(luck int) bool {
+	chance := critChancePercent(luck)
+	if chance <= 0 {
+		return false
+	}
+	return rand.Intn(100) < chance
+}
+
+// rollIsEvade は luck から算出した回避率で判定する。
+func (s *BattleScene) rollIsEvade(luck int) bool {
+	chance := evadeChancePercent(luck)
+	if chance <= 0 {
+		return false
+	}
+	return rand.Intn(100) < chance
 }
 
 // ── 新スプライトシート対応：フレーム計算 ──────────────────────
@@ -198,6 +222,12 @@ func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll boo
 		defStat = 1
 	}
 	dmg := int(atkStat * float64(power) / 100.0 / defStat * 10)
+
+	// ★追加：攻撃者の運による会心判定（敵は運を持たないため、敵の攻撃には適用されない）
+	if actor >= 0 && actor < partySize && s.rollIsCrit(s.game.PlayerLuck[actor]) {
+		dmg = int(float64(dmg) * critDamageMultiply)
+	}
+
 	if dmg < 1 {
 		dmg = 1
 	}
@@ -249,6 +279,19 @@ func (s *BattleScene) effectiveEnemyDef(magic bool) int {
 	}
 	down := SumDebuffPercent(s.EnemyDebuffs, t)
 	return int(float64(base) * (1.0 - float64(down)/100.0))
+}
+
+// effectivePlayerDef は、敵からの攻撃に対する味方側の防御力を返す。
+// isMagic が false の場合は物理防御力、true の場合は魔法防御力を使う
+// （＝「物理攻撃に対しては物理防御が適応される」仕様）。
+func (s *BattleScene) effectivePlayerDef(target int, magic bool) int {
+	if target < 0 || target >= partySize {
+		return 0
+	}
+	if magic {
+		return s.game.PlayerMagicDef[target]
+	}
+	return s.game.PlayerDef[target]
 }
 
 func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, targetIsEnemy bool, targetIdx int) {

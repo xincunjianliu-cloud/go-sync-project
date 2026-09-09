@@ -19,7 +19,7 @@ const (
 	lineWidth   = 400.0
 )
 
-const maxPlayerLevel = 99
+const maxPlayerLevel = 50
 
 // Scene はフィールド・バトル・メニューなど各画面が実装する共通インターフェース。
 // Game は currentScene にこれを保持し、Update/Draw を委譲する。
@@ -176,19 +176,26 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 	g.PlayerMP[3], g.PlayerMaxMP[3] = 10, 10
 	g.PlayerAtk[3] = 13
 
+	// ★変更：すばやさ(PlayerSpd)は「タイムライン上でアイコンが進む速さ」そのものになったため、
+	// キャラごとに個別の初期値を設定する（旧 playerSpeeds 配列の値を踏襲）。
+	initialSpd := [4]int{24, 26, 22, 20}
+	// ★変更：運(PlayerLuck)も会心率・回避率に使う実ステータスになったため、キャラごとに初期値を分ける。
+	initialLuck := [4]int{5, 8, 4, 10}
+
 	for i := 0; i < 4; i++ {
 		g.PlayerMagicAtk[i] = 10 // 仮の初期値、後で個別調整
 		g.PlayerDef[i] = 10
 		g.PlayerMagicDef[i] = 10
-		g.PlayerSpd[i] = 10
-		g.PlayerLuck[i] = 5
+		g.PlayerSpd[i] = initialSpd[i]
+		g.PlayerLuck[i] = initialLuck[i]
 		g.PlayerSP[i] = 0
 	}
 
 	for i := 0; i < 4; i++ {
 		g.PlayerLv[i] = 1
 		g.PlayerEXP[i] = 0
-		g.PlayerNextEXP[i] = 10
+		// ★変更：固定値10ではなく、キャラごとに個別設定可能なEXPカーブ(stat_growth.go)から算出する。
+		g.PlayerNextEXP[i] = PlayerExpCurve(i, 1)
 	}
 
 	// スキルレベルは1始まり。0のままだとLevels[lv-1]がLevels[-1]となりクラッシュするため必ず1で初期化する。

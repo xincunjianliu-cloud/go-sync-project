@@ -288,7 +288,8 @@ const (
 var resultBarFillColor = color.RGBA{255, 200, 130, 255}
 var resultBarBgColor = color.RGBA{30, 30, 40, 255}
 
-var playerSpeeds = [partySize]float64{24, 26, 22, 20}
+// ★変更：素早さは「PlayerSpd」ステータス（レベルアップで個別成長）に一本化したため、
+// 固定配列だった playerSpeeds は廃止。初期値は game.go の initialSpd で設定している。
 
 var actorColors = [partySize + 1]color.RGBA{
 	{80, 220, 230, 255},

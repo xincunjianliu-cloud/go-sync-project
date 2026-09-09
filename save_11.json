@@ -1,5 +1,5 @@
 {
-  "slot_id": 1,
+  "slot_id": 11,
   "location_name": "理科室",
   "current_map": "assets/maps/School_Map_1.tmj",
   "player_x": 1408,
@@ -53,6 +53,6 @@
     68,
     62
   ],
-  "play_time": 5.649999999999985,
+  "play_time": 1386.1166666657348,
   "saved_at": "2026/09/09"
 }

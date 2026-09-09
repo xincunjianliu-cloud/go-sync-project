@@ -39,7 +39,10 @@ func (s *BattleScene) tickATB(dt float64) {
 		if s.waitStance[i] || s.atbGauge[i] >= atbMax || s.game.PlayerHP[i] <= 0 {
 			continue
 		}
-		speed := playerSpeeds[i]
+		// ★変更：素早さは固定配列(playerSpeeds)ではなく、
+		// レベルアップで個別成長するステータス PlayerSpd を使う
+		// （＝「タイムライン上でアイコンが進む速さ」そのもの）。
+		speed := float64(s.game.PlayerSpd[i])
 		if s.rewindActive {
 			speed *= 1.5
 		}

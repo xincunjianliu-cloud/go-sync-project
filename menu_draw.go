@@ -259,7 +259,7 @@ const (
 
 	skillSubNameOffsetX     = 20.0
 	skillSubRowStartOffsetY = 30.0
-	skillSubRowGapY         = 30.0
+	skillSubRowGapY         = 50.0
 
 	// ── 所持SP／「決定で強化」ヒント：同じYで横並び ──
 	skillSubSPOffsetX   = 550.0 // 所持SPのX
@@ -323,7 +323,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 		nameOp := &text.DrawOptions{}
 		nameOp.GeoM.Translate(winX+skillSubNameOffsetX, rowY) // ← 変更
 		nameOp.ColorScale.ScaleWithColor(nameCol)
-		text.Draw(screen, prefix+sk.Name, m.game.FontFace(15), nameOp)
+		text.Draw(screen, prefix+sk.Name, m.game.FontFace(20), nameOp)
 
 		for lv := 1; lv <= len(sk.Levels); lv++ {
 			numX := winX + numStartX + float64(lv-1)*numGap
@@ -341,7 +341,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 			numOp := &text.DrawOptions{}
 			numOp.GeoM.Translate(numX, rowY)
 			numOp.ColorScale.ScaleWithColor(col)
-			text.Draw(screen, label, m.game.FontFace(14), numOp)
+			text.Draw(screen, label, m.game.FontFace(45), numOp)
 
 			if selected {
 				arrowOp := &text.DrawOptions{}

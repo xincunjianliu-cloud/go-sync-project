@@ -44,7 +44,16 @@ func (s *BattleScene) rollNormalDamage() int {
 		raw = 1
 	}
 	bonus := s.gaugeAtkBonus()
-	return int(float64(raw) * (1.0 + float64(bonus)/100.0))
+	dmg := int(float64(raw) * (1.0 + float64(bonus)/100.0))
+
+	// ★追加：攻撃者(味方)の運による会心判定
+	if s.rollIsCrit(s.game.PlayerLuck[p]) {
+		dmg = int(float64(dmg) * critDamageMultiply)
+	}
+	if dmg < 1 {
+		dmg = 1
+	}
+	return dmg
 }
 
 func (s *BattleScene) finishPlayerTurn(resetGauge bool) {
@@ -137,16 +146,45 @@ func (s *BattleScene) executeEnemyAction() {
 		return
 	}
 	target := aliveList[rand.Intn(len(aliveList))]
-	dmg := rand.Intn(s.enemyDmgRange) + s.enemyDmgMin
+
+	targetX := s.partyScreenX[target]
+	targetY := s.partyScreenY[target] - 30.0
+
+	// ★追加：敵は運を持たないため会心はしないが、
+	// 味方側は自分の運に応じて回避（敵の攻撃を完全に無効化）できる。
+	if s.rollIsEvade(s.game.PlayerLuck[target]) {
+		s.lastEnemyAttackTarget = target
+		s.lastEnemyAttackPrevHP = s.game.PlayerHP[target]
+		s.lastEnemyAttackDamage = 0
+
+		s.damagePops = append(s.damagePops, DamagePop{
+			Value: 0,
+			X:     targetX,
+			Y:     targetY,
+			Vy:    -180.0,
+			Timer: 0.0,
+		})
+		s.battleLog = "回避！"
+		s.battleLogTimer = battleLogDuration
+		s.enemyActionWaitTimer = 1.5
+		return
+	}
+
+	// ★変更：敵の攻撃は物理攻撃として扱い、対象の物理防御力(PlayerDef)で軽減する
+	//（＝「物理攻撃に対しては物理防御が適応される」仕様）。
+	rawDmg := rand.Intn(s.enemyDmgRange) + s.enemyDmgMin
+	def := s.effectivePlayerDef(target, false)
+	dmg := rawDmg - def/2
+	if dmg < 1 {
+		dmg = 1
+	}
+
 	prevHP := s.game.PlayerHP[target]
 	s.lastEnemyAttackTarget = target
 	s.lastEnemyAttackPrevHP = prevHP
 	s.lastEnemyAttackDamage = dmg
 
 	s.game.PlayerHP[target] -= dmg
-
-	targetX := s.partyScreenX[target]
-	targetY := s.partyScreenY[target] - 30.0
 
 	s.damagePops = append(s.damagePops, DamagePop{
 		Value: dmg,
@@ -198,6 +236,9 @@ func (s *BattleScene) checkBattleEnd() bool {
 				s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 			}
 
+			// ★変更：レベルアップ時のステータス上昇は固定値ではなく、
+			// stat_growth.go の PlayerGrowthRates / PlayerExpCurve を使って
+			// キャラごと・ステータスごとに個別成長させる。
 			for i := 0; i < partySize; i++ {
 				if s.game.PlayerLv[i] < maxPlayerLevel {
 					s.game.PlayerEXP[i] += s.enemyExp
@@ -205,18 +246,16 @@ func (s *BattleScene) checkBattleEnd() bool {
 				for s.game.PlayerLv[i] < maxPlayerLevel && s.game.PlayerEXP[i] >= s.game.PlayerNextEXP[i] {
 					s.game.PlayerEXP[i] -= s.game.PlayerNextEXP[i]
 					s.game.PlayerLv[i]++
+
+					s.game.ApplyLevelUpGrowth(i)
+
 					if s.game.PlayerLv[i] >= maxPlayerLevel {
 						s.game.PlayerLv[i] = maxPlayerLevel
 						s.game.PlayerEXP[i] = 0
 						s.game.PlayerNextEXP[i] = 0
 					} else {
-						s.game.PlayerNextEXP[i] = s.game.PlayerLv[i] * 50
+						s.game.PlayerNextEXP[i] = PlayerExpCurve(i, s.game.PlayerLv[i])
 					}
-					s.game.PlayerMaxHP[i] += 10
-					s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
-					s.game.PlayerMaxMP[i] += 5
-					s.game.PlayerMP[i] = s.game.PlayerMaxMP[i]
-					s.game.PlayerAtk[i] += 3
 				}
 			}
 
