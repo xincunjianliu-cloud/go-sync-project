@@ -107,47 +107,28 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 	titleOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, "七不思議討滅録", s.game.FontFace(15), titleOp)
 
-	newGameText := "はじめから"
-	if s.menuIndex == 0 {
-		newGameText = "▶ はじめから"
-	}
-	opt1Op := &text.DrawOptions{}
-	opt1Op.GeoM.Translate(float64(gameWidth)/2, 260)
-	opt1Op.PrimaryAlign = text.AlignCenter
-	if s.menuIndex == 0 {
-		opt1Op.ColorScale.ScaleWithColor(uiColorSelect)
-	} else {
-		opt1Op.ColorScale.ScaleWithColor(uiColorText)
-	}
-	text.Draw(screen, newGameText, s.game.FontFace(15), opt1Op)
-
-	loadGameText := "つづきから"
-	opt2Op := &text.DrawOptions{}
-	opt2Op.GeoM.Translate(float64(gameWidth)/2, 295)
-	opt2Op.PrimaryAlign = text.AlignCenter
-	if !s.hasSaveFile {
-		opt2Op.ColorScale.ScaleWithColor(uiColorText)
-	} else {
-		if s.menuIndex == 1 {
-			loadGameText = "▶ つづきから"
-			opt2Op.ColorScale.ScaleWithColor(uiColorSelect)
-		} else {
-			opt2Op.ColorScale.ScaleWithColor(uiColorText)
+	titleMenuFace := s.game.FontFace(15)
+	drawTitleMenuOption := func(label string, y float64, selected bool) {
+		centerX := float64(gameWidth) / 2
+		col := uiColorText
+		if selected {
+			col = uiColorSelect
+			labelW := text.Advance(label, titleMenuFace)
+			arrowOp := &text.DrawOptions{}
+			arrowOp.GeoM.Translate(centerX-labelW/2-text.Advance("▶ ", titleMenuFace), y)
+			arrowOp.ColorScale.ScaleWithColor(col)
+			text.Draw(screen, "▶", titleMenuFace, arrowOp)
 		}
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(centerX, y)
+		op.PrimaryAlign = text.AlignCenter
+		op.ColorScale.ScaleWithColor(col)
+		text.Draw(screen, label, titleMenuFace, op)
 	}
-	text.Draw(screen, loadGameText, s.game.FontFace(15), opt2Op)
 
-	exitText := "ゲームを終了する"
-	opt3Op := &text.DrawOptions{}
-	opt3Op.GeoM.Translate(float64(gameWidth)/2, 330)
-	opt3Op.PrimaryAlign = text.AlignCenter
-	if s.menuIndex == 2 {
-		exitText = "▶ ゲームを終了する"
-		opt3Op.ColorScale.ScaleWithColor(uiColorSelect)
-	} else {
-		opt3Op.ColorScale.ScaleWithColor(uiColorText)
-	}
-	text.Draw(screen, exitText, s.game.FontFace(15), opt3Op)
+	drawTitleMenuOption("はじめから", 260, s.menuIndex == 0)
+	drawTitleMenuOption("つづきから", 295, s.hasSaveFile && s.menuIndex == 1)
+	drawTitleMenuOption("ゲームを終了する", 330, s.menuIndex == 2)
 
 	creditOp := &text.DrawOptions{}
 	creditOp.GeoM.Translate(float64(gameWidth)/2, 350)
@@ -165,22 +146,33 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 // ---------------------------------------------------------------------------
 
 type SaveData struct {
-	SlotID        int     `json:"slot_id"`
-	LocationName  string  `json:"location_name"`
-	CurrentMap    string  `json:"current_map"`
-	PlayerX       float64 `json:"player_x"`
-	PlayerY       float64 `json:"player_y"`
-	PlayerDir     int     `json:"player_dir"`
-	PlayerHP      [4]int  `json:"player_hp"`
-	PlayerMaxHP   [4]int  `json:"player_max_hp"`
-	PlayerMP      [4]int  `json:"player_mp"`
-	PlayerMaxMP   [4]int  `json:"player_max_mp"`
-	PlayerAtk     [4]int  `json:"player_atk"`
-	PlayerLv      [4]int  `json:"player_lv"`
-	PlayerEXP     [4]int  `json:"player_exp"`
-	PlayerNextEXP [4]int  `json:"player_next_exp"`
-	PlayTime      float64 `json:"play_time"`
-	SavedAt       string  `json:"saved_at"`
+	SlotID            int       `json:"slot_id"`
+	LocationName      string    `json:"location_name"`
+	CurrentMap        string    `json:"current_map"`
+	PlayerX           float64   `json:"player_x"`
+	PlayerY           float64   `json:"player_y"`
+	PlayerDir         int       `json:"player_dir"`
+	PlayerHP          [4]int    `json:"player_hp"`
+	PlayerMaxHP       [4]int    `json:"player_max_hp"`
+	PlayerMP          [4]int    `json:"player_mp"`
+	PlayerMaxMP       [4]int    `json:"player_max_mp"`
+	PlayerAtk         [4]int    `json:"player_atk"`
+	PlayerMagicAtk    [4]int    `json:"player_magic_atk"`
+	PlayerDef         [4]int    `json:"player_def"`
+	PlayerMagicDef    [4]int    `json:"player_magic_def"`
+	PlayerSpd         [4]int    `json:"player_spd"`
+	PlayerLuck        [4]int    `json:"player_luck"`
+	PlayerSP          [4]int    `json:"player_sp"`
+	PlayerSkillLv     [4][8]int `json:"player_skill_lv"`
+	PlayerLv          [4]int    `json:"player_lv"`
+	PlayerEXP         [4]int    `json:"player_exp"`
+	PlayerNextEXP     [4]int    `json:"player_next_exp"`
+	BossDefeatedFlags [4]bool   `json:"boss_defeated_flags"`
+	PlayTime          float64   `json:"play_time"`
+	SavedAt           string    `json:"saved_at"`
+
+	Inventory    []InventorySlot `json:"inventory"`
+	OpenedChests map[string]bool `json:"opened_chests"`
 }
 
 func saveFilePath(slot int) string {
@@ -199,6 +191,31 @@ func LoadGame(slot int) (*SaveData, error) {
 	var data SaveData
 	if err := json.Unmarshal(file, &data); err != nil {
 		return nil, err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(file, &raw); err != nil {
+		return nil, err
+	}
+	if _, ok := raw["player_magic_atk"]; !ok {
+		for i := 0; i < partySize; i++ {
+			level := data.PlayerLv[i]
+			if level < 1 || level > len(PlayerStatsByLevel) {
+				level = 1
+			}
+			st := PlayerStatsByLevel[level-1][i]
+			data.PlayerMagicAtk[i] = st.MagicAtk
+			data.PlayerDef[i] = st.PhysDef
+			data.PlayerMagicDef[i] = st.MagicDef
+			data.PlayerSpd[i] = st.Spd
+			data.PlayerLuck[i] = st.Luck
+		}
+	}
+	if _, ok := raw["player_skill_lv"]; !ok {
+		for i := 0; i < partySize; i++ {
+			for j := 0; j < len(data.PlayerSkillLv[i]); j++ {
+				data.PlayerSkillLv[i][j] = 1
+			}
+		}
 	}
 	return &data, nil
 }
@@ -263,9 +280,19 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.PlayerMP = d.PlayerMP
 		s.game.PlayerMaxMP = d.PlayerMaxMP
 		s.game.PlayerAtk = d.PlayerAtk
+		s.game.PlayerMagicAtk = d.PlayerMagicAtk
+		s.game.PlayerDef = d.PlayerDef
+		s.game.PlayerMagicDef = d.PlayerMagicDef
+		s.game.PlayerSpd = d.PlayerSpd
+		s.game.PlayerLuck = d.PlayerLuck
+		s.game.PlayerSP = d.PlayerSP
+		s.game.PlayerSkillLv = d.PlayerSkillLv
+		s.game.BossDefeatedFlags = d.BossDefeatedFlags
 		s.game.PlayerLv = d.PlayerLv
 		s.game.PlayerEXP = d.PlayerEXP
 		s.game.PlayerNextEXP = d.PlayerNextEXP
+		s.game.Inventory = d.Inventory
+		s.game.OpenedChests = d.OpenedChests
 
 		field, err := NewRoomScene(s.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
 		if err != nil {

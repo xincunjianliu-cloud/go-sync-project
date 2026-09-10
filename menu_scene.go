@@ -7,24 +7,23 @@ import (
 )
 
 const (
-	menuStateMain                = "main"
-	menuStateSkillCharSel        = "skillCharSel"
-	menuStateSkillSub            = "skillSub"
-	menuStateSkillUpgradeCharSel = "skillUpgradeCharSel" // ← 追加
-	menuStateSkillUpgradeSub     = "skillUpgradeSub"     // ← 追加
-	menuStateSkillUpgrade        = "skillUpgrade"
-	menuStateHealTarget          = "healTarget"
-	menuStateStatus              = "status"
-	menuStateSaveSlot            = "saveSlot"
-	menuStateLoadSlot            = "loadSlot"
-	menuStateSaveConfirm         = "saveConfirm"
-	menuStateLoadConfirm         = "loadConfirm"
-	menuStateSaveDone            = "saveDone"
-	menuStateOption              = "option"
-	menuStateOptionAdjust        = "optionAdjust"
-	menuStateMessageSpeedAdjust  = "messageSpeedAdjust"
-	menuStateDisplayModeAdjust   = "displayModeAdjust"
-	menuStateReturnTitleConfirm  = "returnTitleConfirm"
+	menuStateMain               = "main"
+	menuStateSkillCharSel       = "skillCharSel"
+	menuStateSkillSub           = "skillSub"
+	menuStateHealTarget         = "healTarget"
+	menuStateItemList           = "itemList"
+	menuStateItemTarget         = "itemTarget"
+	menuStateStatus             = "status"
+	menuStateSaveSlot           = "saveSlot"
+	menuStateLoadSlot           = "loadSlot"
+	menuStateSaveConfirm        = "saveConfirm"
+	menuStateLoadConfirm        = "loadConfirm"
+	menuStateSaveDone           = "saveDone"
+	menuStateOption             = "option"
+	menuStateOptionAdjust       = "optionAdjust"
+	menuStateMessageSpeedAdjust = "messageSpeedAdjust"
+	menuStateDisplayModeAdjust  = "displayModeAdjust"
+	menuStateReturnTitleConfirm = "returnTitleConfirm"
 
 	maxSaveSlots = 20
 	slotsPerPage = 4
@@ -54,7 +53,9 @@ const (
 const defaultBGMVolume = 0. // ★これ1つだけで管理します！
 
 const defaultMessageSpeed = 1
-const defaultDisplayModeIndex = 0
+const defaultFullscreen = false
+const defaultWindowWidth = gameWidth
+const defaultWindowHeight = gameHeight
 
 // ※ const resetBGMVolume = 0.4 は削除してOKです！
 
@@ -84,12 +85,17 @@ type MenuScene struct {
 	confirmIndex int
 	pendingSlot  int
 
-	upgradeConfirmIndex int
-	upgradeResultMsg    string
+	upgradeProgress     float64
+	upgradeHoldArmed    bool
 	skillLevelCursor    int // ← 追加：スキル行内での数字(Lv)カーソル
 	skillLevelSelecting bool
 	pendingSkill        int // ← 追加：メニューからの回復スキル使用時、対象スキルIndex+1（0=未使用）
 	pendingSkillLevel   int // ← 追加：メニューからの回復スキル使用時、使用するLv
+
+	// ── アイテム使用（メニュー）関連 ──
+	itemListIndex   int    // アイテム一覧でのカーソル位置
+	pendingItemID   string // 対象選択中に使用するアイテムID（""=未選択）
+	itemTargetIndex int    // アイテムの対象選択カーソル（0〜3=個別、partySize=全体）
 }
 
 func NewMenuScene(game *Game, backScene Scene) *MenuScene {
@@ -113,10 +119,12 @@ func (m *MenuScene) Update(dt float64) Scene {
 		m.updateSkillCharSel()
 	case menuStateSkillSub:
 		m.updateSkillSub()
-	case menuStateSkillUpgrade:
-		m.updateSkillUpgrade()
 	case menuStateHealTarget:
 		m.updateHealTarget()
+	case menuStateItemList:
+		m.updateItemList()
+	case menuStateItemTarget:
+		m.updateItemTarget()
 	case menuStateStatus: // ← 追加
 		m.updateStatus()
 	case menuStateSaveSlot, menuStateLoadSlot:
@@ -167,6 +175,8 @@ func (m *MenuScene) updateMain() {
 	m.game.LastMenuIndex = m.menuIndex // ← この行は残しておいてOK（重複だが害はない、削除しても良い）
 	switch m.menuIndex {
 	case 0: // アイテム
+		m.itemListIndex = 0
+		m.menuState = menuStateItemList
 	case 1: // スキル
 		m.skillCharIndex = m.game.LastSkillCharIndex
 		m.menuState = menuStateSkillCharSel
@@ -333,9 +343,19 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.PlayerMP = d.PlayerMP
 	m.game.PlayerMaxMP = d.PlayerMaxMP
 	m.game.PlayerAtk = d.PlayerAtk
+	m.game.PlayerMagicAtk = d.PlayerMagicAtk
+	m.game.PlayerDef = d.PlayerDef
+	m.game.PlayerMagicDef = d.PlayerMagicDef
+	m.game.PlayerSpd = d.PlayerSpd
+	m.game.PlayerLuck = d.PlayerLuck
+	m.game.PlayerSP = d.PlayerSP
+	m.game.PlayerSkillLv = d.PlayerSkillLv
+	m.game.BossDefeatedFlags = d.BossDefeatedFlags
 	m.game.PlayerLv = d.PlayerLv
 	m.game.PlayerEXP = d.PlayerEXP
 	m.game.PlayerNextEXP = d.PlayerNextEXP
+	m.game.Inventory = d.Inventory
+	m.game.OpenedChests = d.OpenedChests
 
 	field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
 	if err != nil {

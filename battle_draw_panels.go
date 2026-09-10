@@ -54,7 +54,7 @@ func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 
 		if showArrow {
 			arrowOp := &text.DrawOptions{}
-			arrowOp.GeoM.Translate(centerX-16, centerY+20)
+			arrowOp.GeoM.Translate(centerX-4, centerY+20)
 			arrowOp.ColorScale.ScaleWithColor(uiColorText)
 			text.Draw(screen, "▶", s.game.FontFace(15), arrowOp)
 		}
@@ -107,7 +107,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	panelW := float64(gameWidth) * resultPanelWidthRatio
 	panelH := float64(gameHeight)
 	ebitenutil.DrawRect(screen, 0, 0, panelW, panelH,
-		scaleAlpha(color.RGBA{0, 0, 0, 200}, float64(panelAlpha)))
+		scaleAlpha(resultPanelBgColor, float64(panelAlpha)))
 	if s.resultFadeAlpha > 0 {
 		alphaByte := uint8(255 * s.resultFadeAlpha)
 		ebitenutil.DrawRect(screen, 0, 0, panelW, panelH, color.RGBA{0, 0, 0, alphaByte})
@@ -161,25 +161,28 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 
 		// プレイヤー名・レベル（別X）
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(resultNameX, barY+resultNameOffsetY)
+		nameOp.GeoM.Translate(barX+resultNameOffsetX, barY+resultNameOffsetY)
 		nameOp.ColorScale.ScaleWithColor(nameColor)
 		nameOp.ColorScale.ScaleAlpha(panelAlpha)
 		text.Draw(screen, PlayerNames[i], s.game.FontFace(resultNameFontSize), nameOp)
 
 		levelOp := &text.DrawOptions{}
-		levelOp.GeoM.Translate(resultLevelX, barY+resultNameOffsetY)
+		levelOp.GeoM.Translate(barX+resultLevelOffsetX, barY+resultNameOffsetY)
 		levelOp.ColorScale.ScaleWithColor(nameColor)
 		levelOp.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, fmt.Sprintf("Lv %d", s.game.PlayerLv[i]), s.game.FontFace(resultNameFontSize), levelOp)
+		text.Draw(screen, fmt.Sprintf("Lv %d", s.drawPlayerLv[i]), s.game.FontFace(resultNameFontSize), levelOp)
 
 		curExpStr := strconv.Itoa(s.drawPlayerEXP[i])
 		maxExpStr := fmt.Sprintf("/%d", s.drawPlayerMaxEXP[i])
 		expRightX := barX + barW
-		expBaseY := barY + resultExpTextOffsetY
+		// resultExpTextOffsetYはresultExpLabelOffsetYと同じ「barYからの上端基準オフセット」。
+		// 下端揃え(SecondaryAlign=End)で描くので、実際の基準線はそこにフォントサイズ分を足した位置になる。
+		expBaseY := barY + resultExpTextOffsetY + resultExpCurFontSize
 
 		maxOp := &text.DrawOptions{}
 		maxOp.PrimaryAlign = text.AlignEnd
-		maxOp.GeoM.Translate(expRightX, expBaseY+3)
+		maxOp.SecondaryAlign = text.AlignEnd
+		maxOp.GeoM.Translate(expRightX, expBaseY)
 		maxOp.ColorScale.ScaleWithColor(uiColorText)
 		maxOp.ColorScale.ScaleAlpha(panelAlpha)
 		text.Draw(screen, maxExpStr, s.game.FontFace(resultExpMaxFontSize), maxOp)
@@ -188,6 +191,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 
 		curOp := &text.DrawOptions{}
 		curOp.PrimaryAlign = text.AlignEnd
+		curOp.SecondaryAlign = text.AlignEnd
 		curOp.GeoM.Translate(expRightX-maxExpW, expBaseY)
 		curOp.ColorScale.ScaleWithColor(uiColorText)
 		curOp.ColorScale.ScaleAlpha(panelAlpha)
@@ -218,10 +222,36 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		if s.isLevelUp[i] && s.game.PlayerHP[i] > 0 && s.drawPlayerLv[i] >= s.game.PlayerLv[i] {
 			lvOp := &text.DrawOptions{}
 			lvOp.GeoM.Translate(barX+resultLevelUpOffsetX, barY+resultLevelUpOffsetY)
-			lvOp.ColorScale.ScaleWithColor(color.RGBA{255, 255, 100, 255})
+			lvOp.ColorScale.ScaleWithColor(resultLevelUpColor)
 			lvOp.ColorScale.ScaleAlpha(panelAlpha)
 			text.Draw(screen, "LEVEL UP!", s.game.FontFace(resultLevelUpFontSize), lvOp)
 		}
+	}
+
+	headerOp := &text.DrawOptions{}
+	headerOp.GeoM.Translate(resultItemsHeaderX, resultItemsHeaderY)
+	headerOp.ColorScale.ScaleWithColor(uiColorText)
+	headerOp.ColorScale.ScaleAlpha(panelAlpha)
+	text.Draw(screen, "獲得アイテム", s.game.FontFace(resultItemsHeaderFontSize), headerOp)
+
+	ebitenutil.DrawRect(screen, resultItemsDividerX, resultItemsDividerY, resultItemsDividerW, resultItemsDividerH,
+		scaleAlpha(resultItemsDividerColor, float64(panelAlpha)))
+
+	for i, item := range s.earnedItems {
+		rowY := resultItemsStartY + float64(i)*resultItemsRowGap
+
+		nameOp := &text.DrawOptions{}
+		nameOp.GeoM.Translate(resultItemsNameX, rowY)
+		nameOp.ColorScale.ScaleWithColor(uiColorText)
+		nameOp.ColorScale.ScaleAlpha(panelAlpha)
+		text.Draw(screen, item.Name, s.game.FontFace(resultItemsFontSize), nameOp)
+
+		countOp := &text.DrawOptions{}
+		countOp.PrimaryAlign = text.AlignEnd
+		countOp.GeoM.Translate(resultItemsCountX, rowY)
+		countOp.ColorScale.ScaleWithColor(uiColorText)
+		countOp.ColorScale.ScaleAlpha(panelAlpha)
+		text.Draw(screen, fmt.Sprintf("x%d", item.Count), s.game.FontFace(resultItemsFontSize), countOp)
 	}
 
 	if s.resultSubPhase == resSubDoneWait {
@@ -266,7 +296,7 @@ func scaleAlpha(c color.RGBA, factor float64) color.RGBA {
 	return c
 }
 
-func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceLarge, faceSmall *text.GoTextFace, alpha float64) {
+func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceLarge, faceSmall *text.GoTextFace, alpha float64, textColorBase color.RGBA) {
 	curStr := strconv.Itoa(current)
 	restStr := fmt.Sprintf(" / %d", max)
 
@@ -282,7 +312,7 @@ func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceL
 		text.Draw(screen, restStr, faceSmall, restShadowOp)
 	}
 
-	textColor := uiColorText
+	textColor := textColorBase
 	textColor.A = uint8(255 * alpha)
 
 	curOp := &text.DrawOptions{}
@@ -295,6 +325,22 @@ func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceL
 	restOp.ColorScale.ScaleWithColor(textColor)
 	text.Draw(screen, restStr, faceSmall, restOp)
 }
+
+func drawBattleOutlinedText(screen *ebiten.Image, x, y float64, value string, face *text.GoTextFace, textColor color.RGBA, alpha float64) {
+	for _, offset := range [][2]float64{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+		shadowOp := &text.DrawOptions{}
+		shadowOp.GeoM.Translate(x+offset[0], y+offset[1])
+		shadowOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, uint8(255 * alpha)})
+		text.Draw(screen, value, face, shadowOp)
+	}
+
+	textOp := &text.DrawOptions{}
+	textOp.GeoM.Translate(x, y)
+	textColor.A = uint8(float64(textColor.A) * alpha)
+	textOp.ColorScale.ScaleWithColor(textColor)
+	text.Draw(screen, value, face, textOp)
+}
+
 func fillSlantedPath(screen *ebiten.Image, path *vector.Path, c color.RGBA) {
 	drawOpts := &vector.DrawPathOptions{AntiAlias: false}
 	drawOpts.ColorScale.ScaleWithColor(c)
@@ -336,44 +382,52 @@ func drawSlantedStatusBar(screen *ebiten.Image, x, y, w, h, slant, ratio float64
 	}
 }
 
-const namePlateOffsetX = -10.0 // ← 調整用：左にずらす量（マイナスで左へ）
+const (
+	namePlateOffsetX = -10.0 // ← 調整用：通常プレート(NameImg)を左にずらす量（マイナスで左へ）
+	namePlateOffsetY = 0.0   // 通常プレート(NameImg)のYオフセット
 
+	// 自分のターン用プレート(NameMyTurnImg)の位置。通常プレートとは独立して調整できる。
+	namePlateMyTurnOffsetX = -10.0
+	namePlateMyTurnOffsetY = 0.0
+)
+
+// drawPartyName は名前プレートを描画する。
+// ★変更：通常プレート(NameImg)は常に描画し、自分のターンの間だけ
+// 専用プレート(NameMyTurnImg)を消さずに上から重ねて同時に表示する
+// （以前は自分のターン中は通常プレートを専用プレートに置き換えていた）。
+// 2枚の画像はそれぞれ namePlateOffsetX/Y と namePlateMyTurnOffsetX/Y で個別に位置調整できる。
 func (s *BattleScene) drawPartyName(screen *ebiten.Image, i int, xPos, winY, alpha float64, isMyTurn bool) {
-	nameImg := s.game.NameImg
-	if isMyTurn && s.game.NameMyTurnImg != nil {
-		nameImg = s.game.NameMyTurnImg
-	}
-
-	sx := xPos + namePlateOffsetX + s.shakeX
-	sy := winY + s.shakeY
+	baseX := xPos + s.shakeX
+	baseY := winY + s.shakeY
 
 	nameCol := uiColorText
 	if s.game.PlayerHP[i] <= 0 {
 		nameCol = uiColorDead
 	}
 
-	if nameImg == nil {
-		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(sx, sy+4)
-		nameOp.ColorScale.ScaleWithColor(nameCol)
-		nameOp.ColorScale.ScaleAlpha(float32(alpha))
-		text.Draw(screen, PlayerNames[i], s.game.FontFace(15), nameOp)
+	drewAnyImage := false
+
+	if s.game.NameImg != nil {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(baseX+namePlateOffsetX, baseY+namePlateOffsetY)
+		op.ColorScale.ScaleAlpha(float32(alpha))
+		screen.DrawImage(s.game.NameImg, op)
+		drewAnyImage = true
+	}
+
+	if isMyTurn && s.game.NameMyTurnImg != nil {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(baseX+namePlateMyTurnOffsetX, baseY+namePlateMyTurnOffsetY)
+		op.ColorScale.ScaleAlpha(float32(alpha))
+		screen.DrawImage(s.game.NameMyTurnImg, op)
+		drewAnyImage = true
+	}
+
+	if !drewAnyImage {
+		drawBattleOutlinedText(screen, baseX+namePlateOffsetX, baseY+namePlateOffsetY+4, PlayerNames[i], s.game.FontFace(15), nameCol, alpha)
 		return
 	}
 
-	// ★変更：statusBlockW に合わせた拡縮をやめ、原寸のまま表示する
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(sx, sy)
-	op.ColorScale.ScaleAlpha(float32(alpha))
-	if s.game.PlayerHP[i] <= 0 {
-		op.ColorScale.Scale(0.5, 0.5, 0.5, 1.0)
-	}
-	screen.DrawImage(nameImg, op)
-
 	// プレート画像の上に名前テキストを重ねて表示
-	nameTextOp := &text.DrawOptions{}
-	nameTextOp.GeoM.Translate(sx+6, sy+4) // ← 位置微調整はここ
-	nameTextOp.ColorScale.ScaleWithColor(nameCol)
-	nameTextOp.ColorScale.ScaleAlpha(float32(alpha))
-	text.Draw(screen, PlayerNames[i], s.game.FontFace(13), nameTextOp)
+	drawBattleOutlinedText(screen, baseX+namePlateOffsetX+6, baseY+namePlateOffsetY+4, PlayerNames[i], s.game.FontFace(13), nameCol, alpha)
 }

@@ -2,6 +2,9 @@ package main
 
 // battle_logic_turns.go: ターン進行・ATB・プレイヤーメニュー・スキルメニューの更新処理
 import (
+	"math/rand"
+	"strings"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
@@ -36,7 +39,7 @@ func (s *BattleScene) endCast(actor int) {
 
 func (s *BattleScene) tickATB(dt float64) {
 	for i := 0; i < partySize; i++ {
-		if s.waitStance[i] || s.atbGauge[i] >= atbMax || s.game.PlayerHP[i] <= 0 {
+		if s.waitStance[i] || s.waitCancelHold[i] > 0 || s.atbGauge[i] >= atbMax || s.game.PlayerHP[i] <= 0 {
 			continue
 		}
 		// ★変更：素早さは固定配列(playerSpeeds)ではなく、
@@ -75,8 +78,22 @@ func (s *BattleScene) updateRewind(dt float64) {
 	}
 }
 
+func (s *BattleScene) fleeSuccessRate() int {
+	if strings.HasPrefix(s.enemyType, "boss_") {
+		return 0
+	}
+	rate := 70 + (s.game.PlayerLv[0]-s.enemyLv)*10
+	if rate < 10 {
+		return 10
+	}
+	if rate > 100 {
+		return 100
+	}
+	return rate
+}
+
 func (s *BattleScene) actorPosX(actor int) float64 {
-	start := trackX
+	start := timelineStartX
 	end := s.goalScreenX()
 	ratio := s.atbGauge[actor] / atbMax
 	if ratio > 1 {
@@ -86,6 +103,9 @@ func (s *BattleScene) actorPosX(actor int) float64 {
 }
 
 func (s *BattleScene) isActorReady(actor int) bool {
+	if actor >= 0 && actor < partySize && s.waitCancelHold[actor] > 0 {
+		return false
+	}
 	return s.atbGauge[actor] >= atbMax
 }
 
@@ -150,6 +170,15 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		}
 	}
 
+	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+		p := s.waitingActor
+		if p >= 0 && p < partySize && s.hasAnyBattleUsableItem() {
+			s.itemIndex = 0
+			s.battlePhase = phaseItemMenu
+			return nil
+		}
+	}
+
 	confirm := isConfirmKeyPressed()
 
 	if !confirm {
@@ -189,6 +218,11 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.battlePhase = phaseSkillMenu
 		return nil
 	case 2:
+		if !s.hasFullPartyForSynergy() {
+			s.battleLog = "4人そろっていないため待機できない"
+			s.battleLogTimer = 1.5
+			return nil
+		}
 		if !s.canUseSynergy() {
 			s.battleLog = "ゲージポイントが足りない"
 			s.battleLogTimer = 1.5
@@ -214,15 +248,19 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		}
 		return nil
 	case 3:
-		if s.returnToText {
-			s.commandIndex = 0
-			s.battleLog = "ボス戦では逃げられない！"
-			s.battlePhase = phaseMessage
-			s.battleLogTimer = 2.0
+		if rand.Intn(100) >= s.fleeSuccessRate() {
+			s.atbGauge[p] = 0
+			s.waitingActor = -1
+			s.battlePhase = phaseATB
+			s.battleLog = "逃げられなかった"
+			s.battleLogTimer = 1.5
 			return nil
 		}
-		field, _ := NewRoomScene(s.game, s.originMap, s.originX, s.originY, "", s.originDir)
-		return field
+		s.fleeSucceeded = true
+		s.battleLog = "逃げきれた！"
+		s.battleLogTimer = 1.5
+		s.battlePhase = phaseMessage
+		return nil
 	}
 	return nil
 }

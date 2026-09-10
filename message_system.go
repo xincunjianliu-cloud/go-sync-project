@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -253,27 +254,9 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 	}
 	visibleText := string(runes[:count])
 
-	// マージンなし：ウィンドウ幅そのまま折り返し判定に使う
-	textMaxWidth := float64(msgWinWidth)
-	var lines []string
-	var currentLine string
-	for _, r := range visibleText {
-		if r == '\n' {
-			lines = append(lines, currentLine)
-			currentLine = ""
-			continue
-		}
-		testLine := currentLine + string(r)
-		if text.Advance(testLine, fontFace) > textMaxWidth {
-			lines = append(lines, currentLine)
-			currentLine = string(r)
-		} else {
-			currentLine = testLine
-		}
-	}
-	if currentLine != "" || len(lines) == 0 {
-		lines = append(lines, currentLine)
-	}
+	// 自動折り返しはせず、テキスト中の改行(\n)の位置をそのまま使う。
+	// 折り返し位置は書き手が入力時に決める（このシステムが調整するのは開始X座標のみ）。
+	lines := strings.Split(visibleText, "\n")
 
 	textOp := &text.DrawOptions{}
 	textOp.LineSpacing = fontFace.Metrics().HAscent + fontFace.Metrics().HDescent + msgLineSpacingExtra

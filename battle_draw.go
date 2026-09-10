@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"strconv"
 	"strings"
 
@@ -164,6 +165,7 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 
 		centerX += s.readySlideX[i]
 		centerX += s.introCharOffsetX
+		centerX += s.evadeOffsetX[i] // ★追加：回避時にスプライトシートを右側にずらす演出
 
 		// 強撃だけ、選択時の前進位置からさらに接近する
 		if s.activeAttacker == i && (pose == poseChargeApproach || pose == poseChargeAttack) {
@@ -181,9 +183,8 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 
 		switch pose {
 		case poseDead:
-			op.ColorScale.Scale(0.5, 0.5, 0.5, 0.8)
-		case poseLowHP:
-			op.ColorScale.Scale(1.0, 0.75, 0.75, 1.0)
+			pulse := float32(0.5 + 0.5*math.Sin(s.playerAnimTimer[i]*2.2))
+			op.ColorScale.Scale(1.0, 1.0-pulse*0.85, 1.0-pulse*0.85, 1.0)
 		case poseDamage:
 			t := s.playerAnimTimer[i]
 			flashStrength := float32(1.0 - t/0.4)
@@ -275,6 +276,14 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 			healDesc = s.game.CurrentSkillLevelData(s.waitingActor, skillIdx).Description
 		}
 		s.drawBottomDescription(screen, healDesc, healHint)
+	case phaseItemMenu:
+		s.drawCommandMenu(screen)
+		s.drawItemSubMenu(screen)
+		s.drawBottomDescription(screen, s.currentItemDescription(), "")
+	case phaseItemTarget:
+		s.drawItemTargetUI(screen)
+		itemDesc, itemHint := s.itemTargetDescriptionAndHint()
+		s.drawBottomDescription(screen, itemDesc, itemHint)
 	}
 }
 

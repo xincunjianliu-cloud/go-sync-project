@@ -2,6 +2,7 @@ package main
 
 // battle_calc.go: ゲージ・ダメージ/回復量・ステータス補正など戦闘計算まわり
 import (
+	"math"
 	"math/rand"
 
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -33,6 +34,15 @@ func (s *BattleScene) gaugeAtkBonus() int {
 
 func (s *BattleScene) canUseSynergy() bool {
 	return s.gaugePoint >= s.allAttackGaugeCost()
+}
+
+func (s *BattleScene) hasFullPartyForSynergy() bool {
+	for i := 0; i < partySize; i++ {
+		if s.game.PlayerHP[i] <= 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *BattleScene) allAttackGaugeCost() int {
@@ -221,17 +231,41 @@ func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll boo
 	if defStat < 1 {
 		defStat = 1
 	}
-	dmg := int(atkStat * float64(power) / 100.0 / defStat * 10)
+	luck := 0
+	if actor >= 0 && actor < partySize {
+		luck = s.game.PlayerLuck[actor]
+	}
+	return s.rollDamage(atkStat, float64(power), defStat, elementalDamageMultiplier(data.Element, s.enemyElementResist), luck)
+}
 
-	// ★追加：攻撃者の運による会心判定（敵は運を持たないため、敵の攻撃には適用されない）
-	if actor >= 0 && actor < partySize && s.rollIsCrit(s.game.PlayerLuck[actor]) {
-		dmg = int(float64(dmg) * critDamageMultiply)
+func (s *BattleScene) rollDamage(atk float64, power float64, def float64, elementMultiplier float64, luck int) int {
+	if def < 1 {
+		def = 1
+	}
+	damage := atk * power / def
+	damage *= float64(90+rand.Intn(21)) / 100.0
+	damage *= elementMultiplier
+	if s.rollIsCrit(luck) {
+		damage *= critDamageMultiply
+	}
+	result := int(math.Round(damage))
+	if result < 1 {
+		result = 1
+	}
+	return result
+}
+
+func elementalDamageMultiplier(element Element, resistances [elementalTypeCount]int) float64 {
+	index := int(element) - int(ElemFire)
+	if index < 0 || index >= elementalTypeCount {
+		return 1.0
 	}
 
-	if dmg < 1 {
-		dmg = 1
+	multiplier := 1.0 - float64(resistances[index])/100.0
+	if multiplier < 0 {
+		return 0
 	}
-	return dmg
+	return multiplier
 }
 
 func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool) int {

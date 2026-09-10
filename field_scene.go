@@ -106,6 +106,14 @@ func objContains(obj TiledObject, x, y float64) bool {
 	return x >= obj.X && x <= obj.X+obj.Width && y >= obj.Y && y <= obj.Y+obj.Height
 }
 
+// objContainsMargin は objContains と同様だが、矩形をmarginぶん四方に広げた範囲で判定する。
+// チェストのように本体に当たり判定があって乗れないオブジェクトを、
+// 周囲から調べられるようにするために使う。
+func objContainsMargin(obj TiledObject, x, y, margin float64) bool {
+	return x >= obj.X-margin && x <= obj.X+obj.Width+margin &&
+		y >= obj.Y-margin && y <= obj.Y+obj.Height+margin
+}
+
 type EnemyField struct {
 	x, y    float64
 	Boss    bool
@@ -144,12 +152,12 @@ type FieldScene struct {
 	msgIndex           int
 	isMsgActive        bool
 	msgSkipHoldElapsed float64
-	autoMode           bool          // 🔥 追加：会話オート送りON/OFF
-	autoWaitElapsed    float64       // 🔥 追加：オート時の待機経過秒数
+	autoMode           bool           // 🔥 追加：会話オート送りON/OFF
+	autoWaitElapsed    float64        // 🔥 追加：オート時の待機経過秒数
 	msgLog             []EventCommand // 🔥 追加：会話ログ（直近msgLogMaxEntries件）
-	isLogActive        bool          // 🔥 追加：ログ画面を開いているか
-	logScrollOffset    float64       // 🔥 追加：ログ画面のスクロール位置（下端=0、上に行くほど増える）
-	logCursorIndex     int           // 🔥 追加：ログ画面で選択中のログのインデックス（msgLogの添字、0=一番古い）
+	isLogActive        bool           // 🔥 追加：ログ画面を開いているか
+	logScrollOffset    float64        // 🔥 追加：ログ画面のスクロール位置（下端=0、上に行くほど増える）
+	logCursorIndex     int            // 🔥 追加：ログ画面で選択中のログのインデックス（msgLogの添字、0=一番古い）
 	isMenuActive       bool
 	menuIndex          int
 	walkCooldown       float64
@@ -183,6 +191,10 @@ type FieldScene struct {
 	onChoiceConfirm func(selected int)
 	choiceAnchorX   float64
 	choiceAnchorY   float64
+
+	// ★追加：アイテム入手時、画面中央に表示する専用ウィンドウ
+	isItemGetActive bool
+	itemGetName     string
 
 	// ★追加：暗転フェード汎用コールバック
 	onDarkCallback         func() // 暗転MAX到達時に1回だけ呼ばれる
@@ -280,6 +292,27 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 					Height: obj.Height,
 				})
 			}
+		}
+	}
+
+	// ★追加：チェスト（event_chest_）は見た目どおり通行不可にしたいので、
+	// オブジェクトの矩形（Width/Height）をそのまま壁判定にも使う。
+	// collisionレイヤーに別途壁オブジェクトを置く必要はない。
+	for _, layer := range tmap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			p := objProps(obj)
+			if p["type"] != "event" || !strings.HasPrefix(p["text"], "event_chest_") {
+				continue
+			}
+			collisionRects = append(collisionRects, CollisionRect{
+				X:      obj.X,
+				Y:      obj.Y,
+				Width:  obj.Width,
+				Height: obj.Height,
+			})
 		}
 	}
 
@@ -396,22 +429,32 @@ func SaveGame(slot int, mapPath string, x, y float64, hp [4]int) error {
 	g := globalActiveFieldInstanceForSave.game
 
 	data := SaveData{
-		SlotID:        slot,
-		LocationName:  locationNameFromMap(mapPath),
-		CurrentMap:    mapPath,
-		PlayerX:       x,
-		PlayerY:       y,
-		PlayerDir:     globalActiveFieldInstanceForSave.dir, // ← 追加：現在の向きを保存
-		PlayerHP:      hp,
-		PlayerMaxHP:   g.PlayerMaxHP,
-		PlayerMP:      g.PlayerMP,
-		PlayerMaxMP:   g.PlayerMaxMP,
-		PlayerAtk:     g.PlayerAtk,
-		PlayerLv:      g.PlayerLv,
-		PlayerEXP:     g.PlayerEXP,
-		PlayerNextEXP: g.PlayerNextEXP,
-		PlayTime:      g.TotalPlayTime,
-		SavedAt:       time.Now().Format("2006/01/02"),
+		SlotID:            slot,
+		LocationName:      locationNameFromMap(mapPath),
+		CurrentMap:        mapPath,
+		PlayerX:           x,
+		PlayerY:           y,
+		PlayerDir:         globalActiveFieldInstanceForSave.dir, // ← 追加：現在の向きを保存
+		PlayerHP:          hp,
+		PlayerMaxHP:       g.PlayerMaxHP,
+		PlayerMP:          g.PlayerMP,
+		PlayerMaxMP:       g.PlayerMaxMP,
+		PlayerAtk:         g.PlayerAtk,
+		PlayerMagicAtk:    g.PlayerMagicAtk,
+		PlayerDef:         g.PlayerDef,
+		PlayerMagicDef:    g.PlayerMagicDef,
+		PlayerSpd:         g.PlayerSpd,
+		PlayerLuck:        g.PlayerLuck,
+		PlayerSP:          g.PlayerSP,
+		PlayerSkillLv:     g.PlayerSkillLv,
+		BossDefeatedFlags: g.BossDefeatedFlags,
+		PlayerLv:          g.PlayerLv,
+		PlayerEXP:         g.PlayerEXP,
+		PlayerNextEXP:     g.PlayerNextEXP,
+		PlayTime:          g.TotalPlayTime,
+		SavedAt:           time.Now().Format("2006/01/02"),
+		Inventory:         g.Inventory,
+		OpenedChests:      g.OpenedChests,
 	}
 
 	file, err := json.MarshalIndent(data, "", "  ")
@@ -508,6 +551,52 @@ func (s *FieldScene) healParty() {
 		s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
 		s.game.PlayerMP[i] = s.game.PlayerMaxMP[i]
 	}
+}
+
+// ============================================================
+// チェスト（宝箱）イベント
+// ============================================================
+
+// chestKey は「マップパス＋座標」からチェスト1個分の一意なキーを作る。
+// 開封済みかどうかをGame.OpenedChestsにこのキーで記録する。
+func chestKey(mapPath string, obj TiledObject) string {
+	return fmt.Sprintf("%s|%.1f_%.1f", mapPath, obj.X, obj.Y)
+}
+
+// openChest はチェスト（type=event, text="event_chest_<アイテムID>"）を
+// 調べた時の処理。未開封ならアイテムを入手してフラグを立てる。
+// 開封済みなら何もしない（調べても無反応）。
+func (s *FieldScene) openChest(obj TiledObject, itemID string) {
+	if s.game.OpenedChests == nil {
+		s.game.OpenedChests = make(map[string]bool)
+	}
+
+	key := chestKey(s.currentMap, obj)
+	if s.game.OpenedChests[key] {
+		return
+	}
+	s.game.OpenedChests[key] = true
+	// 決定押下と同フレームで「▼ 調べる」を消す（次のUpdateの再判定を待たない）
+	s.nearExamineEvent = false
+
+	def, ok := GetItemDef(itemID)
+	if !ok {
+		fmt.Printf("警告: チェストのアイテムID %q が見つかりません\n", itemID)
+		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
+		s.msgIndex = 0
+		s.beginMessage()
+		return
+	}
+	s.game.AddItem(itemID, 1)
+	s.openItemGetPopup(def.Name)
+}
+
+// openItemGetPopup はアイテム入手時に画面中央へ表示する専用ウィンドウを開く。
+// 通常の会話メッセージ（下部ウィンドウ）とは別枠の表示で、
+// 決定キーで閉じるまでプレイヤーの移動や他の操作を止める。
+func (s *FieldScene) openItemGetPopup(itemName string) {
+	s.itemGetName = itemName
+	s.isItemGetActive = true
 }
 
 // updateObjectiveGuide は現在の目的地に応じて、

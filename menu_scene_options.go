@@ -1,6 +1,11 @@
 package main
 
 // menu_scene_options.go: オプション画面（音量・メッセージ速度・表示モード）の更新処理と設定保存
+
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
 func (m *MenuScene) updateOption() {
 	if isEscapePressed() {
 		m.menuState = menuStateMain
@@ -27,8 +32,11 @@ func (m *MenuScene) updateOption() {
 			m.game.Audio.SetVolume(defaultBGMVolume)
 		}
 		m.game.MessageSpeed = defaultMessageSpeed
-		m.game.DisplayModeIndex = defaultDisplayModeIndex
-		applyDisplayMode(defaultDisplayModeIndex)
+		m.game.Fullscreen = defaultFullscreen
+		m.game.WindowWidth = defaultWindowWidth
+		m.game.WindowHeight = defaultWindowHeight
+		applyDisplayMode(defaultFullscreen, defaultWindowWidth, defaultWindowHeight)
+		m.game.lastWindowW, m.game.lastWindowH = defaultWindowWidth, defaultWindowHeight
 		m.persistSettings()
 	}
 }
@@ -74,7 +82,7 @@ var menuCommandDescriptions = map[string]string{
 
 var menuOptionDescriptions = map[int]string{
 	0: "BGMの音量を調整します",
-	1: "ウィンドウサイズ・フルスクリーンを切り替えます", // ← 【変更】番号を1に
+	1: "フルスクリーン/ウィンドウを切り替えます（ウィンドウは端をドラッグしてサイズ変更できます）",
 	2: "メッセージの表示速度を変更します",        // ← 【変更】番号を2に
 	3: "設定をすべて初期値に戻します",
 }
@@ -146,26 +154,23 @@ func (m *MenuScene) updateDisplayModeAdjust() {
 		m.menuState = menuStateOption
 		return
 	}
-	if isMenuRightPressed() && m.game.DisplayModeIndex < len(displayModeLabels)-1 {
-		m.game.DisplayModeIndex++
-		applyDisplayMode(m.game.DisplayModeIndex)
-		m.persistSettings()
-	}
-	if isMenuLeftPressed() && m.game.DisplayModeIndex > 0 {
-		m.game.DisplayModeIndex--
-		applyDisplayMode(m.game.DisplayModeIndex)
+	// フルスクリーン/ウィンドウの二択トグル。左右どちらでも切り替わる。
+	if isMenuRightPressed() || isMenuLeftPressed() {
+		m.game.Fullscreen = !m.game.Fullscreen
+		w, h := m.game.WindowWidth, m.game.WindowHeight
+		if w <= 0 || h <= 0 {
+			w, h = defaultWindowWidth, defaultWindowHeight
+		}
+		applyDisplayMode(m.game.Fullscreen, w, h)
+		if !m.game.Fullscreen {
+			// ウィンドウに戻した直後の実サイズを記憶しておく
+			m.game.WindowWidth, m.game.WindowHeight = ebiten.WindowSize()
+			m.game.lastWindowW, m.game.lastWindowH = m.game.WindowWidth, m.game.WindowHeight
+		}
 		m.persistSettings()
 	}
 }
 
 func (m *MenuScene) persistSettings() {
-	vol := defaultBGMVolume
-	if m.game.Audio != nil {
-		vol = m.game.Audio.volume
-	}
-	SaveSettings(GameSettings{
-		BGMVolume:        vol,
-		MessageSpeed:     m.game.MessageSpeed,
-		DisplayModeIndex: m.game.DisplayModeIndex,
-	})
+	m.game.SaveGameSettings()
 }

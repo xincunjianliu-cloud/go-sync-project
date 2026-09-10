@@ -38,22 +38,8 @@ func (s *BattleScene) rollNormalDamage() int {
 	if def < 1 {
 		def = 1
 	}
-	const normalAttackPower = 100.0
-	raw := int(float64(atk) * normalAttackPower / 100.0 / float64(def) * 10)
-	if raw < 1 {
-		raw = 1
-	}
-	bonus := s.gaugeAtkBonus()
-	dmg := int(float64(raw) * (1.0 + float64(bonus)/100.0))
-
-	// ★追加：攻撃者(味方)の運による会心判定
-	if s.rollIsCrit(s.game.PlayerLuck[p]) {
-		dmg = int(float64(dmg) * critDamageMultiply)
-	}
-	if dmg < 1 {
-		dmg = 1
-	}
-	return dmg
+	power := 100.0 + float64(s.gaugeAtkBonus())
+	return s.rollDamage(float64(atk), power, float64(def), 1.0, s.game.PlayerLuck[p])
 }
 
 func (s *BattleScene) finishPlayerTurn(resetGauge bool) {
@@ -81,6 +67,27 @@ func (s *BattleScene) countWaitStance() int {
 	return n
 }
 
+func (s *BattleScene) cancelWaitAfterDeath() {
+	s.waitCancelOrder = append(s.waitCancelOrder[:0], s.waitOrder...)
+	for i := 0; i < partySize; i++ {
+		if !s.waitStance[i] {
+			continue
+		}
+		s.waitStance[i] = false
+		if s.game.PlayerHP[i] <= 0 {
+			s.atbGauge[i] = 0
+			s.deadWaitStuck[i] = true
+			continue
+		}
+		s.waitCancelHold[i] = 2.0
+		s.playerPose[i] = poseDefend
+		s.playerAnimTimer[i] = 0
+	}
+	s.waitOrder = []int{}
+	s.battleLog = "味方が倒れたため連携待機が解除された"
+	s.battleLogTimer = battleLogDuration
+}
+
 func (s *BattleScene) tryWaitSynergy() {
 	for i := 0; i < partySize; i++ {
 		if !s.waitStance[i] {
@@ -98,13 +105,21 @@ func (s *BattleScene) tryWaitSynergy() {
 		return
 	}
 
+	power := 100.0 + float64(s.gaugeAtkBonus())
 	s.gaugePoint -= s.allAttackGaugeCost()
 	if s.gaugePoint < 0 {
 		s.gaugePoint = 0
 	}
 	s.recomputeGaugeStage()
 
-	dmg := rand.Intn(50) + 70
+	atk := 0
+	luck := 0
+	for i := 0; i < partySize; i++ {
+		atk += s.effectiveAtk(i)
+		luck += s.game.PlayerLuck[i]
+	}
+	def := s.effectiveEnemyDef(false)
+	dmg := s.rollDamage(float64(atk), power, float64(def), 1.0, luck)
 	s.enemyHP -= dmg
 	if s.enemyHP < 0 {
 		s.enemyHP = 0
@@ -157,6 +172,10 @@ func (s *BattleScene) executeEnemyAction() {
 		s.lastEnemyAttackPrevHP = s.game.PlayerHP[target]
 		s.lastEnemyAttackDamage = 0
 
+		// ★追加：回避が発動した場合はダメージを食らわず、
+		// スプライトシートの表示位置を右側にずらして「かわした」動きを演出する。
+		s.evadeOffsetX[target] = evadeDodgeShiftX
+
 		s.damagePops = append(s.damagePops, DamagePop{
 			Value: 0,
 			X:     targetX,
@@ -170,14 +189,14 @@ func (s *BattleScene) executeEnemyAction() {
 		return
 	}
 
-	// ★変更：敵の攻撃は物理攻撃として扱い、対象の物理防御力(PlayerDef)で軽減する
-	//（＝「物理攻撃に対しては物理防御が適応される」仕様）。
-	rawDmg := rand.Intn(s.enemyDmgRange) + s.enemyDmgMin
+	// ★変更：敵の攻撃は物理攻撃として扱い、敵の物理攻撃力(enemyPhysAtk)を基準に
+	// 対象の物理防御力(PlayerDef)で軽減する、味方側と同じ式にした
+	// ダメージ = 攻撃力 × 倍率(%) ÷ 防御力（物理攻撃に対しては物理防御が適応される仕様）
 	def := s.effectivePlayerDef(target, false)
-	dmg := rawDmg - def/2
-	if dmg < 1 {
-		dmg = 1
+	if def < 1 {
+		def = 1
 	}
+	dmg := s.rollDamage(float64(s.enemyPhysAtk), 100.0, float64(def), 1.0, 0)
 
 	prevHP := s.game.PlayerHP[target]
 	s.lastEnemyAttackTarget = target
@@ -206,12 +225,7 @@ func (s *BattleScene) executeEnemyAction() {
 		s.game.PlayerHP[target] = 0
 
 		if s.countWaitStance() > 0 {
-			for i := 0; i < partySize; i++ {
-				s.waitStance[i] = false
-			}
-			s.waitOrder = []int{}
-			s.battleLog = "味方が倒れたため連携待機がリセットされた"
-			s.battleLogTimer = battleLogDuration
+			s.cancelWaitAfterDeath()
 		}
 	}
 	s.enemyActionWaitTimer = 1.5
@@ -236,9 +250,9 @@ func (s *BattleScene) checkBattleEnd() bool {
 				s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 			}
 
-			// ★変更：レベルアップ時のステータス上昇は固定値ではなく、
-			// stat_growth.go の PlayerGrowthRates / PlayerExpCurve を使って
-			// キャラごと・ステータスごとに個別成長させる。
+			// ★変更：レベルアップ時のステータス上昇は固定式ではなく、
+			// stats_config.go の PlayerStatsByLevel / PlayerExpToNextByLevel から、
+			// そのレベルの値をそのまま読み込む。
 			for i := 0; i < partySize; i++ {
 				if s.game.PlayerLv[i] < maxPlayerLevel {
 					s.game.PlayerEXP[i] += s.enemyExp
@@ -254,13 +268,30 @@ func (s *BattleScene) checkBattleEnd() bool {
 						s.game.PlayerEXP[i] = 0
 						s.game.PlayerNextEXP[i] = 0
 					} else {
-						s.game.PlayerNextEXP[i] = PlayerExpCurve(i, s.game.PlayerLv[i])
+						s.game.PlayerNextEXP[i] = PlayerExpToNextByLevel[s.game.PlayerLv[i]-1]
 					}
 				}
 			}
 
 			for i := 0; i < partySize; i++ {
 				s.game.PlayerSP[i] += s.enemySP
+			}
+
+			s.earnedItems = nil
+			for _, drop := range s.enemyDrops {
+				if drop.Percent <= 0 {
+					continue
+				}
+				if rand.Intn(100) >= drop.Percent {
+					continue
+				}
+				qty := drop.rollCount()
+				s.game.AddItem(drop.ItemID, qty)
+				name := drop.ItemID
+				if def, ok := GetItemDef(drop.ItemID); ok {
+					name = def.Name
+				}
+				s.earnedItems = addEarnedItem(s.earnedItems, name, qty)
 			}
 
 			s.enemyDeathPhase = 1
@@ -284,12 +315,23 @@ func (s *BattleScene) checkBattleEnd() bool {
 		s.gameOverIdx = 0
 		s.isWon = false
 		s.battlePhase = phaseBattleEnd
+		s.battleLog = "全滅した…"
+		s.battleLogTimer = gameOverMessageDuration
 		return true
 	}
 	return false
 }
 
+func (s *BattleScene) restoreDefeatedPartyHP() {
+	for i := 0; i < partySize; i++ {
+		if s.game.PlayerHP[i] <= 0 {
+			s.game.PlayerHP[i] = 1
+		}
+	}
+}
+
 func (s *BattleScene) exitBattleToField() {
+	s.restoreDefeatedPartyHP()
 	field, _ := NewRoomScene(s.game, s.originMap, s.originX, s.originY, "", s.originDir)
 	if strings.HasPrefix(s.enemyType, "boss_") {
 		numStr := strings.TrimPrefix(s.enemyType, "boss_")

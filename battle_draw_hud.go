@@ -66,35 +66,43 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 	}
 
 	for _, actor := range order {
-		if actor < partySize && s.game.PlayerHP[actor] <= 0 {
-			continue
-		}
 		if actor == enemyID && s.enemyHP <= 0 {
 			continue
 		}
-		isActive := s.waitingActor == actor && (s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu)
+		isDead := actor < partySize && s.game.PlayerHP[actor] <= 0
+		isActive := s.waitingActor == actor && (s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu || s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
 		// ★修正：位置の保持とサイズの保持を分ける
 		// 位置保持：returnDelayTimer > 0（戻り始めるまで）
-		isHoldingPosition := actor < partySize && s.returnDelayTimer[actor] > 0
+		isHoldingPosition := !isDead && actor < partySize && s.returnDelayTimer[actor] > 0
 		// サイズ保持：readySlideX < 0（スタート地点に到達したら通常サイズに戻す）
-		isHoldingSize := actor < partySize && s.readySlideX[actor] < 0
-		isMyselfWaiting := (actor < partySize && s.waitStance[actor]) || (isActive && s.commandIndex == 2)
+		isHoldingSize := !isDead && actor < partySize && s.readySlideX[actor] < 0
+		isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == 2))
 		currentIconSize := float64(iconSize)
 		if (isActive || isHoldingSize) && !isMyselfWaiting {
 			currentIconSize = float64(iconSize) * 1.5
 		}
 
 		x := s.actorPosX(actor)
-		ready := s.isActorReady(actor)
+		ready := !isDead && s.isActorReady(actor)
+		if actor < partySize && s.deadWaitStuck[actor] {
+			x = timelineStartX - (currentIconSize / 2)
+		}
 		if ready || ((isActive || isHoldingPosition) && !isMyselfWaiting) {
 			x = goalX - (currentIconSize / 2)
+		}
+		if actor < partySize && s.deadWaitStuck[actor] {
+			x = timelineStartX - (currentIconSize / 2)
 		}
 
 		y := centerY - currentIconSize/2
 
 		if isMyselfWaiting {
 			downCount := -1
-			for orderIdx, actorIdx := range s.waitOrder {
+			waitingOrder := s.waitOrder
+			if actor < partySize && s.waitCancelHold[actor] > 0 {
+				waitingOrder = s.waitCancelOrder
+			}
+			for orderIdx, actorIdx := range waitingOrder {
 				if actorIdx == actor {
 					downCount = orderIdx
 					break
@@ -167,8 +175,15 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 
 		isMyTurn := s.waitingActor == i &&
 			(s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu ||
-				s.battlePhase == phaseTargetSelect || s.battlePhase == phaseHealSelect)
+				s.battlePhase == phaseTargetSelect || s.battlePhase == phaseHealSelect ||
+				s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
 		s.drawPartyName(screen, i, xPos, winY, alpha, isMyTurn)
+
+		isDead := s.game.PlayerHP[i] <= 0
+		valueColor := uiColorText
+		if isDead {
+			valueColor = uiColorDead
+		}
 
 		maxHP := s.game.PlayerMaxHP[i]
 		hpRatio := 0.0
@@ -180,12 +195,19 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 		}
 
 		drawStatusValue(screen, sx, sy+statusHPTextY, s.game.PlayerHP[i], maxHP,
-			s.game.FontFace(17.5), s.game.FontFace(14), alpha)
+			s.game.FontFace(17.5), s.game.FontFace(14), alpha, valueColor)
 
-		drawSlantedStatusBar(screen, barX, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
-			scaleAlpha(color.RGBA{75, 171, 120, 255}, alpha),
-			scaleAlpha(color.RGBA{20, 50, 30, 255}, alpha),
-			scaleAlpha(color.RGBA{41, 94, 66, 255}, alpha))
+		if isDead {
+			drawSlantedStatusBar(screen, barX, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
+				scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
+				scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
+				scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
+		} else {
+			drawSlantedStatusBar(screen, barX, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
+				scaleAlpha(color.RGBA{75, 171, 120, 255}, alpha),
+				scaleAlpha(color.RGBA{20, 50, 30, 255}, alpha),
+				scaleAlpha(color.RGBA{41, 94, 66, 255}, alpha))
+		}
 
 		maxMP := s.game.PlayerMaxMP[i]
 		mpRatio := 0.0
@@ -197,12 +219,19 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 		}
 
 		drawStatusValue(screen, sx, sy+statusMPTextY, s.game.PlayerMP[i], maxMP,
-			s.game.FontFace(17.5), s.game.FontFace(14), alpha)
+			s.game.FontFace(17.5), s.game.FontFace(14), alpha, valueColor)
 
-		drawSlantedStatusBar(screen, barX, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
-			scaleAlpha(color.RGBA{75, 105, 171, 255}, alpha),
-			scaleAlpha(color.RGBA{20, 30, 55, 255}, alpha),
-			scaleAlpha(color.RGBA{41, 58, 94, 255}, alpha))
+		if isDead {
+			drawSlantedStatusBar(screen, barX, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
+				scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
+				scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
+				scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
+		} else {
+			drawSlantedStatusBar(screen, barX, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
+				scaleAlpha(color.RGBA{75, 105, 171, 255}, alpha),
+				scaleAlpha(color.RGBA{20, 30, 55, 255}, alpha),
+				scaleAlpha(color.RGBA{41, 58, 94, 255}, alpha))
+		}
 
 		// ── デバフアイコン(簡易：文字表記)を名前欄の下に表示 ──
 		if len(s.PlayerDebuffs[i]) > 0 {
@@ -494,8 +523,9 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		disabledList = append(disabledList, s.game.PlayerMP[p] < s.effectiveMPCost(data.MPCost))
 	}
 
+	skillListFace := s.game.FontFace(15)
+	skillListArrowGap := text.Advance("▶ ", skillListFace)
 	for i, label := range labels {
-		prefix := "  "
 		labelCol := uiColorText
 		mpCol := uiColorText
 		insufficient := disabledList[i]
@@ -503,15 +533,23 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		if insufficient {
 			mpCol = uiColorDanger // MPの数値だけ、不足していれば赤
 		}
-		if i == s.skillIndex {
-			prefix = "▶"
+		selected := i == s.skillIndex
+		if selected {
 			labelCol = uiColorSelect // 選択中は常にこの色（MP不足でも変えない）
 		}
 
+		baseX := windowX + labelOffsetX
+		baseY := windowY + labelOffsetY + float64(i)*rowHeight
+		if selected {
+			arrowOp := &text.DrawOptions{}
+			arrowOp.GeoM.Translate(baseX, baseY)
+			arrowOp.ColorScale.ScaleWithColor(labelCol)
+			text.Draw(screen, "▶", skillListFace, arrowOp)
+		}
 		op := &text.DrawOptions{}
-		op.GeoM.Translate(windowX+labelOffsetX, windowY+labelOffsetY+float64(i)*rowHeight)
+		op.GeoM.Translate(baseX+skillListArrowGap, baseY)
 		op.ColorScale.ScaleWithColor(labelCol)
-		text.Draw(screen, prefix+label, s.game.FontFace(15), op)
+		text.Draw(screen, label, skillListFace, op)
 
 		mpOp := &text.DrawOptions{}
 		mpOp.GeoM.Translate(windowX+windowW-mpOffsetX, windowY+labelOffsetY+float64(i)*rowHeight)
@@ -548,7 +586,7 @@ func (s *BattleScene) drawBattleMessage(screen *ebiten.Image) {
 }
 
 func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
-	if s.battlePhase == phaseBattleEnd && !s.isWon {
+	if s.battlePhase == phaseBattleEnd && !s.isWon && s.battleLogTimer <= 0 {
 		winX, winY, winW, winH := 380.0, 235.0, 200.0, 70.0
 		ebitenutil.DrawRect(screen, winX, winY, winW, winH, color.RGBA{40, 10, 10, 220})
 		ebitenutil.DrawRect(screen, winX, winY, winW, 1, uiColorDanger)
@@ -556,26 +594,35 @@ func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
 		ebitenutil.DrawRect(screen, winX, winY, 1, winH, uiColorDanger)
 		ebitenutil.DrawRect(screen, winX+winW, winY, 1, winH, uiColorDanger)
 
-		retryText := "  Retry Game"
-		if s.gameOverIdx == 0 {
-			retryText = "> Retry Game"
+		gameOverFace := s.game.FontFace(15)
+		gameOverArrowGap := text.Advance("▶ ", gameOverFace)
+
+		retryCol := uiColorText
+		retrySelected := s.gameOverIdx == 0
+		if retrySelected {
+			retryCol = uiColorSelect
+			arrowOp1 := &text.DrawOptions{}
+			arrowOp1.GeoM.Translate(winX+24, winY+18)
+			arrowOp1.ColorScale.ScaleWithColor(retryCol)
+			text.Draw(screen, "▶", gameOverFace, arrowOp1)
 		}
 		op1 := &text.DrawOptions{}
-		op1.GeoM.Translate(winX+24, winY+18)
-		op1.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, retryText, s.game.FontFace(15), op1)
+		op1.GeoM.Translate(winX+24+gameOverArrowGap, winY+18)
+		op1.ColorScale.ScaleWithColor(retryCol)
+		text.Draw(screen, "Retry Game", gameOverFace, op1)
 
-		titleText := "  Title Screen"
-		if s.gameOverIdx == 1 {
-			titleText = "> Title Screen"
+		titleCol := uiColorText
+		titleSelected := s.gameOverIdx == 1
+		if titleSelected {
+			titleCol = uiColorSelect
+			arrowOp2 := &text.DrawOptions{}
+			arrowOp2.GeoM.Translate(winX+24, winY+42)
+			arrowOp2.ColorScale.ScaleWithColor(titleCol)
+			text.Draw(screen, "▶", gameOverFace, arrowOp2)
 		}
 		op2 := &text.DrawOptions{}
-		op2.GeoM.Translate(winX+24, winY+42)
-		if s.gameOverIdx == 1 {
-			op2.ColorScale.ScaleWithColor(uiColorDanger)
-		} else {
-			op2.ColorScale.ScaleWithColor(uiColorText)
-		}
-		text.Draw(screen, titleText, s.game.FontFace(15), op2)
+		op2.GeoM.Translate(winX+24+gameOverArrowGap, winY+42)
+		op2.ColorScale.ScaleWithColor(titleCol)
+		text.Draw(screen, "Title Screen", gameOverFace, op2)
 	}
 }

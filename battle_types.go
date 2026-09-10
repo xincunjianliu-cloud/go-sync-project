@@ -10,30 +10,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-type EnemyType struct {
-	Name     string
-	MaxHP    int
-	DmgMin   int
-	DmgRange int
-	Speed    float64
-	Exp      int
-	SP       int
-	Def      int
-	MagicDef int
-}
-
-var EnemyDatabase = []EnemyType{
-	{Name: "フリーザ", MaxHP: 160, DmgMin: 12, DmgRange: 6, Speed: 22, Exp: 45, SP: 2, Def: 8, MagicDef: 8},
-	{Name: "セル", MaxHP: 200, DmgMin: 15, DmgRange: 5, Speed: 26, Exp: 60, SP: 3, Def: 10, MagicDef: 9},
-	{Name: "魔人ブウ", MaxHP: 350, DmgMin: 10, DmgRange: 8, Speed: 16, Exp: 90, SP: 4, Def: 12, MagicDef: 14},
-}
-
-var BossDatabase = map[string]EnemyType{
-	"boss_1": {Name: BossNames[0], MaxHP: 200, DmgMin: 12, DmgRange: 6, Speed: 18, Exp: 80, SP: 300, Def: 12, MagicDef: 10},
-	"boss_2": {Name: BossNames[1], MaxHP: 250, DmgMin: 14, DmgRange: 6, Speed: 20, Exp: 100, SP: 400, Def: 14, MagicDef: 12},
-	"boss_3": {Name: BossNames[2], MaxHP: 300, DmgMin: 16, DmgRange: 7, Speed: 22, Exp: 130, SP: 500, Def: 16, MagicDef: 14},
-	"boss_4": {Name: BossNames[3], MaxHP: 600, DmgMin: 26, DmgRange: 10, Speed: 30, Exp: 500, SP: 1919, Def: 26, MagicDef: 24},
-}
+// ★変更：EnemyType / EnemyDatabase / BossDatabase は stats_config.go の
+// EnemyStats / EnemyDatabase / BossDatabase に統合した（敵と味方のステータスを
+// 1ファイルにまとめるため）。ここでは定義しない。
 
 const (
 	partySize = 4
@@ -42,6 +21,13 @@ const (
 )
 
 const battleLogDuration = 0.7
+const gameOverMessageDuration = 1.5
+
+// 回避演出：スプライトを右にずらす量と、元の位置へ戻る速さ。
+const (
+	evadeDodgeShiftX      = 26.0
+	evadeDodgeReturnSpeed = 140.0 // 1秒あたりに戻るpx数
+)
 
 const (
 	phaseATB = iota
@@ -49,6 +35,8 @@ const (
 	phaseSkillMenu
 	phaseTargetSelect
 	phaseHealSelect
+	phaseItemMenu
+	phaseItemTarget
 	phaseMessage
 	phaseBattleEnd
 )
@@ -67,10 +55,11 @@ const (
 )
 
 const (
-	trackX   = 20.0
-	trackY   = 53.0
-	trackH   = 8.0
-	iconSize = 40.0
+	trackX         = 20.0
+	trackY         = 53.0
+	trackH         = 8.0
+	iconSize       = 40.0
+	timelineStartX = trackX + 10.0
 
 	logPanelY = 400.0
 	logPanelH = 28.0
@@ -193,6 +182,10 @@ const (
 	resSubDoneWait     = 4
 )
 
+// levelUpPauseDuration：EXPゲージが右端まで到達してから、
+// 実際にレベルを上げて数字・ゲージをリセットするまでの静止時間(秒)。
+const levelUpPauseDuration = 0.35
+
 const (
 	timelineIconOffsetY   = 46.0
 	introStartOffsetX     = 960.0
@@ -215,7 +208,7 @@ const (
 )
 
 var gaugeStageThresholds = [gaugeMaxStage - 1]int{8, 8, 8, 8}
-var gaugeStageAtkBonus = [gaugeMaxStage]int{0, 3, 5, 7, 10}
+var gaugeStageAtkBonus = [gaugeMaxStage]int{0, 3, 5, 7, 20}
 
 const (
 	gaugeTriX = 15.0
@@ -238,47 +231,70 @@ const (
 const (
 	resultPanelWidthRatio = 0.4
 
-	resultTitleX        = 24.0
-	resultTitleY        = 20.0
+	resultTitleX        = 15.0
+	resultTitleY        = 10.0
 	resultTitleFontSize = 40.0
 
 	resultExpLabelX   = 40.0
 	resultExpValueX   = 250.0
-	resultExpY        = 75.0
+	resultExpY        = 48.0
 	resultExpFontSize = 20.0
 
 	resultSpLabelX   = 40.0
 	resultSpValueX   = 250.0
-	resultSpY        = 100.0
+	resultSpY        = 68.0
 	resultSpFontSize = 20.0
 
-	resultDividerX = 20.0
-	resultDividerY = 125.0
+	resultDividerX = 10.0
+	resultDividerY = 90.0
 	resultDividerW = 350.0
 	resultDividerH = 1.0
 
+	resultItemsHeaderX        = 30.0
+	resultItemsHeaderY        = 380.0
+	resultItemsHeaderFontSize = 20.0
+
+	resultItemsDividerX = 10.0
+	resultItemsDividerY = 405.0
+	resultItemsDividerW = 350.0
+	resultItemsDividerH = 1.0
+
+	resultItemsNameX    = 40.0
+	resultItemsCountX   = 250.0
+	resultItemsStartY   = 410.0
+	resultItemsRowGap   = 20.0
+	resultItemsFontSize = 15.0
+
 	resultBarStartX = 45.0
-	resultBarStartY = 180.0
-	resultBarRowGap = 95.0
+	resultBarStartY = 130.0
+	resultBarRowGap = 70.0
 	resultBarWAbs   = 280.0
 	resultBarH      = 10.0
 
-	resultNameX        = 49.0
-	resultLevelX       = 290.0
-	resultNameOffsetY  = -35.0
-	resultNameFontSize = 15.0
+	// ── パーティ各行の要素はすべて、その行のバー左上(barX, barY)からの
+	// 相対オフセットで位置を決めている。符号の向きはX/Yとも共通：
+	// プラスでバーより右・下、マイナスでバーより左・上。
+	// 行全体の縦位置・横位置を調整したいときはこのブロックだけ見ればよい。
+	resultNameOffsetX  = 0.0   // プレイヤー名
+	resultLevelOffsetX = 250.0 // Lv表示
+	resultNameOffsetY  = -30.0 // 名前・Lv共通の縦位置
 
-	resultExpCurFontSize = 18.0
-	resultExpMaxFontSize = 13.0
-	resultExpTextOffsetY = -20.0
+	resultExpLabelOffsetX = 4.0 // "EXP"ラベル
+	resultExpLabelOffsetY = -15.0
 
-	resultExpLabelOffsetX  = 4.0
-	resultExpLabelOffsetY  = -15.0
-	resultExpLabelFontSize = 16.0
+	// resultExpTextOffsetY：現在EXP／最大EXP数値の縦位置。他と同じ上端基準オフセットだが、
+	// 下端揃え(SecondaryAlign=End)で描くため、実際の基準線はresultExpCurFontSize分だけ下にずれる
+	// （battle_draw_panels.goのexpBaseY計算を参照）。
+	resultExpTextOffsetY = -15.0
 
-	resultLevelUpOffsetX  = 4.0
-	resultLevelUpOffsetY  = 12.0
-	resultLevelUpFontSize = 15.0
+	resultLevelUpOffsetX = 4.0 // "LEVEL UP!"
+	resultLevelUpOffsetY = 12.0
+
+	resultNameFontSize     = 15.0
+	resultExpCurFontSize   = 15.0
+	resultExpMaxFontSize   = 13.0
+	resultExpLabelFontSize = 15.0
+	resultLevelUpFontSize  = 15.0
 
 	resultHintX        = 24.0
 	resultHintYFromBtm = 20.0
@@ -287,6 +303,9 @@ const (
 
 var resultBarFillColor = color.RGBA{255, 200, 130, 255}
 var resultBarBgColor = color.RGBA{30, 30, 40, 255}
+var resultPanelBgColor = color.RGBA{0, 0, 0, 200}
+var resultLevelUpColor = color.RGBA{255, 255, 100, 255}
+var resultItemsDividerColor = color.RGBA{255, 255, 255, 255}
 
 // ★変更：素早さは「PlayerSpd」ステータス（レベルアップで個別成長）に一本化したため、
 // 固定配列だった playerSpeeds は廃止。初期値は game.go の initialSpd で設定している。
@@ -320,16 +339,24 @@ type BattleScene struct {
 	preBattlePlayerHP [partySize]int
 	preBattlePlayerMP [partySize]int
 
-	enemyName     string
-	enemyType     string
-	enemyHP       int
-	enemyMaxHP    int
-	enemyDmgMin   int
-	enemyDmgRange int
-	enemySpeed    float64
-	enemyExp      int
-	enemyDef      int
-	enemyMagicDef int
+	enemyName          string
+	enemyType          string
+	enemyLv            int
+	enemyHP            int
+	enemyMaxHP         int
+	enemyMP            int
+	enemyMaxMP         int
+	enemyPhysAtk       int
+	enemyMagicAtk      int
+	enemySpeed         float64
+	enemyExp           int
+	enemyDef           int
+	enemyMagicDef      int
+	enemyElement       Element
+	enemyElementResist [elementalTypeCount]int
+
+	// 回避時、スプライトを右にずらすための演出用オフセット
+	evadeOffsetX [partySize]float64
 
 	battlePhase  int
 	isWon        bool
@@ -337,11 +364,14 @@ type BattleScene struct {
 	skillIndex   int
 	activePlayer int
 
-	atbGauge     [partySize + 1]float64
-	waitStance   [partySize]bool
-	waitOrder    []int
-	waitingActor int
-	readyQueue   []int
+	atbGauge        [partySize + 1]float64
+	waitStance      [partySize]bool
+	waitOrder       []int
+	waitCancelOrder []int
+	waitCancelHold  [partySize]float64
+	deadWaitStuck   [partySize]bool
+	waitingActor    int
+	readyQueue      []int
 
 	rewindActive             bool
 	rewindTimer              float64
@@ -362,7 +392,8 @@ type BattleScene struct {
 	battleLog       string
 	gameOverIdx     int
 
-	enemyImage *ebiten.Image
+	fleeSucceeded bool
+	enemyImage    *ebiten.Image
 
 	playerPose           [partySize]int
 	playerAnimTimer      [partySize]float64
@@ -382,7 +413,7 @@ type BattleScene struct {
 	drawPlayerMaxEXP [partySize]int
 
 	earnedGold  int
-	earnedItems []string
+	earnedItems []EarnedItemEntry
 
 	resultFadeAlpha float64
 
@@ -411,6 +442,12 @@ type BattleScene struct {
 	targetIndex  int
 	pendingSkill int
 
+	// ── アイテム使用（バトル中）関連 ──
+	itemIndex       int    // アイテム一覧でのカーソル位置
+	pendingItemID   string // 対象選択中に使用するアイテムID（""=未選択）
+	itemTargetIndex int    // アイテムの対象選択カーソル（0〜3=個別、partySize=全体）
+	enemyDrops      []ItemDrop
+
 	skillLevelCursors [partySize][8]int
 	healTargetIndex   int
 
@@ -438,6 +475,11 @@ type BattleScene struct {
 	introPhaseTimer  float64
 
 	expStartEXP [partySize]int
+
+	// levelUpPauseTimer は、EXPゲージが右端まで到達してから
+	// レベルアップ処理（Lv加算・ゲージリセット）を行うまでの一時停止時間。
+	// >0の間はゲージを満タンのまま止めておき、0になったら実際にレベルを上げる。
+	levelUpPauseTimer [partySize]float64
 
 	drawPlayerEXPF [partySize]float64
 
@@ -481,7 +523,7 @@ type DeathParticle struct {
 }
 
 func NewBattleScene(game *Game, originMap string, originX, originY float64, originDir int, evType string, specificEnemyName string) *BattleScene {
-	var chosen EnemyType
+	var chosen EnemyStats
 
 	isBoss := strings.HasPrefix(evType, "boss_")
 
@@ -489,7 +531,7 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 		if bossData, exists := BossDatabase[evType]; exists {
 			chosen = bossData
 		} else {
-			chosen = EnemyType{Name: "未知の強敵", MaxHP: 200, DmgMin: 10, DmgRange: 5, Speed: 20, Exp: 100, SP: 100, Def: 10, MagicDef: 10}
+			chosen = EnemyStats{Name: "未知の強敵", Lv: 10, Exp: 100, HP: 200, MP: 30, PhysAtk: 18, MagicAtk: 14, PhysDef: 10, MagicDef: 10, Spd: 20, SP: 100}
 		}
 	} else if specificEnemyName != "" {
 		found := false
@@ -510,27 +552,33 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 	s := &BattleScene{
 		game: game,
 
-		enemyName:       chosen.Name,
-		enemyType:       evType,
-		enemyHP:         chosen.MaxHP,
-		enemyMaxHP:      chosen.MaxHP,
-		enemyDmgMin:     chosen.DmgMin,
-		enemyDmgRange:   chosen.DmgRange,
-		enemySpeed:      chosen.Speed,
-		enemyExp:        chosen.Exp,
-		enemySP:         chosen.SP,
-		enemyDef:        chosen.Def,
-		enemyMagicDef:   chosen.MagicDef,
-		battlePhase:     phaseATB,
-		waitingActor:    -1,
-		activeAttacker:  -1,
-		originMap:       originMap,
-		originX:         originX,
-		originY:         originY,
-		originDir:       originDir,
-		returnToText:    isBoss,
-		postTextMessage: "",
-		gameOverIdx:     0,
+		enemyName:          chosen.Name,
+		enemyType:          evType,
+		enemyLv:            chosen.Lv,
+		enemyHP:            chosen.HP,
+		enemyMaxHP:         chosen.HP,
+		enemyMP:            chosen.MP,
+		enemyMaxMP:         chosen.MP,
+		enemyPhysAtk:       chosen.PhysAtk,
+		enemyMagicAtk:      chosen.MagicAtk,
+		enemySpeed:         float64(chosen.Spd),
+		enemyExp:           chosen.Exp,
+		enemySP:            chosen.SP,
+		enemyDef:           chosen.PhysDef,
+		enemyMagicDef:      chosen.MagicDef,
+		enemyElement:       chosen.Element,
+		enemyElementResist: chosen.ElementResist,
+		enemyDrops:         chosen.Drops,
+		battlePhase:        phaseATB,
+		waitingActor:       -1,
+		activeAttacker:     -1,
+		originMap:          originMap,
+		originX:            originX,
+		originY:            originY,
+		originDir:          originDir,
+		returnToText:       isBoss,
+		postTextMessage:    "",
+		gameOverIdx:        0,
 
 		skillMenuOpenTimer: 0.0,
 		readySlideX:        [partySize]float64{},

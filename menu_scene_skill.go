@@ -1,6 +1,26 @@
 package main
 
 // menu_scene_skill.go: スキル選択・スキル強化・回復対象選択の更新処理
+
+// reachableSkillLevel は指定キャラ・指定スキルでLvカーソルが到達できる上限を返す。
+// 現在のレベルの次(curLv+1)までしか進められない（Lv2を強化しないとLv3を選べない、が絶対のルール）。
+func (m *MenuScene) reachableSkillLevel(charIdx, skillIdx int) int {
+	skills := m.game.CharacterSkills(charIdx)
+	if skillIdx < 0 || skillIdx >= len(skills) {
+		return 1
+	}
+	curLv := m.game.PlayerSkillLv[charIdx][skillIdx]
+	if curLv < 1 {
+		curLv = 1
+	}
+	maxLv := len(skills[skillIdx].Levels)
+	reachable := curLv + 1
+	if reachable > maxLv {
+		reachable = maxLv
+	}
+	return reachable
+}
+
 func (m *MenuScene) updateSkillCharSel() {
 	if isEscapePressed() {
 		m.menuState = menuStateMain
@@ -31,13 +51,16 @@ func (m *MenuScene) updateSkillCharSel() {
 	if curLv < 1 {
 		curLv = 1
 	}
+	// ★修正：カーソル復元先はLv一覧の末尾までではなく、到達可能な上限(curLv+1)までに
+	// クランプする。これを怠ると、以前に別スキル/別キャラでLv3まで見ていた時の
+	// カーソル値が残ったまま復元され、Lv2を強化していないのにLv3を選べてしまっていた。
 	m.skillLevelCursor = m.game.LastSkillLevelCursor
-	if m.skillLevelCursor < 1 || m.skillLevelCursor > len(skills[m.skillSubIndex].Levels) {
+	reachable := m.reachableSkillLevel(m.skillCharIndex, m.skillSubIndex)
+	if m.skillLevelCursor < 1 || m.skillLevelCursor > reachable {
 		m.skillLevelCursor = curLv
 	}
 
 	m.skillLevelSelecting = false
-	m.upgradeResultMsg = ""
 	m.menuState = menuStateSkillSub
 }
 
@@ -102,8 +125,13 @@ func (m *MenuScene) updateSkillSub() {
 
 	// ── Lv選択モード：左右でLvカーソル移動、決定で実行、ESCで行選択に戻る ──
 	if m.skillLevelSelecting {
+		if !isConfirmKeyDown() {
+			m.upgradeHoldArmed = true
+			m.upgradeProgress = 0
+		}
 		if isEscapePressed() {
 			m.skillLevelSelecting = false
+			m.upgradeHoldArmed = false
 			return
 		}
 		if isMenuRightPressed() {
@@ -118,14 +146,13 @@ func (m *MenuScene) updateSkillSub() {
 				m.game.LastSkillLevelCursor = m.skillLevelCursor // ← 追加
 			}
 		}
-		if !isConfirmKeyPressed() {
-			return
-		}
-
 		skillIdx := m.skillSubIndex
 		lv := m.skillLevelCursor
 
 		if lv <= curLv {
+			if !isConfirmKeyPressed() {
+				return
+			}
 			// ── 解放済みレベル：メニューから使用（回復系のみ） ──
 			data := skills[skillIdx].Levels[lv-1]
 			if data.IsHeal {
@@ -137,10 +164,25 @@ func (m *MenuScene) updateSkillSub() {
 			return
 		}
 
-		// ── 未解放レベル：強化確認へ ──
-		m.upgradeConfirmIndex = 0
-		m.upgradeResultMsg = ""
-		m.menuState = menuStateSkillUpgrade
+		// ── 未解放レベル：決定キー長押しで強化 ──
+		if !m.game.CanUpgradeSkill(m.skillCharIndex, m.skillSubIndex) {
+			m.upgradeProgress = 0
+			return
+		}
+		if !m.upgradeHoldArmed || !isConfirmKeyDown() {
+			m.upgradeProgress = 0
+			return
+		}
+		m.upgradeProgress += 1.0 / (1.5 * 60.0)
+		if m.upgradeProgress < 1 {
+			return
+		}
+
+		m.upgradeProgress = 0
+		if m.game.UpgradeSkill(m.skillCharIndex, m.skillSubIndex) {
+			m.skillLevelCursor = m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
+			m.game.LastSkillLevelCursor = m.skillLevelCursor
+		}
 		return
 	}
 
@@ -164,7 +206,6 @@ func (m *MenuScene) updateSkillSub() {
 			newCurLv = 1
 		}
 		m.skillLevelCursor = newCurLv
-		m.upgradeResultMsg = ""
 
 		// ← 追加：行とLvカーソルを記憶
 		m.game.LastSkillSubIndex = m.skillSubIndex
@@ -175,42 +216,15 @@ func (m *MenuScene) updateSkillSub() {
 		return
 	}
 	m.skillLevelSelecting = true
+	m.upgradeProgress = 0
+	m.upgradeHoldArmed = false
+	// ★修正：Lv選択モードに入る直前にも到達可能上限でクランプし、
+	// 古いカーソル値が残っていてもLv2未強化のままLv3を選べないようにする。
+	if reachable := m.reachableSkillLevel(m.skillCharIndex, m.skillSubIndex); m.skillLevelCursor > reachable {
+		m.skillLevelCursor = reachable
+	}
 	m.game.LastSkillSubIndex = m.skillSubIndex       // ← 追加（念のため）
 	m.game.LastSkillLevelCursor = m.skillLevelCursor // ← 追加（念のため）
-}
-
-// updateSkillUpgrade：SP消費してスキルレベルを上げる確認画面の入力処理。
-func (m *MenuScene) updateSkillUpgrade() {
-	if isEscapePressed() {
-		m.menuState = menuStateSkillSub
-		return
-	}
-	if isMenuUpPressed() || isMenuDownPressed() {
-		m.upgradeConfirmIndex = 1 - m.upgradeConfirmIndex
-	}
-	if !isConfirmKeyPressed() {
-		return
-	}
-
-	if m.upgradeConfirmIndex == 1 { // いいえ
-		m.menuState = menuStateSkillSub
-		return
-	}
-
-	charIdx := m.skillCharIndex
-	skillIdx := m.skillSubIndex
-
-	if !m.game.CanUpgradeSkill(charIdx, skillIdx) {
-		m.upgradeResultMsg = "SPが足りません"
-		return
-	}
-	ok := m.game.UpgradeSkill(charIdx, skillIdx)
-	if ok {
-		m.upgradeResultMsg = "スキルを強化しました！"
-	} else {
-		m.upgradeResultMsg = "強化できませんでした"
-	}
-	m.menuState = menuStateSkillSub
 }
 
 func (m *MenuScene) updateHealTarget() {
@@ -291,8 +305,12 @@ func (m *MenuScene) updateHealTarget() {
 			}
 		}
 
-		m.pendingSkill = 0
-		m.menuState = menuStateSkillSub
+		// ← 変更：使用直後に自動で戻さず、対象選択画面のまま連続で使えるようにする。
+		// MPが足りなくなった時だけスキル一覧画面へ戻す。
+		if m.game.PlayerMP[caster] < cost {
+			m.pendingSkill = 0
+			m.menuState = menuStateSkillSub
+		}
 		return
 	}
 
@@ -334,4 +352,3 @@ func (m *MenuScene) updateHealTarget() {
 		m.menuState = menuStateSkillSub
 	}
 }
-

@@ -74,6 +74,19 @@ func (s *BattleScene) applyDebugCheats() {
 		}
 		s.battleLog = "SP+9999（デバッグ）"
 		s.battleLogTimer = battleLogDuration
+
+	case inpututil.IsKeyJustPressed(ebiten.Key9):
+		for _, def := range ItemDatabase {
+			s.game.AddItem(def.ID, 5)
+		}
+		s.battleLog = "全アイテムを5個ずつ入手（デバッグ）"
+		s.battleLogTimer = battleLogDuration
+
+	case inpututil.IsKeyJustPressed(ebiten.Key0):
+		for i := 0; i < partySize; i++ {
+			s.game.PlayerHP[i] = 0
+		}
+		s.checkBattleEnd()
 	}
 }
 
@@ -242,6 +255,14 @@ func (s *BattleScene) Update(dt float64) Scene {
 	const returnDelayDuration = 0.4 // ← 調整用：アニメーション終了後、戻り始めるまでの秒数
 
 	for i := 0; i < partySize; i++ {
+		if s.waitCancelHold[i] > 0 {
+			s.waitCancelHold[i] -= dt
+			if s.waitCancelHold[i] < 0 {
+				s.waitCancelHold[i] = 0
+				s.atbGauge[i] = 0
+				s.readySlideX[i] = 0
+			}
+		}
 		isAttacking := (s.activeAttacker == i) || (s.hitStopTimer > 0 && s.playerPose[i] != poseIdle && s.playerPose[i] != poseDamage)
 		isSelecting := s.playerPose[i] == poseReady || s.playerPose[i] == poseReadyGlow || s.playerPose[i] == poseHealCast
 
@@ -367,6 +388,11 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 	case phaseMessage:
 		if s.battleLogTimer <= 0 {
+			if s.fleeSucceeded {
+				s.restoreDefeatedPartyHP()
+				field, _ := NewRoomScene(s.game, s.originMap, s.originX, s.originY, "", s.originDir)
+				return field
+			}
 			s.battlePhase = phasePlayerMenu
 		}
 	case phaseSkillMenu:
@@ -378,8 +404,17 @@ func (s *BattleScene) Update(dt float64) Scene {
 	case phaseHealSelect:
 		s.updateHealTargetSelect()
 
+	case phaseItemMenu:
+		s.updateItemMenu(dt)
+
+	case phaseItemTarget:
+		s.updateItemTargetSelect()
+
 	case phaseBattleEnd:
 		if !s.isWon {
+			if s.battleLogTimer > 0 {
+				return s
+			}
 			if isMenuUpPressed() || isMenuDownPressed() {
 				s.gameOverIdx = (s.gameOverIdx + 1) % 2
 			}
@@ -447,6 +482,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 					if s.game.PlayerHP[i] <= 0 {
 						continue
 					}
+					s.levelUpPauseTimer[i] = 0
 					if s.drawPlayerLv[i] < s.game.PlayerLv[i] {
 						s.drawPlayerLv[i]++
 						if s.drawPlayerLv[i] == s.game.PlayerLv[i] {
@@ -459,6 +495,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 						s.expStartEXP[i] = 0
 					} else {
 						s.drawPlayerEXP[i] = s.game.PlayerEXP[i]
+						s.drawPlayerEXPF[i] = float64(s.game.PlayerEXP[i])
 						s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 						s.drawPlayerLv[i] = s.game.PlayerLv[i]
 					}
@@ -486,6 +523,25 @@ func (s *BattleScene) Update(dt float64) Scene {
 				if s.game.PlayerHP[i] <= 0 {
 					continue
 				}
+
+				// ゲージが右端まで到達済み：しばらく満タン表示のまま待ってからレベルアップ処理をする。
+				if s.levelUpPauseTimer[i] > 0 {
+					allFinished = false
+					s.levelUpPauseTimer[i] -= dt
+					if s.levelUpPauseTimer[i] <= 0 {
+						s.levelUpPauseTimer[i] = 0
+						s.drawPlayerLv[i]++
+						if s.drawPlayerLv[i] == s.game.PlayerLv[i] {
+							s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
+						} else {
+							s.drawPlayerMaxEXP[i] = s.drawPlayerLv[i] * 50
+						}
+						s.drawPlayerEXP[i] = 0
+						s.drawPlayerEXPF[i] = 0.0
+					}
+					continue
+				}
+
 				var targetEXP int
 				if s.drawPlayerLv[i] < s.game.PlayerLv[i] {
 					targetEXP = s.drawPlayerMaxEXP[i]
@@ -498,21 +554,18 @@ func (s *BattleScene) Update(dt float64) Scene {
 				}
 
 				s.drawPlayerEXPF[i] += float64(s.drawPlayerMaxEXP[i]) * 0.3 * dt
+				if s.drawPlayerEXPF[i] > float64(targetEXP) {
+					s.drawPlayerEXPF[i] = float64(targetEXP)
+				}
 				s.drawPlayerEXP[i] = int(s.drawPlayerEXPF[i])
 
 				if s.drawPlayerEXP[i] >= targetEXP {
+					s.drawPlayerEXP[i] = targetEXP
+					s.drawPlayerEXPF[i] = float64(targetEXP)
 					if s.drawPlayerLv[i] < s.game.PlayerLv[i] {
-						s.drawPlayerLv[i]++
-						if s.drawPlayerLv[i] == s.game.PlayerLv[i] {
-							s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
-						} else {
-							s.drawPlayerMaxEXP[i] = s.drawPlayerLv[i] * 50
-						}
-						s.drawPlayerEXP[i] = 0
-						s.drawPlayerEXPF[i] = 0.0
-					} else {
-						s.drawPlayerEXP[i] = targetEXP
-						s.drawPlayerEXPF[i] = float64(targetEXP)
+						// ゲージが右端に達した状態をひと呼吸見せてからレベルアップする。
+						s.levelUpPauseTimer[i] = levelUpPauseDuration
+						allFinished = false
 					}
 				}
 			}
@@ -592,6 +645,14 @@ func (s *BattleScene) updateEnemyDeath(dt float64) {
 
 func (s *BattleScene) updateAllPoses(dt float64) {
 	for i := 0; i < partySize; i++ {
+		// ★追加：回避で右にずらしたスプライトを、時間経過で元の位置に戻す。
+		if s.evadeOffsetX[i] > 0 {
+			s.evadeOffsetX[i] -= evadeDodgeReturnSpeed * dt
+			if s.evadeOffsetX[i] < 0 {
+				s.evadeOffsetX[i] = 0
+			}
+		}
+
 		if s.playerPose[i] == poseHealCast && i != s.healingCaster {
 			s.playerPose[i] = poseIdle
 			s.playerAnimTimer[i] = 0
@@ -603,6 +664,10 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 				s.playerPose[i] = poseDead
 				s.playerAnimTimer[i] = 0
 			}
+			continue
+		}
+		if s.waitCancelHold[i] > 0 {
+			s.playerPose[i] = poseDefend
 			continue
 		}
 
@@ -659,7 +724,9 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 			(s.battlePhase == phasePlayerMenu ||
 				s.battlePhase == phaseSkillMenu ||
 				s.battlePhase == phaseTargetSelect ||
-				s.battlePhase == phaseHealSelect) {
+				s.battlePhase == phaseHealSelect ||
+				s.battlePhase == phaseItemMenu ||
+				s.battlePhase == phaseItemTarget) {
 
 			if s.battlePhase == phaseSkillMenu {
 				lv := s.skillLevelCursors[i][s.skillIndex]

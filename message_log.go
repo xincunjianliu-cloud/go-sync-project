@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"math"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -87,28 +88,10 @@ func drawMessageKeyGuide(screen *ebiten.Image, game *Game) {
 	}
 }
 
-// wrapLines は与えられた文字列を maxWidth に収まるよう改行位置で分割する。
-func wrapLines(s string, face *text.GoTextFace, maxWidth float64) []string {
-	var lines []string
-	var currentLine string
-	for _, r := range s {
-		if r == '\n' {
-			lines = append(lines, currentLine)
-			currentLine = ""
-			continue
-		}
-		testLine := currentLine + string(r)
-		if text.Advance(testLine, face) > maxWidth {
-			lines = append(lines, currentLine)
-			currentLine = string(r)
-		} else {
-			currentLine = testLine
-		}
-	}
-	if currentLine != "" || len(lines) == 0 {
-		lines = append(lines, currentLine)
-	}
-	return lines
+// wrapLines は自動折り返しをせず、文字列中の改行(\n)の位置でそのまま分割する。
+// 改行位置は書き手が入力時に決める（このシステムが調整するのは開始X座標のみ）。
+func wrapLines(s string) []string {
+	return strings.Split(s, "\n")
 }
 
 type logEntryLayout struct {
@@ -147,7 +130,6 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 
 	nameFace := game.FontFace(13)
 	textFace := game.FontFace(13)
-	innerWidth := imgW - logTextOffsetX*2
 
 	maxTextLinesF := (imgH - logTextOffsetY) / logTextLineH
 	maxTextLines := int(maxTextLinesF)
@@ -157,7 +139,7 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 
 	entries := make([]logEntryLayout, 0, len(log))
 	for _, cmd := range log {
-		lines := wrapLines(cmd.Text, textFace, innerWidth)
+		lines := wrapLines(cmd.Text)
 		if len(lines) > maxTextLines {
 			lines = lines[:maxTextLines]
 			last := lines[len(lines)-1]

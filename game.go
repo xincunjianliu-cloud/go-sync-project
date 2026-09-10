@@ -30,10 +30,10 @@ type Scene interface {
 
 // PlayerNames はパーティメンバーの表示名。
 var PlayerNames = [partySize]string{
-	"プレイヤー1",
-	"プレイヤー2",
-	"プレイヤー3",
-	"プレイヤー4",
+	"ブロリー",
+	"パラガス",
+	"ベジータ",
+	"トランクスルー",
 }
 
 // BossNames はボスの表示名（1章1ボスで全4体）。
@@ -124,12 +124,20 @@ type Game struct {
 	LastStatusCharIndex  int
 
 	// Game構造体に追加
-	DisplayModeIndex int
+	Fullscreen   bool
+	WindowWidth  int
+	WindowHeight int
+
+	lastWindowW             int
+	lastWindowH             int
+	windowResizeSettleTimer int
 
 	CurrentObjectiveID string
 
 	MinimapPlayerIconImg    *ebiten.Image
 	MinimapObjectiveIconImg *ebiten.Image
+
+	ChestImg *ebiten.Image // チェスト（宝箱）: 32x32を2フレーム横並び（0=未開封, 1=開封済み）
 
 	Audio                  *AudioManager
 	mouseLastX, mouseLastY int
@@ -139,6 +147,10 @@ type Game struct {
 	// ★追加：ダッシュのオン/オフ状態。マップ移動でFieldSceneが作り直されても
 	// ダッシュ状態が消えないよう、シーンをまたいで生きるGame側に持たせる。
 	IsDashing bool
+
+	// ── アイテム関連 ──
+	Inventory    []InventorySlot // 所持アイテム一覧
+	OpenedChests map[string]bool // 開封済みチェスト（"マップパス|X_Y"をキーとする）
 }
 
 const mouseIdleHideDelay = 2.0 // マウスカーソルを隠すまでの無操作時間（秒）
@@ -155,47 +167,31 @@ func (g *Game) FontFace(size float64) *text.GoTextFace {
 
 func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 	g := &Game{
-		fontSource: source,
-		Tilesets:   make(map[string]*ebiten.Image),
-		CharaImgs:  make(map[string]*ebiten.Image),
+		fontSource:   source,
+		Tilesets:     make(map[string]*ebiten.Image),
+		CharaImgs:    make(map[string]*ebiten.Image),
+		OpenedChests: make(map[string]bool),
 	}
 
-	g.PlayerHP[0], g.PlayerMaxHP[0] = 100, 100
-	g.PlayerMP[0], g.PlayerMaxMP[0] = 15, 15
-	g.PlayerAtk[0] = 15
-
-	g.PlayerHP[1], g.PlayerMaxHP[1] = 70, 70
-	g.PlayerMP[1], g.PlayerMaxMP[1] = 40, 40
-	g.PlayerAtk[1] = 8
-
-	g.PlayerHP[2], g.PlayerMaxHP[2] = 110, 110
-	g.PlayerMP[2], g.PlayerMaxMP[2] = 20, 20
-	g.PlayerAtk[2] = 12
-
-	g.PlayerHP[3], g.PlayerMaxHP[3] = 90, 90
-	g.PlayerMP[3], g.PlayerMaxMP[3] = 10, 10
-	g.PlayerAtk[3] = 13
-
-	// ★変更：すばやさ(PlayerSpd)は「タイムライン上でアイコンが進む速さ」そのものになったため、
-	// キャラごとに個別の初期値を設定する（旧 playerSpeeds 配列の値を踏襲）。
-	initialSpd := [4]int{24, 26, 22, 20}
-	// ★変更：運(PlayerLuck)も会心率・回避率に使う実ステータスになったため、キャラごとに初期値を分ける。
-	initialLuck := [4]int{5, 8, 4, 10}
-
-	for i := 0; i < 4; i++ {
-		g.PlayerMagicAtk[i] = 10 // 仮の初期値、後で個別調整
-		g.PlayerDef[i] = 10
-		g.PlayerMagicDef[i] = 10
-		g.PlayerSpd[i] = initialSpd[i]
-		g.PlayerLuck[i] = initialLuck[i]
+	// ★変更：初期ステータスは stats_config.go の PlayerStatsByLevel[0]（＝Lv1）を
+	// 単一の情報源として読み込む（値を変えたい場合は stats_config.go を編集する）。
+	for i := 0; i < partySize; i++ {
+		st := PlayerStatsByLevel[0][i]
+		g.PlayerHP[i], g.PlayerMaxHP[i] = st.HP, st.HP
+		g.PlayerMP[i], g.PlayerMaxMP[i] = st.MP, st.MP
+		g.PlayerAtk[i] = st.PhysAtk
+		g.PlayerMagicAtk[i] = st.MagicAtk
+		g.PlayerDef[i] = st.PhysDef
+		g.PlayerMagicDef[i] = st.MagicDef
+		g.PlayerSpd[i] = st.Spd
+		g.PlayerLuck[i] = st.Luck
 		g.PlayerSP[i] = 0
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < partySize; i++ {
 		g.PlayerLv[i] = 1
 		g.PlayerEXP[i] = 0
-		// ★変更：固定値10ではなく、キャラごとに個別設定可能なEXPカーブ(stat_growth.go)から算出する。
-		g.PlayerNextEXP[i] = PlayerExpCurve(i, 1)
+		g.PlayerNextEXP[i] = PlayerExpToNextByLevel[0]
 	}
 
 	// スキルレベルは1始まり。0のままだとLevels[lv-1]がLevels[-1]となりクラッシュするため必ず1で初期化する。
@@ -207,7 +203,9 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 
 	settings := LoadSettings()
 	g.MessageSpeed = settings.MessageSpeed
-	g.DisplayModeIndex = settings.DisplayModeIndex
+	g.Fullscreen = settings.Fullscreen
+	g.WindowWidth = settings.WindowWidth
+	g.WindowHeight = settings.WindowHeight
 
 	var err error
 
@@ -398,6 +396,12 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 		g.MinimapObjectiveIconImg = nil
 	}
 
+	g.ChestImg, _, err = ebitenutil.NewImageFromFile("assets/images/chest.png")
+	if err != nil {
+		fmt.Printf("警告: チェスト画像の読み込みに失敗しました\n")
+		g.ChestImg = nil
+	}
+
 	g.Audio = NewAudioManager()
 	g.Audio.SetVolume(settings.BGMVolume) // ← 追加
 
@@ -468,7 +472,11 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 		g.SaveThumbFrameImg = nil
 	}
 
-	applyDisplayMode(g.DisplayModeIndex)
+	applyDisplayMode(g.Fullscreen, g.WindowWidth, g.WindowHeight)
+	if !g.Fullscreen {
+		g.WindowWidth, g.WindowHeight = ebiten.WindowSize()
+	}
+	g.lastWindowW, g.lastWindowH = g.WindowWidth, g.WindowHeight
 
 	if err := LoadDialogues("assets/dialogues"); err != nil {
 		return nil, fmt.Errorf("セリフデータの読み込みに失敗 %w", err)
@@ -482,6 +490,7 @@ func (g *Game) Update() error {
 	dt := 1.0 / 60.0
 
 	g.updateMouseCursorVisibility(dt) // ★追加
+	g.updateWindowSizeTracking()
 
 	// プレイ時間の累積（フェード中も含めて常に加算）
 	g.TotalPlayTime += dt

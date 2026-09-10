@@ -28,6 +28,13 @@ func isConfirmKeyPressed() bool {
 		inpututil.IsKeyJustPressed(ebiten.KeyZ)
 }
 
+func isConfirmKeyDown() bool {
+	return ebiten.IsKeyPressed(ebiten.KeyEnter) ||
+		ebiten.IsKeyPressed(ebiten.KeyNumpadEnter) ||
+		ebiten.IsKeyPressed(ebiten.KeySpace) ||
+		ebiten.IsKeyPressed(ebiten.KeyZ)
+}
+
 func isEscapePressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyX)

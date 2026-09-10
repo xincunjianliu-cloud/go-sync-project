@@ -14,15 +14,19 @@ const (
 	TargetBoth                      // 単体/全体をプレイヤーが選択可能
 )
 
-// ── 属性(最終的に5属性程度まで拡張予定) ──────────────────────
+// ── 属性 ────────────────────────────────────────────────
 type Element int
 
 const (
 	ElemPhysicalNone Element = iota // 物理無属性
 	ElemMagicNone                   // 魔法無属性
 	ElemFire                        // 火
-	// 今後 ElemWater / ElemWind / ElemThunder / ElemHoly / ElemDark などを追加予定
+	ElemLightning                   // 雷
+	ElemIce                         // 氷
+	ElemWind                        // 風
 )
+
+const elementalTypeCount = 4
 
 // ── スキル追加効果の種類 ──────────────────────────────────────
 type EffectType int
@@ -49,8 +53,8 @@ type SkillLevelData struct {
 	Description string
 	Target      SkillTarget
 	Element     Element
-	PowerSingle int // 単体威力（%）。使わないスキルは0
-	PowerAll    int // 全体威力（%）。使わないスキルは0
+	PowerSingle int // 単体威力。使わないスキルは0
+	PowerAll    int // 全体威力。使わないスキルは0
 	MPCost      int
 	Effects     []SkillEffect
 	IsHeal      bool
@@ -71,7 +75,8 @@ type SkillDef struct {
 // 現在は全員 HeroSkills を共有しているが、将来的にキャラごとに
 // 専用のスキルリストへ差し替えられるようにこの配列経由で参照する。
 // 例）P2だけ専用スキルにしたい場合:
-//   characterSkillSets[1] = MageSkills
+//
+//	characterSkillSets[1] = MageSkills
 var characterSkillSets = [4][]SkillDef{
 	HeroSkills, // P1
 	HeroSkills, // P2（暫定でP1と共有）
@@ -129,7 +134,7 @@ var HeroSkills = []SkillDef{
 			{
 				Description: "全体にダメージを与える",
 				Target:      TargetAll,
-				Element:     ElemMagicNone,
+				Element:     ElemLightning,
 				PowerAll:    80,
 				MPCost:      7,
 			},
@@ -193,7 +198,7 @@ var HeroSkills = []SkillDef{
 			{
 				Description: "対象の物理魔法攻撃力を10%下げる",
 				Target:      TargetSingle,
-				Element:     ElemPhysicalNone,
+				Element:     ElemWind,
 				MPCost:      3,
 				Effects: []SkillEffect{
 					{Type: EffectDebuffAtk, Percent: 10, Turns: 3},
@@ -227,7 +232,7 @@ var HeroSkills = []SkillDef{
 			{
 				Description: "対象のHPを回復する",
 				Target:      TargetBoth,
-				Element:     ElemMagicNone,
+				Element:     ElemIce,
 				PowerSingle: 120,
 				PowerAll:    60,
 				MPCost:      6,
@@ -306,11 +311,17 @@ func (g *Game) CanUpgradeSkill(charIdx, skillIdx int) bool {
 	if cost < 0 {
 		return false
 	}
+	if currentLv >= len(skills[skillIdx].Levels) {
+		return false
+	}
 	return g.PlayerSP[charIdx] >= cost
 }
 
 // UpgradeSkill はSPを消費してスキルレベルを1上げる。
 // 成功したらtrue、SP不足や最大レベル到達などで失敗したらfalseを返す。
+// ★修正：MPCostは戦闘中にそのスキルを「使う」ための消費MPであり、
+// 強化(レベルアップ)とは無関係。ここでMPを要求・消費していたため、
+// SPが足りていても直前の強化でMPを使い切っていると強化不可になるバグがあった。
 func (g *Game) UpgradeSkill(charIdx, skillIdx int) bool {
 	if !g.CanUpgradeSkill(charIdx, skillIdx) {
 		return false

@@ -59,6 +59,7 @@ const (
 	statusLeftValueX = 500.0
 	statusLeftLineX  = 220.0
 	statusLeftLineW  = 300.0
+	statusLevelX     = statusLeftLabelX
 
 	// Y位置だけ行ごとに個別指定
 	statusLvY  = 280.0
@@ -170,7 +171,7 @@ func (m *MenuScene) drawStatusScreen(screen *ebiten.Image) {
 
 	// ── Lv・EXP ──
 	drawStatusRow(screen, g, "Lv", fmt.Sprintf("%d/%d", g.PlayerLv[i], maxPlayerLevel),
-		statusLeftLabelX, statusLeftValueX, statusLvY, statusLeftLineX, statusLeftLineW,
+		statusLevelX, statusLeftValueX, statusLvY, statusLeftLineX, statusLeftLineW,
 		statusFontSizeEN, statusFontSizeNum, statusLeftLineOffsetY)
 
 	drawStatusRow(screen, g, "EXP", fmt.Sprintf("%d/%d", g.PlayerEXP[i], g.PlayerNextEXP[i]),
@@ -395,28 +396,38 @@ func drawConfirmDialog(screen *ebiten.Image, game *Game, message string, selecte
 
 	face := game.FontFace(15)
 	lineOp := &text.DrawOptions{}
-	lineOp.GeoM.Translate(winX+winW/2+confirmTextOffsetX, winY+confirmTextOffsetY)
 	lineOp.PrimaryAlign = text.AlignCenter
 	lineOp.LineSpacing = face.Metrics().HAscent + face.Metrics().HDescent + 4
 	lineOp.ColorScale.ScaleWithColor(uiColorText)
+	if displayChoices {
+		lineOp.GeoM.Translate(winX+winW/2+confirmTextOffsetX, winY+confirmTextOffsetY)
+	} else {
+		// 選択肢がない場合（結果メッセージのみ）は画像の中央に配置する
+		lineOp.GeoM.Translate(winX+winW/2+confirmTextOffsetX, winY+winH/2)
+		lineOp.SecondaryAlign = text.AlignCenter
+	}
 	text.Draw(screen, message, face, lineOp)
 
 	if displayChoices {
 		choices := []string{"はい", "いいえ"}
+		choiceFace := game.FontFace(15)
 		for j, choice := range choices {
-			choiceOp := &text.DrawOptions{}
-			choiceOp.GeoM.Translate(
-				winX+winW/2+confirmChoiceOffsetX,
-				winY+confirmChoiceStartY+float64(j)*confirmChoiceGap,
-			)
-			choiceOp.PrimaryAlign = text.AlignCenter
+			centerX := winX + winW/2 + confirmChoiceOffsetX
+			centerY := winY + confirmChoiceStartY + float64(j)*confirmChoiceGap
+			col := uiColorText
 			if j == selectedIndex {
-				choiceOp.ColorScale.ScaleWithColor(uiColorSelect)
-				text.Draw(screen, "▶ "+choice, game.FontFace(15), choiceOp)
-			} else {
-				choiceOp.ColorScale.ScaleWithColor(uiColorText)
-				text.Draw(screen, "  "+choice, game.FontFace(15), choiceOp)
+				col = uiColorSelect
+				labelW := text.Advance(choice, choiceFace)
+				arrowOp := &text.DrawOptions{}
+				arrowOp.GeoM.Translate(centerX-labelW/2-text.Advance("▶ ", choiceFace), centerY)
+				arrowOp.ColorScale.ScaleWithColor(col)
+				text.Draw(screen, "▶", choiceFace, arrowOp)
 			}
+			choiceOp := &text.DrawOptions{}
+			choiceOp.GeoM.Translate(centerX, centerY)
+			choiceOp.PrimaryAlign = text.AlignCenter
+			choiceOp.ColorScale.ScaleWithColor(col)
+			text.Draw(screen, choice, choiceFace, choiceOp)
 		}
 	}
 }

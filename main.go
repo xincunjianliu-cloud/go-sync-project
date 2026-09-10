@@ -22,7 +22,7 @@ func main() {
 
 	ebiten.SetWindowTitle("七不思議討滅録")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetWindowSize(960, 540) // ← 仮サイズ。NewGame内のapplyDisplayModeで上書きされる
+	ebiten.SetWindowSize(960, 540) // ← 仮サイズ。NewGame内のapplyDisplayModeで実際の設定値に上書きされる
 	ebiten.SetTPS(60)
 
 	g, err := NewGame(source)

@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/color"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -52,6 +53,8 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 			}
 		}
 	}
+
+	s.drawChests(screen, camX, camY)
 
 	for _, e := range s.enemies {
 		if idx, ok := bossIndexFromEnemyType(e.Type); ok {
@@ -111,11 +114,11 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 		drawMessageKeyGuide(screen, s.game)
 	}
 
-	if s.nearExamineEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene {
+	if s.nearExamineEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
 		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ 調べる")
 	}
 
-	if s.nearDoorEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene {
+	if s.nearDoorEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
 		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ 進む")
 	}
 
@@ -129,8 +132,49 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 		s.drawChoiceUI(screen, camX, camY)
 	}
 
+	if s.isItemGetActive {
+		s.drawItemGetPopup(screen)
+	}
+
 	if s.isLogActive {
 		s.logScrollOffset = drawMessageLog(screen, s.game, s.msgLog, s.logScrollOffset, s.logCursorIndex)
+	}
+}
+
+// drawChests は現在のマップのeventsレイヤーにあるチェスト（event_chest_）を
+// 未開封/開封済みの状態に応じて描画する。ChestImgは32x32を2フレーム横並びにした
+// 画像（0=未開封, 1=開封済み）を想定している。
+func (s *FieldScene) drawChests(screen *ebiten.Image, camX, camY float64) {
+	if s.game.ChestImg == nil {
+		return
+	}
+	const chestFrameW, chestFrameH = 32, 32
+
+	for _, layer := range s.tileMap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			p := objProps(obj)
+			if p["type"] != "event" {
+				continue
+			}
+			if !strings.HasPrefix(p["text"], "event_chest_") {
+				continue
+			}
+
+			frame := 0
+			if s.game.OpenedChests[chestKey(s.currentMap, obj)] {
+				frame = 1
+			}
+
+			sx := frame * chestFrameW
+			rect := image.Rect(sx, 0, sx+chestFrameW, chestFrameH)
+
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate(obj.X+camX, obj.Y+camY)
+			screen.DrawImage(s.game.ChestImg.SubImage(rect).(*ebiten.Image), op)
+		}
 	}
 }
 
@@ -187,6 +231,31 @@ func (s *BattleScene) enemyCenter() (float64, float64) {
 	return x + w/2, y + h/2
 }
 
+// drawItemGetPopup はアイテム入手時、画面中央に表示する専用ウィンドウを描画する。
+// 下部の会話ウィンドウとは別に、独立した四角い枠として表示する。
+func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
+	const (
+		boxW, boxH  = 320.0, 120.0
+		borderWidth = 3.0
+	)
+
+	bx := float64(gameWidth)/2 - boxW/2
+	by := float64(gameHeight)/2 - boxH/2
+
+	// 枠線（外側を明るい色、内側を半透明の黒で塗って境界線に見せる）
+	ebitenutil.DrawRect(screen, bx, by, boxW, boxH, uiColorText)
+	ebitenutil.DrawRect(screen, bx+borderWidth, by+borderWidth, boxW-borderWidth*2, boxH-borderWidth*2, uiColorPanelBg)
+
+	nameFace := s.game.FontFace(20)
+	label := s.itemGetName + "を手に入れた！"
+	textW, textH := text.Measure(label, nameFace, 0)
+
+	nameOp := &text.DrawOptions{}
+	nameOp.GeoM.Translate(bx+boxW/2-textW/2, by+boxH/2-textH/2)
+	nameOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, label, nameFace, nameOp)
+}
+
 func (s *FieldScene) drawChoiceUI(screen *ebiten.Image, camX, camY float64) {
 	const boxW, boxH = 160.0, 90.0
 
@@ -212,14 +281,18 @@ func (s *FieldScene) drawChoiceUI(screen *ebiten.Image, camX, camY float64) {
 	qOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, s.choiceQuestion, face, qOp)
 
+	choiceArrowGap := text.Advance("▶", face)
 	for i, opt := range s.choiceOptions {
-		label := "　" + opt
+		baseX, baseY := bx+10, by+40+float64(i)*24
 		if i == s.choiceIndex {
-			label = "▶" + opt
+			arrowOp := &text.DrawOptions{}
+			arrowOp.GeoM.Translate(baseX, baseY)
+			arrowOp.ColorScale.ScaleWithColor(uiColorText)
+			text.Draw(screen, "▶", face, arrowOp)
 		}
 		op := &text.DrawOptions{}
-		op.GeoM.Translate(bx+10, by+40+float64(i)*24)
+		op.GeoM.Translate(baseX+choiceArrowGap, baseY)
 		op.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, label, face, op)
+		text.Draw(screen, opt, face, op)
 	}
 }

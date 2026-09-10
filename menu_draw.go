@@ -16,8 +16,53 @@ const (
 	menuStatusStartY   = 50.0
 	menuStatusSpacingY = 116.0
 	menuStatusFontSize = 15.0
+	menuStatusCursorX  = 0.0
+	menuStatusNameX    = 20.0
+	menuStatusLevelX   = 135.0
 	menuBarW           = 160.0
 )
+
+// 左側のコマンド一覧（アイテム/スキル/ステータス/セーブ/ロード/オプション/タイトルに戻る）の文字サイズ・位置。
+// メイン画面での選択可能表示と、他画面で背景として出すグレー表示の両方がこの値を共有する。
+const (
+	cmdListFontSize = 20.0
+	cmdListStartX   = 20.0
+	cmdListStartY   = 30.0
+	cmdListRowGapY  = 40.0
+)
+
+// メニュー背景の区画線。元のメニュー画面.pngに焼き込まれていた白線と同じ位置になるよう、
+// 元画像（960x540）を基準に計測した座標。線の太さは全て menuLineWidth で統一する。
+const (
+	menuFrameLeft   = 15.0
+	menuFrameTop    = 8.0
+	menuFrameRight  = gameWidth - menuFrameLeft // 左右の隙間を同じ数値にする
+	menuFrameBottom = gameHeight - menuFrameTop // 上下の隙間を同じ数値にする
+
+	menuFrameDividerX = 203.0 // 左カラムと右側メイン領域を分ける縦線
+	menuFrameDividerY = 364.0 // 左カラムの上下ボックスを分ける横線
+
+	menuLineWidth = 2.0
+)
+
+// drawMenuBgFrame はメニュー背景に重ねる区画線（外枠・左カラムの仕切り線）を描画する。
+// 元画像の線ににじみ・太さのばらつきがあったため、太さ menuLineWidth で統一し、
+// 角・交点で隙間なくつながるように矩形を少し重ねて描画する。
+func drawMenuBgFrame(screen *ebiten.Image) {
+	w := menuLineWidth
+
+	// 外枠（上下は幅いっぱいに、左右はその内側の高さいっぱいに描いて角を隙間なくつなげる）
+	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameTop, menuFrameRight-menuFrameLeft, w, uiColorMenuLine)
+	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameBottom-w, menuFrameRight-menuFrameLeft, w, uiColorMenuLine)
+	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
+	ebitenutil.DrawRect(screen, menuFrameRight-w, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
+
+	// 左カラムを縦に貫く仕切り線（上下端は外枠と重ねてつなげる）
+	ebitenutil.DrawRect(screen, menuFrameDividerX-w/2, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
+
+	// 左カラム内を上下に分ける仕切り線（左端は外枠、右端は縦の仕切り線と重ねてつなげる）
+	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameDividerY-w/2, menuFrameDividerX-menuFrameLeft+w/2, w, uiColorMenuLine)
+}
 
 const (
 	confirmPanelScale = 1.0
@@ -43,26 +88,29 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		float64(gameHeight)/float64(m.game.MenuBgImg.Bounds().Dy()),
 	)
 	screen.DrawImage(m.game.MenuBgImg, op)
+	drawMenuBgFrame(screen)
 
 	switch m.menuState {
 
 	case menuStateStatus:
+		bgCmdFace := m.game.FontFace(cmdListFontSize)
 		for i, cmdName := range m.commands {
 			cmdOp := &text.DrawOptions{}
-			cmdOp.GeoM.Translate(25, 40+float64(i*40))
+			cmdOp.GeoM.Translate(cmdListStartX+text.Advance("▶ ", bgCmdFace), cmdListStartY+float64(i)*cmdListRowGapY)
 			cmdOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "  "+cmdName, m.game.FontFace(20), cmdOp)
+			text.Draw(screen, cmdName, bgCmdFace, cmdOp)
 		}
 		m.drawStatusScreen(screen)
 		m.drawMenuDescription(screen)
 		return
 
 	case menuStateSaveConfirm, menuStateLoadConfirm:
+		bgCmdFace := m.game.FontFace(cmdListFontSize)
 		for i, cmdName := range m.commands {
 			cmdOp := &text.DrawOptions{}
-			cmdOp.GeoM.Translate(25, 40+float64(i*40))
+			cmdOp.GeoM.Translate(cmdListStartX+text.Advance("▶ ", bgCmdFace), cmdListStartY+float64(i)*cmdListRowGapY)
 			cmdOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "  "+cmdName, m.game.FontFace(20), cmdOp)
+			text.Draw(screen, cmdName, bgCmdFace, cmdOp)
 		}
 		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, slotsPerPageView-1, slotCardStartX, slotCardStartY)
 
@@ -76,57 +124,60 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		return
 
 	case menuStateSaveDone:
+		bgCmdFace := m.game.FontFace(cmdListFontSize)
 		for i, cmdName := range m.commands {
 			cmdOp := &text.DrawOptions{}
-			cmdOp.GeoM.Translate(25, 40+float64(i*40))
+			cmdOp.GeoM.Translate(cmdListStartX+text.Advance("▶ ", bgCmdFace), cmdListStartY+float64(i)*cmdListRowGapY)
 			cmdOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "  "+cmdName, m.game.FontFace(20), cmdOp)
+			text.Draw(screen, cmdName, bgCmdFace, cmdOp)
 		}
 		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, slotsPerPageView-1, slotCardStartX, slotCardStartY)
-		drawConfirmDialog(screen, m.game, m.saveResultMsg+"\n決定で戻る", 0, confirmImageOffsetX, false)
+		drawConfirmDialog(screen, m.game, m.saveResultMsg, 0, confirmImageOffsetX, false)
 		m.drawMenuDescription(screen)
 		return
 
 	case menuStateSaveSlot, menuStateLoadSlot:
+		bgCmdFace := m.game.FontFace(cmdListFontSize)
 		for i, cmdName := range m.commands {
 			cmdOp := &text.DrawOptions{}
-			cmdOp.GeoM.Translate(25, 40+float64(i*40))
+			cmdOp.GeoM.Translate(cmdListStartX+text.Advance("▶ ", bgCmdFace), cmdListStartY+float64(i)*cmdListRowGapY)
 			cmdOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "  "+cmdName, m.game.FontFace(20), cmdOp)
+			text.Draw(screen, cmdName, bgCmdFace, cmdOp)
 		}
 		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, slotsPerPageView-1, slotCardStartX, slotCardStartY)
 		m.drawMenuDescription(screen)
 		return
 
 	case menuStateOption, menuStateOptionAdjust, menuStateMessageSpeedAdjust, menuStateDisplayModeAdjust:
+		bgCmdFace := m.game.FontFace(cmdListFontSize)
 		for i, cmdName := range m.commands {
 			cmdOp := &text.DrawOptions{}
-			cmdOp.GeoM.Translate(25, 40+float64(i*40))
+			cmdOp.GeoM.Translate(cmdListStartX+text.Advance("▶ ", bgCmdFace), cmdListStartY+float64(i)*cmdListRowGapY)
 			cmdOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "  "+cmdName, m.game.FontFace(20), cmdOp)
+			text.Draw(screen, cmdName, bgCmdFace, cmdOp)
 		}
 		m.drawVolumePanel(screen)
 		m.drawMenuDescription(screen)
 		return
-
-	case menuStateSkillUpgrade:
-		// 背景としてスキル画面をそのまま表示してから、確認ダイアログを重ねる
-		m.drawSkillCharAndSubBase(screen)
-		m.drawSkillUpgradeDialog(screen)
-		return
 	}
 
 	statusX := menuStatusOffsetX
+	cmdFace := m.game.FontFace(cmdListFontSize)
+	cmdArrowGap := text.Advance("▶ ", cmdFace)
 	for i, cmdName := range m.commands {
-		cmdOp := &text.DrawOptions{}
-		cmdOp.GeoM.Translate(25, 40+float64(i*40))
+		baseX, baseY := cmdListStartX, cmdListStartY+float64(i)*cmdListRowGapY
+		col := uiColorText
 		if i == m.menuIndex && m.menuState == menuStateMain {
-			cmdOp.ColorScale.ScaleWithColor(uiColorSelect)
-			text.Draw(screen, "▶ "+cmdName, m.game.FontFace(20), cmdOp)
-		} else {
-			cmdOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "  "+cmdName, m.game.FontFace(20), cmdOp)
+			col = uiColorSelect
+			arrowOp := &text.DrawOptions{}
+			arrowOp.GeoM.Translate(baseX, baseY)
+			arrowOp.ColorScale.ScaleWithColor(col)
+			text.Draw(screen, "▶", cmdFace, arrowOp)
 		}
+		cmdOp := &text.DrawOptions{}
+		cmdOp.GeoM.Translate(baseX+cmdArrowGap, baseY)
+		cmdOp.ColorScale.ScaleWithColor(col)
+		text.Draw(screen, cmdName, cmdFace, cmdOp)
 	}
 
 	for i := 0; i < 4; i++ {
@@ -139,6 +190,14 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 			} else {
 				textColor = uiColorText
 			}
+		}
+		if m.menuState == menuStateHealTarget &&
+			(m.healTargetIndex == i || m.healTargetIndex == partySize) {
+			textColor = uiColorSelect
+		}
+		if m.menuState == menuStateItemTarget &&
+			(m.itemTargetIndex == i || m.itemTargetIndex == partySize) {
+			textColor = uiColorSelect
 		}
 		if m.game.PlayerHP[i] <= 0 {
 			textColor = uiColorDead
@@ -167,22 +226,35 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		}
 		if m.menuState == menuStateHealTarget {
 			if m.healTargetIndex == 4 {
-				if m.game.PlayerHP[i] > 0 {
-					prefix = "▶ "
-				}
+				prefix = "▶ "
 			} else if m.healTargetIndex == i {
 				prefix = "▶ "
 			}
 		}
+		if m.menuState == menuStateItemTarget {
+			if m.itemTargetIndex == partySize || m.itemTargetIndex == i {
+				prefix = "▶ "
+			}
+		}
+		prefixOp := &text.DrawOptions{}
+		prefixOp.GeoM.Translate(statusX+menuStatusCursorX, itemY)
+		prefixOp.ColorScale.ScaleWithColor(textColor)
+		text.Draw(screen, prefix, m.game.FontFace(menuStatusFontSize), prefixOp)
+
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(statusX+20, itemY)
+		nameOp.GeoM.Translate(statusX+menuStatusNameX, itemY)
 		nameOp.ColorScale.ScaleWithColor(textColor)
-		text.Draw(screen, fmt.Sprintf("%s%s  Lv %d", prefix, PlayerNames[i], m.game.PlayerLv[i]), m.game.FontFace(menuStatusFontSize), nameOp)
+		text.Draw(screen, PlayerNames[i], m.game.FontFace(menuStatusFontSize), nameOp)
+
+		levelOp := &text.DrawOptions{}
+		levelOp.GeoM.Translate(statusX+menuStatusLevelX, itemY)
+		levelOp.ColorScale.ScaleWithColor(textColor)
+		text.Draw(screen, fmt.Sprintf("Lv %d", m.game.PlayerLv[i]), m.game.FontFace(menuStatusFontSize), levelOp)
 
 		drawStatusValue(screen,
 			statusX+20, itemY+18,
 			m.game.PlayerHP[i], m.game.PlayerMaxHP[i],
-			m.game.FontFace(17.5), m.game.FontFace(14), alpha)
+			m.game.FontFace(17.5), m.game.FontFace(14), alpha, uiColorText)
 
 		hpRatio := 0.0
 		if m.game.PlayerMaxHP[i] > 0 {
@@ -198,7 +270,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		drawStatusValue(screen,
 			statusX+20, itemY+48,
 			m.game.PlayerMP[i], m.game.PlayerMaxMP[i],
-			m.game.FontFace(17.5), m.game.FontFace(14), alpha)
+			m.game.FontFace(17.5), m.game.FontFace(14), alpha, uiColorText)
 
 		mpRatio := 0.0
 		if m.game.PlayerMaxMP[i] > 0 {
@@ -219,35 +291,15 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		m.drawSkillSubMenu(screen)
 	}
 
+	if m.menuState == menuStateItemList {
+		m.drawItemListMenu(screen)
+	}
+
 	if m.menuState == menuStateReturnTitleConfirm {
 		drawConfirmDialog(screen, m.game, "タイトルに戻りますか？", m.confirmIndex, confirmImageOffsetX)
 	}
 
 	m.drawMenuDescription(screen)
-}
-
-// drawSkillCharAndSubBase はskillUpgrade画面の背景として、
-// 通常のスキル画面(ステータス一覧+サブメニュー)を描画する。
-func (m *MenuScene) drawSkillCharAndSubBase(screen *ebiten.Image) {
-	statusX := menuStatusOffsetX
-	for i, cmdName := range m.commands {
-		cmdOp := &text.DrawOptions{}
-		cmdOp.GeoM.Translate(25, 40+float64(i*40))
-		cmdOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "  "+cmdName, m.game.FontFace(20), cmdOp)
-	}
-	for i := 0; i < 4; i++ {
-		itemY := menuStatusStartY + float64(i)*menuStatusSpacingY
-		textColor := uiColorText
-		if i == m.skillCharIndex {
-			textColor = uiColorSelect
-		}
-		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(statusX+20, itemY)
-		nameOp.ColorScale.ScaleWithColor(textColor)
-		text.Draw(screen, fmt.Sprintf("%s  Lv %d", PlayerNames[i], m.game.PlayerLv[i]), m.game.FontFace(menuStatusFontSize), nameOp)
-	}
-	m.drawSkillSubMenu(screen)
 }
 
 // スキルパネル専用の表示開始位置（左上基準）
@@ -258,21 +310,30 @@ const (
 	skillSubPanelY = 100.0
 
 	skillSubNameOffsetX     = 20.0
-	skillSubRowStartOffsetY = 30.0
-	skillSubRowGapY         = 50.0
+	skillSubRowStartOffsetY = 35.0 // 1行目の「行の中心Y」（ここを基準に名前・レベル数字とも縦中央揃え）
+	skillSubRowGapY         = 55.0 // 行間（1行あたりの高さ）
 
-	// ── 所持SP／「決定で強化」ヒント：同じYで横並び ──
-	skillSubSPOffsetX   = 550.0 // 所持SPのX
-	skillSubHintOffsetX = 470.0 // 決定で強化のX（所持SPの右）
+	// レベル数字、ゲージ、必要MPの配置とサイズ。
+	skillSubLevelStartX       = 350.0
+	skillSubLevelGapX         = 75.0
+	skillSubLevelOffsetY      = 0.0
+	skillSubLevelFontSize     = 40.0
+	skillSubLevelArrowOffsetX = 30.0
+	skillSubGaugeOffsetY      = 20.0
+	skillSubGaugeWidth        = 40.0
+	skillSubGaugeHeight       = 10.0
+	skillSubRequiredSPOffsetX = 23.0
+	skillSubRequiredSPOffsetY = 15.0
+	skillSubBottomFontSize    = 16.0
+
+	// ── 所持SPの表示位置 ──
+	skillSubSPOffsetX = 550.0 // 所持SPのX
 
 	// ── 説明文：別Xグループ ──
 	skillSubDescOffsetX = 10.0
 
-	// ── 所持SP／決定で強化／説明文で共通して使う、パネル下端からのYオフセット ──
+	// ── 所持SP／説明文で共通して使う、パネル下端からのYオフセット ──
 	skillSubBottomOffsetY = 20.0
-
-	// 強化結果メッセージだけ少し上にずらす追加オフセット
-	skillSubResultMsgExtraOffsetY = 18.0
 )
 
 func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
@@ -292,11 +353,6 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 
 	skills := m.game.CharacterSkills(m.skillCharIndex)
 
-	const (
-		numStartX = 150.0
-		numGap    = 22.0
-	)
-
 	for i, sk := range skills {
 		if len(sk.Levels) == 0 {
 			continue
@@ -306,48 +362,81 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 			curLv = 1
 		}
 
-		rowY := winY + skillSubRowStartOffsetY + float64(i)*skillSubRowGapY // ← 変更
+		rowCenterY := winY + skillSubRowStartOffsetY + float64(i)*skillSubRowGapY // ← 変更：行の中心Y
 		rowSelected := i == m.skillSubIndex
 
-		prefix := "  "
 		nameCol := uiColorText
+		showNameArrow := false
 		if rowSelected {
+			nameCol = uiColorSelect
 			if !m.skillLevelSelecting {
-				prefix = "▶ "
-				nameCol = uiColorSelect
-			} else {
-				nameCol = uiColorSelect
+				showNameArrow = true
 			}
 		}
 
+		// ★変更：スキル名は行の中心Yを基準に縦中央揃えで描画する（数字側と高さの中心を合わせるため）。
+		// 矢印とスキル名は別々に描画し、スキル名の開始X座標を固定することで選択有無による文字ズレを防ぐ。
+		nameFace := m.game.FontFace(20)
+		if showNameArrow {
+			arrowOp := &text.DrawOptions{}
+			arrowOp.GeoM.Translate(winX+skillSubNameOffsetX, rowCenterY)
+			arrowOp.SecondaryAlign = text.AlignCenter
+			arrowOp.ColorScale.ScaleWithColor(nameCol)
+			text.Draw(screen, "▶", nameFace, arrowOp)
+		}
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(winX+skillSubNameOffsetX, rowY) // ← 変更
+		nameOp.GeoM.Translate(winX+skillSubNameOffsetX+text.Advance("▶ ", nameFace), rowCenterY)
+		nameOp.SecondaryAlign = text.AlignCenter
 		nameOp.ColorScale.ScaleWithColor(nameCol)
-		text.Draw(screen, prefix+sk.Name, m.game.FontFace(20), nameOp)
+		text.Draw(screen, sk.Name, nameFace, nameOp)
 
 		for lv := 1; lv <= len(sk.Levels); lv++ {
-			numX := winX + numStartX + float64(lv-1)*numGap
-			col := uiColorText
+			numX := winX + skillSubLevelStartX + float64(lv-1)*skillSubLevelGapX
+			col := color.RGBA{120, 120, 120, 255}
 			label := fmt.Sprintf("%d", lv)
 			if lv <= curLv {
 				col = uiColorText
 			}
 
 			selected := rowSelected && m.skillLevelSelecting && lv == m.skillLevelCursor
-			if selected {
-				col = uiColorSelect
+
+			numCenterY := rowCenterY + skillSubLevelOffsetY
+			numOp := &text.DrawOptions{}
+			numOp.GeoM.Translate(numX, numCenterY)
+			numOp.PrimaryAlign = text.AlignCenter
+			numOp.SecondaryAlign = text.AlignCenter
+			numOp.ColorScale.ScaleWithColor(col)
+			text.Draw(screen, label, m.game.FontFace(skillSubLevelFontSize), numOp)
+
+			if lv > curLv {
+				gaugeX := numX - skillSubGaugeWidth/2
+				gaugeY := numCenterY + skillSubGaugeOffsetY
+				ebitenutil.DrawRect(screen, gaugeX, gaugeY, skillSubGaugeWidth, skillSubGaugeHeight, color.RGBA{45, 45, 55, 255})
+				gaugeRatio := 0.0
+				if selected {
+					gaugeRatio = m.upgradeProgress
+				}
+				ebitenutil.DrawRect(screen, gaugeX, gaugeY, skillSubGaugeWidth*gaugeRatio, skillSubGaugeHeight, uiColorSelect)
 			}
 
-			numOp := &text.DrawOptions{}
-			numOp.GeoM.Translate(numX, rowY)
-			numOp.ColorScale.ScaleWithColor(col)
-			text.Draw(screen, label, m.game.FontFace(45), numOp)
+			if lv > curLv {
+				requiredSP := "-"
+				if cost := SkillUpgradeCost(lv - 1); cost > 0 {
+					requiredSP = fmt.Sprintf("%d", cost)
+				}
+				spOp := &text.DrawOptions{}
+				spOp.GeoM.Translate(numX+skillSubRequiredSPOffsetX, numCenterY+skillSubRequiredSPOffsetY)
+				spOp.ColorScale.ScaleWithColor(uiColorText)
+				text.Draw(screen, requiredSP, m.game.FontFace(skillSubBottomFontSize), spOp)
+			}
 
 			if selected {
+				// ★変更：Lv選択カーソルの矢印は、スキル名の選択矢印(▶)と全く同じ描き方にする。
 				arrowOp := &text.DrawOptions{}
-				arrowOp.GeoM.Translate(numX+4, rowY-12)
+				arrowOp.GeoM.Translate(numX-skillSubLevelArrowOffsetX, numCenterY)
+				arrowOp.SecondaryAlign = text.AlignCenter
 				arrowOp.ColorScale.ScaleWithColor(uiColorSelect)
-				text.Draw(screen, "▼", m.game.FontFace(11), arrowOp)
+				text.Draw(screen, "▶", m.game.FontFace(20), arrowOp)
 			}
 		}
 	}
@@ -355,74 +444,6 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 	spOp := &text.DrawOptions{}
 	spOp.GeoM.Translate(winX+skillSubSPOffsetX, winY+winH-skillSubBottomOffsetY)
 	spOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, fmt.Sprintf("所持SP: %d", m.game.PlayerSP[m.skillCharIndex]), m.game.FontFace(13), spOp)
+	text.Draw(screen, fmt.Sprintf("所持SP: %d", m.game.PlayerSP[m.skillCharIndex]), m.game.FontFace(skillSubBottomFontSize), spOp)
 
-	if m.upgradeResultMsg != "" {
-		msgOp := &text.DrawOptions{}
-		msgOp.GeoM.Translate(winX+skillSubSPOffsetX, winY+winH-skillSubBottomOffsetY-skillSubResultMsgExtraOffsetY)
-		msgOp.ColorScale.ScaleWithColor(uiColorSelect)
-		text.Draw(screen, m.upgradeResultMsg, m.game.FontFace(12), msgOp)
-	}
-}
-
-// drawSkillUpgradeDialog：スキル強化確認ダイアログ(はい/いいえ + 必要SP表示)
-func (m *MenuScene) drawSkillUpgradeDialog(screen *ebiten.Image) {
-	charIdx := m.skillCharIndex
-	skillIdx := m.skillSubIndex
-
-	winW, winH := 260.0, 120.0
-	winX := float64(gameWidth)/2 - winW/2
-	winY := float64(gameHeight)/2 - winH/2
-
-	ebitenutil.DrawRect(screen, winX, winY, winW, winH, color.RGBA{10, 10, 25, 235})
-	ebitenutil.DrawRect(screen, winX, winY, winW, 1, uiColorText)
-	ebitenutil.DrawRect(screen, winX, winY+winH, winW, 1, uiColorText)
-	ebitenutil.DrawRect(screen, winX, winY, 1, winH, uiColorText)
-	ebitenutil.DrawRect(screen, winX+winW, winY, 1, winH, uiColorText)
-
-	currentLv := m.game.PlayerSkillLv[charIdx][skillIdx]
-	skillName := m.game.CharacterSkills(charIdx)[skillIdx].Name
-
-	titleOp := &text.DrawOptions{}
-	titleOp.GeoM.Translate(winX+winW/2, winY+18)
-	titleOp.PrimaryAlign = text.AlignCenter
-	titleOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, fmt.Sprintf("%s Lv.%d → Lv.%d", skillName, currentLv, currentLv+1), m.game.FontFace(15), titleOp)
-
-	cost := SkillUpgradeCost(currentLv)
-	costText := "強化済み(最大Lv)"
-	if cost > 0 {
-		costText = fmt.Sprintf("必要SP: %d（所持: %d）", cost, m.game.PlayerSP[charIdx])
-	}
-	costOp := &text.DrawOptions{}
-	costOp.GeoM.Translate(winX+winW/2, winY+42)
-	costOp.PrimaryAlign = text.AlignCenter
-	costOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, costText, m.game.FontFace(13), costOp)
-
-	choices := []string{"強化する", "やめる"}
-	for j, choice := range choices {
-		choiceOp := &text.DrawOptions{}
-		choiceOp.GeoM.Translate(winX+winW/2, winY+70+float64(j)*22)
-		choiceOp.PrimaryAlign = text.AlignCenter
-		if j == m.upgradeConfirmIndex {
-			col := uiColorSelect
-			if j == 0 && !m.game.CanUpgradeSkill(charIdx, skillIdx) {
-				col = uiColorText
-			}
-			choiceOp.ColorScale.ScaleWithColor(col)
-			text.Draw(screen, "▶ "+choice, m.game.FontFace(14), choiceOp)
-		} else {
-			choiceOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "  "+choice, m.game.FontFace(14), choiceOp)
-		}
-	}
-
-	if m.upgradeResultMsg != "" {
-		msgOp := &text.DrawOptions{}
-		msgOp.GeoM.Translate(winX+winW/2, winY+winH+16)
-		msgOp.PrimaryAlign = text.AlignCenter
-		msgOp.ColorScale.ScaleWithColor(uiColorSelect)
-		text.Draw(screen, m.upgradeResultMsg, m.game.FontFace(13), msgOp)
-	}
 }

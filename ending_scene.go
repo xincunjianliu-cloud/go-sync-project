@@ -268,7 +268,7 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		return
 	case endingPhaseSaveDone:
 		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, slotsPerPageView/2, slotCardStartX-80, slotCardStartY)
-		drawConfirmDialog(screen, s.game, s.saveResultMsg+"\n決定でタイトルへ", 0, confirmImageOffsetX, false)
+		drawConfirmDialog(screen, s.game, s.saveResultMsg, 0, confirmImageOffsetX, false)
 		return
 	}
 

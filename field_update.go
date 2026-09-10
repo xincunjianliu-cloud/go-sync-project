@@ -11,6 +11,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
+// chestTriggerMargin はチェスト本体（当たり判定あり）の周囲、何ピクセル分から
+// 調べられるようにするか。16px=1マス分。
+const chestTriggerMargin = 32
+
 // openMessageLog は会話ログ画面を開く。開くたびに、スクロール位置・カーソルは
 // どちらも「一番新しい（一番下の）ログ」を指すようにリセットする。
 func (s *FieldScene) openMessageLog() {
@@ -102,6 +106,17 @@ func (s *FieldScene) Update(dt float64) Scene {
 			if cb != nil {
 				cb(selected)
 			}
+		}
+		return s
+	}
+
+	// -------------------------------------------------------------------------
+	// アイテム入手ポップアップ（画面中央の専用ウィンドウ）表示中の処理
+	// -------------------------------------------------------------------------
+	if s.isItemGetActive {
+		if isConfirmKeyPressed() || isEscapePressed() {
+			s.isItemGetActive = false
+			s.itemGetName = ""
 		}
 		return s
 	}
@@ -321,15 +336,27 @@ func (s *FieldScene) Update(dt float64) Scene {
 				continue
 			}
 			for _, obj := range layer.Objects {
-				if !objContains(obj, playerFootX, playerFootY) {
-					continue
-				}
 				p := objProps(obj)
 				evType := p["type"]
 				evText := p["text"]
+				isChest := strings.HasPrefix(evText, "event_chest_")
+
+				// チェストは本体に当たり判定があって乗れないため、
+				// 周囲1マス分（chestTriggerMargin）からでも調べられるようにする。
+				// それ以外のイベントは従来どおりオブジェクトに乗った時だけ反応する。
+				if isChest {
+					if !objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
+						continue
+					}
+				} else if !objContains(obj, playerFootX, playerFootY) {
+					continue
+				}
 
 				if evType == "event" && !strings.HasPrefix(evText, "event_boss_") {
-					if evText == "event_rest" {
+					if isChest {
+						s.openChest(obj, strings.TrimPrefix(evText, "event_chest_"))
+						return s
+					} else if evText == "event_rest" {
 						s.startRestEvent(obj)
 						return s
 					} else if evText != "" {
@@ -436,7 +463,15 @@ func (s *FieldScene) Update(dt float64) Scene {
 			evText := p["text"]
 			routeStr := p["route"]
 
-			if evType == "event" && objContains(obj, playerFootX, playerFootY) {
+			if evType == "event" && strings.HasPrefix(evText, "event_chest_") {
+				// チェストは本体に当たり判定があって乗れないため、
+				// 調べるプロンプトも周囲(chestTriggerMargin)から出す。
+				// ただし開封済みのチェストにはもう何もないのでプロンプトを出さない。
+				if !s.game.OpenedChests[chestKey(s.currentMap, obj)] &&
+					objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
+					s.nearExamineEvent = true
+				}
+			} else if evType == "event" && objContains(obj, playerFootX, playerFootY) {
 				s.nearExamineEvent = true
 			}
 
@@ -746,15 +781,24 @@ func (s *FieldScene) checkDoorProximity() {
 			targetMap := p["targetmap"]
 			targetPoint := p["targetpoint"]
 
-			if targetMap != "" {
-				s.nearDoorEvent = true
-				s.pendingDoorMap = targetMap
-				s.pendingDoorPoint = targetPoint
-				s.pendingDoorX = s.px
-				s.pendingDoorY = s.py
-				s.pendingDoorDir = s.dir
-				return
+			if targetMap == "" {
+				continue
 			}
+
+			// ★追加：requireboss（ボスID）が設定されている場合、
+			// そのボスを倒す(isBossDefeated)までドアは反応しない（未解放のまま）。
+			// 通常のドアはrequirebossを設定しなければ今まで通り常に反応する。
+			if bossID, ok := objPropInt(obj, "requireboss"); ok && bossID > 0 && !isBossDefeated(s.game, bossID) {
+				continue
+			}
+
+			s.nearDoorEvent = true
+			s.pendingDoorMap = targetMap
+			s.pendingDoorPoint = targetPoint
+			s.pendingDoorX = s.px
+			s.pendingDoorY = s.py
+			s.pendingDoorDir = s.dir
+			return
 		}
 	}
 }
@@ -785,7 +829,7 @@ func (s *FieldScene) endMessage() {
 	s.isMsgActive = false
 	s.msgTexts = nil
 	s.msgIndex = 0
-	s.autoMode = false        // 🔥 追加：会話ごとにオートはリセットする
+	s.autoMode = false // 🔥 追加：会話ごとにオートはリセットする
 	s.autoWaitElapsed = 0
 	s.nearExamineEvent = false // ★追加：会話終了時にプロンプト状態をリセット
 	s.game.Audio.PlayBGM(bgmFieldSchool)
@@ -842,6 +886,9 @@ func (s *FieldScene) advanceMessage() Scene {
 			s.msgTexts = nil
 			s.msgIndex = 0
 			s.autoMode = false // 🔥 追加：エンディングに入るのでオートは解除
+			thumb := ebiten.NewImage(gameWidth, gameHeight)
+			s.Draw(thumb)
+			s.game.captureMenuEntryThumb(thumb)
 
 			endingScene := NewEndingScene(s.game, s)
 			s.game.ChangeSceneWithFade(endingScene, fadeTimeBossOut)
@@ -884,6 +931,9 @@ func (s *FieldScene) skipMessage() Scene {
 			s.isMsgActive = false
 			s.msgTexts = nil
 			s.msgIndex = 0
+			thumb := ebiten.NewImage(gameWidth, gameHeight)
+			s.Draw(thumb)
+			s.game.captureMenuEntryThumb(thumb)
 			endingScene := NewEndingScene(s.game, s)
 			s.game.ChangeSceneWithFade(endingScene, fadeTimeBossOut)
 			return s
