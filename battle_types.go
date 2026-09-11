@@ -210,6 +210,14 @@ const (
 var gaugeStageThresholds = [gaugeMaxStage - 1]int{8, 8, 8, 8}
 var gaugeStageAtkBonus = [gaugeMaxStage]int{0, 3, 5, 7, 20}
 
+var gaugeStageColors = [gaugeMaxStage]color.RGBA{
+	{90, 210, 120, 255}, // 1段階目：緑
+	{235, 205, 60, 255}, // 2段階目：黄色
+	{235, 140, 50, 255}, // 3段階目：オレンジ
+	{225, 70, 70, 255},  // 4段階目：赤
+	{175, 90, 225, 255}, // 5段階目：紫
+}
+
 const (
 	gaugeTriX = 15.0
 	gaugeTriY = 100.0
@@ -483,8 +491,9 @@ type BattleScene struct {
 
 	drawPlayerEXPF [partySize]float64
 
-	gaugeStage int
-	gaugePoint int
+	gaugeStage          int
+	gaugePoint          int
+	gaugeColorAnimTimer float64 // ← 追加：MAX時のグラデーション用経過時間
 
 	enemySP       int
 	PlayerDebuffs [partySize][]Debuff

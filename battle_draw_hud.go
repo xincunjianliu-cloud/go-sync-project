@@ -282,48 +282,31 @@ func (s *BattleScene) drawGaugeTriangle(screen *ebiten.Image) {
 			filledHeight = 0
 		}
 
-		if filledHeight > 0 {
-			// ★修正：以前はiw*(1-(fillTopY-iy)/ih)のように浮動小数点の
-			// 割り算・掛け算を経由していたため、本来ちょうど整数になる
-			// はずの値が89.999999998のようにごくわずかにずれ、
-			// math.Floorで切り捨てると本来より1px内側に描画されていた。
-			// ここではfillTopY = iy+ih-filledHeight という関係から
-			// ih-(fillTopY-iy) = filledHeight であることを使い、
-			// 割り算を最後の1回だけにした整数演算に置き換えることで
-			// 誤差なくぴったり境界を計算する。
-			ixI := int(math.Round(ix))
-			iyI := int(math.Round(iy))
-			iwI := int(math.Round(iw))
-			ihI := int(math.Round(ih))
-			filledHeightI := int(math.Round(filledHeight))
-			if filledHeightI > ihI {
-				filledHeightI = ihI
+		ixI := int(math.Round(ix))
+		iyI := int(math.Round(iy))
+		iwI := int(math.Round(iw))
+		ihI := int(math.Round(ih))
+
+		stageSlot := float64(gaugePointsPerStage)*gaugeFillPerPoint + gaugeDividerHeight // 1段=18px
+
+		// 完了済みの段を、それぞれ固定の色で塗る
+		for stage := 0; stage < completedStages && stage < gaugeMaxStage; stage++ {
+			hStart := float64(stage) * stageSlot
+			hEnd := hStart + stageSlot
+			if hEnd > ih {
+				hEnd = ih
 			}
+			s.fillGaugeTriSegment(screen, ixI, iyI, iwI, ihI, hStart, hEnd, s.gaugeSegmentColor(stage))
+		}
 
-			fillTopYI := iyI + ihI - filledHeightI
-			bottomYI := iyI + ihI
-			// ★修正：整数演算にしても右端が1px足りなかった。原因は計算誤差
-			// ではなく、vector.FillPathが指定した境界座標そのものは
-			// 塗らない(半開区間で塗る)ため。境界ちょうどの列を確実に
-			// 塗るには、右端の座標を+1して指定する必要がある。
-			rightAtFillTopI := ixI + (iwI*filledHeightI)/ihI + 1
-
-			fillTopY := float64(fillTopYI)
-			bottomY := float64(bottomYI)
-			rightAtFillTop := float64(rightAtFillTopI)
-
-			var path vector.Path
-			path.MoveTo(float32(ix), float32(bottomY))
-			path.LineTo(float32(ix), float32(fillTopY))
-			path.LineTo(float32(rightAtFillTop), float32(fillTopY))
-			path.Close()
-
-			// ★変更：ゲージ画像がドット絵(境界くっきり)なので、
-			// アンチエイリアスをOFFにしてピクセルぴったりの境界にする。
-			// ONのままだと境界が滲んで「1〜2pxずれて見える」原因になっていた。
-			fillOpts := &vector.DrawPathOptions{AntiAlias: false}
-			fillOpts.ColorScale.ScaleWithColor(color.RGBA{102, 204, 204, 255})
-			vector.FillPath(screen, &path, nil, fillOpts)
+		// 現在進行中（未完了）の段を塗る
+		if remainder > 0 && completedStages < gaugeMaxStage {
+			hStart := float64(completedStages) * stageSlot
+			hEnd := hStart + float64(remainder)*gaugeFillPerPoint
+			if hEnd > ih {
+				hEnd = ih
+			}
+			s.fillGaugeTriSegment(screen, ixI, iyI, iwI, ihI, hStart, hEnd, s.gaugeSegmentColor(completedStages))
 		}
 
 		op := &ebiten.DrawImageOptions{}

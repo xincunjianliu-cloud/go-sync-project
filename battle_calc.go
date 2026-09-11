@@ -2,10 +2,13 @@ package main
 
 // battle_calc.go: ゲージ・ダメージ/回復量・ステータス補正など戦闘計算まわり
 import (
+	"image/color"
 	"math"
 	"math/rand"
 
+	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 func (s *BattleScene) addGaugePoint(pt int) {
@@ -391,4 +394,63 @@ func (s *BattleScene) anyActorHolding() bool {
 		}
 	}
 	return false
+}
+
+// gaugeSegmentColor は指定した段(stage)の色を返す。
+// MAX状態(5段階目)のときは全段グラデーションアニメになる。
+func (s *BattleScene) gaugeSegmentColor(stage int) color.RGBA {
+	if stage < 0 {
+		stage = 0
+	}
+	if stage > gaugeMaxStage-1 {
+		stage = gaugeMaxStage - 1
+	}
+	if s.gaugeStage >= gaugeMaxStage-1 {
+		return s.gaugeRainbowColor()
+	}
+	return gaugeStageColors[stage]
+}
+
+// gaugeRainbowColor は全段階色を巡回する簡易グラデーションを返す。
+func (s *BattleScene) gaugeRainbowColor() color.RGBA {
+	n := len(gaugeStageColors)
+	const secPerColor = 0.6 // 1色あたりの切り替え秒数（調整用）
+	t := s.gaugeColorAnimTimer / secPerColor
+	idx := int(t) % n
+	next := (idx + 1) % n
+	frac := t - float64(int(t))
+	c1, c2 := gaugeStageColors[idx], gaugeStageColors[next]
+	return color.RGBA{
+		R: lerpByte(c1.R, c2.R, frac),
+		G: lerpByte(c1.G, c2.G, frac),
+		B: lerpByte(c1.B, c2.B, frac),
+		A: 255,
+	}
+}
+
+func lerpByte(a, b uint8, t float64) uint8 {
+	return uint8(float64(a) + (float64(b)-float64(a))*t)
+}
+
+// fillGaugeTriSegment は三角形ゲージの高さ方向[hStart, hEnd]区間だけを
+// 指定色で塗る（hは底辺からの高さ、単位px）。
+func (s *BattleScene) fillGaugeTriSegment(screen *ebiten.Image, ix, iy, iw, ih int, hStart, hEnd float64, col color.RGBA) {
+	if hEnd <= hStart {
+		return
+	}
+	yBottom := float64(iy+ih) - hStart
+	yTop := float64(iy+ih) - hEnd
+	rightAtBottom := float64(ix) + float64(iw)*hStart/float64(ih)
+	rightAtTop := float64(ix) + float64(iw)*hEnd/float64(ih) + 1
+
+	var path vector.Path
+	path.MoveTo(float32(ix), float32(yBottom))
+	path.LineTo(float32(ix), float32(yTop))
+	path.LineTo(float32(rightAtTop), float32(yTop))
+	path.LineTo(float32(rightAtBottom), float32(yBottom))
+	path.Close()
+
+	fillOpts := &vector.DrawPathOptions{AntiAlias: false}
+	fillOpts.ColorScale.ScaleWithColor(col)
+	vector.FillPath(screen, &path, nil, fillOpts)
 }

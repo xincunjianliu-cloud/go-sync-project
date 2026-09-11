@@ -1,7 +1,7 @@
 {
   "bgmVolume": 0,
   "messageSpeed": 1,
-  "fullscreen": false,
+  "fullscreen": true,
   "windowWidth": 960,
   "windowHeight": 540
 }

@@ -97,6 +97,8 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 	s.applyDebugCheats()
 
+	s.gaugeColorAnimTimer += dt
+
 	if s.introActive {
 		s.introPhaseTimer += dt
 		switch s.introPhase {
