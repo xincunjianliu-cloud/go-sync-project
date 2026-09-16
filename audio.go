@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2/audio"
@@ -45,16 +47,33 @@ func NewAudioManager() *AudioManager {
 	}
 }
 
-func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
+// decodePCM はmp3を最後まで読み切り、PCMデータを丸ごとメモリに展開する。
+// ストリーミングデコード(Playerが再生しながら少しずつmp3をデコードする方式)は、
+// スマホの非力なCPUだとデコードが再生に間に合わずバッファが枯渇し、
+// ブツブツ音の原因になる。事前に全部デコードしておけば再生中は
+// メモリからコピーするだけになり、デコード負荷による音切れがなくなる。
+func decodePCM(path string) (*bytes.Reader, int64, error) {
 	f, err := loadAssetReader(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	d, err := mp3.DecodeWithSampleRate(sampleRate, f)
 	if err != nil {
+		return nil, 0, err
+	}
+	pcm, err := io.ReadAll(d)
+	if err != nil {
+		return nil, 0, err
+	}
+	return bytes.NewReader(pcm), int64(len(pcm)), nil
+}
+
+func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
+	r, _, err := decodePCM(path)
+	if err != nil {
 		return nil, err
 	}
-	p, err := a.context.NewPlayer(d)
+	p, err := a.context.NewPlayer(r)
 	if err != nil {
 		return nil, err
 	}
@@ -64,15 +83,11 @@ func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
 }
 
 func (a *AudioManager) loadLoopPlayer(path string) (*audio.Player, error) {
-	f, err := loadAssetReader(path)
+	r, length, err := decodePCM(path)
 	if err != nil {
 		return nil, err
 	}
-	d, err := mp3.DecodeWithSampleRate(sampleRate, f)
-	if err != nil {
-		return nil, err
-	}
-	loop := audio.NewInfiniteLoop(d, d.Length())
+	loop := audio.NewInfiniteLoop(r, length)
 	p, err := a.context.NewPlayer(loop)
 	if err != nil {
 		return nil, err
