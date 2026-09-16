@@ -28,12 +28,51 @@
     width: 100vw;
     height: 100vh;
   }
+  #rotate-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    background: #000;
+    color: #eee;
+    font-family: sans-serif;
+    text-align: center;
+    padding: 24px;
+  }
+  #rotate-overlay .icon {
+    font-size: 40px;
+    animation: rotate-hint 1.6s ease-in-out infinite;
+  }
+  @keyframes rotate-hint {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+  }
+  @media (pointer: coarse) and (orientation: portrait) {
+    #rotate-overlay { display: flex; }
+    canvas { visibility: hidden; }
+  }
 </style>
 </head>
 <body>
 <div id="loading">読み込み中...(初回は少し時間がかかります)</div>
+<div id="rotate-overlay">
+  <div class="icon">📱</div>
+  <div>端末を横向きにしてください</div>
+</div>
 <script src="wasm_exec.js"></script>
 <script>
+  function tryLockLandscape() {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock("landscape").catch(() => {});
+    }
+  }
+  window.addEventListener("load", tryLockLandscape);
+  document.addEventListener("touchstart", tryLockLandscape, { once: true });
+
   const go = new Go();
   WebAssembly.instantiateStreaming(fetch("game.wasm"), go.importObject).then((result) => {
     document.getElementById("loading").remove();
