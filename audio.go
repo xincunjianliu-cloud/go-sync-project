@@ -2,12 +2,18 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/audio/mp3"
 )
 
 const sampleRate = 44100
+
+// bgmBufferSize はBGM再生バッファの長さ。スマホ(特にCPUが遅い端末)ではデフォルトの
+// バッファが短く、mp3デコードが間に合わずノイズ(音割れ・ブツブツ音)が発生するため、
+// BGMのようにレイテンシを気にしない用途では長めに確保して耐性を持たせる。
+const bgmBufferSize = 500 * time.Millisecond
 
 const (
 	bgmFieldSchool    = "assets/bgm/FIELD_School.mp3"
@@ -52,6 +58,7 @@ func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.SetBufferSize(bgmBufferSize)
 	p.SetVolume(a.volume)
 	return p, nil
 }
@@ -70,6 +77,7 @@ func (a *AudioManager) loadLoopPlayer(path string) (*audio.Player, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.SetBufferSize(bgmBufferSize)
 	p.SetVolume(a.volume)
 	return p, nil
 }
