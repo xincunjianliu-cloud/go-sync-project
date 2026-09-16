@@ -15,6 +15,7 @@
 # WASMビルド出力（GitHub Actionsが生成、都度作り直す）
 /web/game.wasm
 /web/wasm_exec.js
+/web/assets
 
 # Claude Code のローカル設定（個人環境ごとの設定なので共有しない）
 .claude/

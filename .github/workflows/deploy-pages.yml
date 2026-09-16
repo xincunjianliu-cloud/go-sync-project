@@ -25,8 +25,14 @@ jobs:
       - name: Build wasm
         run: |
           mkdir -p web
-          GOOS=js GOARCH=wasm go build -o web/game.wasm .
+          GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o web/game.wasm .
           cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/wasm_exec.js
+          cp -r assets web/assets
+      - name: Optimize wasm size
+        run: |
+          sudo apt-get update && sudo apt-get install -y binaryen
+          wasm-opt -Oz --enable-bulk-memory --enable-sign-ext --enable-nontrapping-float-to-int \
+            -o web/game.wasm web/game.wasm
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

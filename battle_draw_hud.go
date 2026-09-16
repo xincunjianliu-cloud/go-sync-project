@@ -480,11 +480,7 @@ func (s *BattleScene) drawLogWindowBackground(screen *ebiten.Image) {
 	winW := float64(gameWidth)
 	winY := logPanelY
 	winH := 28.0
-	winImg := ebiten.NewImage(int(winW), int(winH))
-	winImg.Fill(color.RGBA{0, 0, 0, 200})
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(winX, winY)
-	screen.DrawImage(winImg, op)
+	ebitenutil.DrawRect(screen, winX, winY, winW, winH, color.RGBA{0, 0, 0, 200})
 	borderColor := color.RGBA{255, 255, 255, 255}
 	ebitenutil.DrawRect(screen, winX, winY, winW, 1, borderColor)
 	ebitenutil.DrawRect(screen, winX, winY+winH-1, winW, 1, borderColor)

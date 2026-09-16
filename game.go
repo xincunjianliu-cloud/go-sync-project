@@ -349,6 +349,75 @@ func (g *Game) ResetForNewGame() {
 	g.UpdateObjective()
 }
 
+// assetPreloadPaths はNewGame内で読み込む画像アセットのパス一覧を返す。
+// prefetchAssetBytesにまとめて渡し、Web版のfetchを並列化するために使う。
+// 実際のロード処理・エラーメッセージはNewGame本体側の記述が正なので、
+// ここでの列挙が万一漏れていても起動は壊れず、その分だけ先読みされずに
+// 通常どおり逐次フェッチされるだけになる。
+func assetPreloadPaths() []string {
+	paths := []string{
+		"assets/images/field/Tile_set_School_Set.png",
+		"assets/images/field/Tile_set_School_Set (12).png",
+		"assets/images/field/player_walk.png",
+		"assets/images/battle/タイムライン横.png",
+		"assets/images/battle/ゲージ.png",
+		"assets/images/battle/ゴール.png",
+		"assets/images/battle/タイムラインバー縦.png",
+		"assets/images/battle/スキル拡張.png",
+		"assets/images/battle/battle_bg.png",
+		"assets/images/common/window.png",
+		"assets/images/battle/name_normal.png",
+		"assets/images/battle/name_myturn.png",
+		"assets/images/battle/log_entry_box.png",
+		"assets/images/field/調べる.png",
+		"assets/images/field/現在地.png",
+		"assets/images/field/目的地.png",
+		"assets/images/field/chest.png",
+		"assets/images/field/key_chest.png",
+		"assets/images/field/locked_wall.png",
+		"assets/images/field/lever_wall.png",
+		"assets/images/field/lever.png",
+		"assets/images/menu/メニュー画面.png",
+		"assets/images/menu/メニュー画面拡張.png",
+		"assets/images/menu/セーブスロット選択中.png",
+		"assets/images/menu/セーブスロット.png",
+		"assets/images/battle/アタック.png",
+		"assets/images/battle/スキル.png",
+		"assets/images/battle/待機.png",
+		"assets/images/battle/逃げる.png",
+	}
+
+	for i := 0; i < 4; i++ {
+		n := i + 1
+		paths = append(paths,
+			fmt.Sprintf("assets/images/field/bossスプライト_%d.png", n),
+			fmt.Sprintf("assets/images/battle/boss_%d.png", n),
+			fmt.Sprintf("assets/images/battle/boss_%d_icon.png", n),
+			fmt.Sprintf("assets/images/battle/boss_%d_icon_large.png", n),
+			fmt.Sprintf("assets/images/battle/player_attack_%d.png", n),
+			fmt.Sprintf("assets/images/battle/timeline_p%d.png", n),
+			fmt.Sprintf("assets/images/battle/timeline_p%d_large.png", n),
+			fmt.Sprintf("assets/images/battle/battle_bg_boss_%d.png", n),
+			fmt.Sprintf("assets/images/common/chara_boss%d.png", n),
+			fmt.Sprintf("assets/images/menu/party_icon_%d.png", n),
+		)
+	}
+
+	for _, enemy := range EnemyDatabase {
+		paths = append(paths,
+			fmt.Sprintf("assets/images/battle/enemy_%s.png", enemy.Name),
+			fmt.Sprintf("assets/images/battle/enemy_%s_icon.png", enemy.Name),
+			fmt.Sprintf("assets/images/battle/enemy_%s_icon_large.png", enemy.Name),
+		)
+	}
+
+	for i := 0; i < partySize; i++ {
+		paths = append(paths, fmt.Sprintf("assets/images/common/chara_player_%d.png", i+1))
+	}
+
+	return paths
+}
+
 func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 	g := &Game{
 		fontSource:           source,
@@ -374,6 +443,8 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 	g.RememberCursor = settings.RememberCursor
 
 	var err error
+
+	prefetchAssetBytes(assetPreloadPaths())
 
 	roukaImg, err := loadAssetImage("assets/images/field/Tile_set_School_Set.png")
 	if err != nil {
