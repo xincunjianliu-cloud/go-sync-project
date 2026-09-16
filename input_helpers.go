@@ -21,11 +21,52 @@ func isMenuRightPressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyRight) || inpututil.IsKeyJustPressed(ebiten.KeyD)
 }
 
+const (
+	menuCursorRepeatDelayTicks    = 20
+	menuCursorRepeatIntervalTicks = 5
+)
+
+func keysRepeatFire(keys ...ebiten.Key) bool {
+	ticks := 0
+	for _, k := range keys {
+		if d := inpututil.KeyPressDuration(k); d > ticks {
+			ticks = d
+		}
+	}
+	return repeatFires(ticks, menuCursorRepeatDelayTicks, menuCursorRepeatIntervalTicks)
+}
+
+func isMenuUpRepeat() bool {
+	return keysRepeatFire(ebiten.KeyUp, ebiten.KeyW)
+}
+
+func isMenuDownRepeat() bool {
+	return keysRepeatFire(ebiten.KeyDown, ebiten.KeyS)
+}
+
+func isMenuCloseKeyPressed() bool {
+	return inpututil.IsKeyJustPressed(ebiten.KeyM)
+}
+
+func repeatFires(ticks, delay, every int) bool {
+	if ticks <= 0 {
+		return false
+	}
+	if ticks == 1 {
+		return true
+	}
+	if ticks <= delay {
+		return false
+	}
+	return (ticks-delay)%every == 0
+}
+
 func isConfirmKeyPressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyEnter) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyNumpadEnter) ||
 		inpututil.IsKeyJustPressed(ebiten.KeySpace) ||
-		inpututil.IsKeyJustPressed(ebiten.KeyZ)
+		inpututil.IsKeyJustPressed(ebiten.KeyZ) ||
+		fieldTouchActionPressed()
 }
 
 func isConfirmKeyDown() bool {
@@ -37,7 +78,9 @@ func isConfirmKeyDown() bool {
 
 func isEscapePressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyEscape) ||
-		inpututil.IsKeyJustPressed(ebiten.KeyX)
+		inpututil.IsKeyJustPressed(ebiten.KeyX) ||
+		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) ||
+		isTouchBackPressed()
 }
 
 func isSkipKeyDown() bool {
@@ -46,19 +89,30 @@ func isSkipKeyDown() bool {
 		ebiten.IsKeyPressed(ebiten.KeyControlRight)
 }
 
-// isAutoTogglePressed は会話オート送りのON/OFFを切り替えるキーが「今押された瞬間」かを返す
 func isAutoTogglePressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyA)
 }
 
-// isLogTogglePressed は会話ログ画面の開閉キーが「今押された瞬間」かを返す
 func isLogTogglePressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyL)
 }
 
-// isDashTogglePressed はダッシュのオン/オフを切り替えるキーが「今押された瞬間」かを返す
 func isDashTogglePressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyShift) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyShiftLeft) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyShiftRight)
+}
+
+func pressedDigitKey() (int, bool) {
+	keys := [9]ebiten.Key{
+		ebiten.Key1, ebiten.Key2, ebiten.Key3,
+		ebiten.Key4, ebiten.Key5, ebiten.Key6,
+		ebiten.Key7, ebiten.Key8, ebiten.Key9,
+	}
+	for i, k := range keys {
+		if inpututil.IsKeyJustPressed(k) {
+			return i + 1, true
+		}
+	}
+	return 0, false
 }

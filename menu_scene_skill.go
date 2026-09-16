@@ -1,9 +1,54 @@
 package main
 
-// menu_scene_skill.go: スキル選択・スキル強化・回復対象選択の更新処理
+import "fmt"
 
-// reachableSkillLevel は指定キャラ・指定スキルでLvカーソルが到達できる上限を返す。
-// 現在のレベルの次(curLv+1)までしか進められない（Lv2を強化しないとLv3を選べない、が絶対のルール）。
+func (m *MenuScene) hitTestSkillNameRows(rowCount int) (int, bool) {
+	rects := make([]tapRect, rowCount)
+	for i := 0; i < rowCount; i++ {
+		y := skillRowStartY + float64(i)*skillRowGapY
+		rects[i] = tapRect{
+			x: skillNameX - 4,
+			y: y - skillRowGapY/2,
+			w: skillLevelStartX - skillNameX,
+			h: skillRowGapY,
+		}
+	}
+	return hitTestTapRects(rects)
+}
+
+func (m *MenuScene) skillLevelCellRect(rowIndex, lv int) tapRect {
+	y := skillRowStartY + float64(rowIndex)*skillRowGapY
+	x := skillLevelStartX + float64(lv-1)*skillLevelGapX
+	return tapRect{x: x - skillLevelGapX/2, y: y - skillRowGapY/2, w: skillLevelGapX, h: skillRowGapY}
+}
+
+func (m *MenuScene) hitTestAnySkillLevelCell(skills []SkillDef) (int, int, bool) {
+	var rects []tapRect
+	var rows, lvs []int
+	for row, sk := range skills {
+		for lv := 1; lv <= len(sk.Levels); lv++ {
+			rects = append(rects, m.skillLevelCellRect(row, lv))
+			rows = append(rows, row)
+			lvs = append(lvs, lv)
+		}
+	}
+	idx, ok := hitTestTapRects(rects)
+	if !ok {
+		return 0, 0, false
+	}
+	return rows[idx], lvs[idx], true
+}
+
+func (m *MenuScene) isSkillLevelCellHeld(rowIndex, lv int) bool {
+	r := m.skillLevelCellRect(rowIndex, lv)
+	for _, p := range activeTouchPoints() {
+		if r.contains(p) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *MenuScene) reachableSkillLevel(charIdx, skillIdx int) int {
 	skills := m.game.CharacterSkills(charIdx)
 	if skillIdx < 0 || skillIdx >= len(skills) {
@@ -26,24 +71,35 @@ func (m *MenuScene) updateSkillCharSel() {
 		m.menuState = menuStateMain
 		return
 	}
-	if isMenuUpPressed() {
-		m.skillCharIndex = (m.skillCharIndex - 1 + 4) % 4
-		m.game.LastSkillCharIndex = m.skillCharIndex // ← 追加
+	if isMenuUpRepeat() {
+		m.skillCharIndex = (m.skillCharIndex - 1 + partySize) % partySize
+		m.game.LastSkillCharIndex = m.skillCharIndex
 	}
-	if isMenuDownPressed() {
-		m.skillCharIndex = (m.skillCharIndex + 1) % 4
-		m.game.LastSkillCharIndex = m.skillCharIndex // ← 追加
+	if isMenuDownRepeat() {
+		m.skillCharIndex = (m.skillCharIndex + 1) % partySize
+		m.game.LastSkillCharIndex = m.skillCharIndex
 	}
-	if !isConfirmKeyPressed() {
+	tapped := false
+	if idx, ok := m.hitTestPartyRows(); ok {
+		m.skillCharIndex = idx
+		m.game.LastSkillCharIndex = m.skillCharIndex
+		tapped = true
+	}
+	if !isConfirmKeyPressed() && !tapped {
+		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.menuState = menuStateMain
+		}
 		return
 	}
-	if m.game.PlayerHP[m.skillCharIndex] <= 0 {
-		return
-	}
+	m.enterSkillCharacter(m.skillCharIndex)
+}
 
-	// ← 変更：記憶されているスキル行・Lvカーソルを復元（キャラが変わっていたら安全にクランプ）
+func (m *MenuScene) enterSkillCharacter(idx int) {
+	m.skillCharIndex = idx
+	m.game.LastSkillCharIndex = idx
+
 	skills := m.game.CharacterSkills(m.skillCharIndex)
-	m.skillSubIndex = m.game.LastSkillSubIndex
+	m.skillSubIndex = m.game.rememberedIndex(m.game.LastSkillSubIndex)
 	if m.skillSubIndex < 0 || m.skillSubIndex >= len(skills) {
 		m.skillSubIndex = 0
 	}
@@ -51,17 +107,52 @@ func (m *MenuScene) updateSkillCharSel() {
 	if curLv < 1 {
 		curLv = 1
 	}
-	// ★修正：カーソル復元先はLv一覧の末尾までではなく、到達可能な上限(curLv+1)までに
-	// クランプする。これを怠ると、以前に別スキル/別キャラでLv3まで見ていた時の
-	// カーソル値が残ったまま復元され、Lv2を強化していないのにLv3を選べてしまっていた。
-	m.skillLevelCursor = m.game.LastSkillLevelCursor
+	m.skillLevelCursor = m.game.rememberedIndex(m.game.LastSkillLevelCursor)
 	reachable := m.reachableSkillLevel(m.skillCharIndex, m.skillSubIndex)
 	if m.skillLevelCursor < 1 || m.skillLevelCursor > reachable {
 		m.skillLevelCursor = curLv
 	}
 
 	m.skillLevelSelecting = false
+	m.upgradeProgress = 0
+	m.upgradeHoldArmed = false
+	m.clearNotice()
 	m.menuState = menuStateSkillSub
+}
+
+func (m *MenuScene) trySkillLevelConfirm(skills []SkillDef, skillIdx, lv int) {
+	data := skills[skillIdx].Levels[lv-1]
+	caster := m.skillCharIndex
+	switch {
+	case !data.IsHeal:
+		m.showNotice("このスキルはメニューからは使えません（戦闘中に使用します）")
+	case m.game.PlayerHP[caster] <= 0:
+		m.showNotice(PlayerNames[caster] + "は戦闘不能のためスキルを使えません")
+	case m.game.PlayerMP[caster] < data.MPCost:
+		m.showNotice(fmt.Sprintf("MPが足りません（必要MP:%d）", data.MPCost))
+	default:
+		m.pendingSkill = skillIdx + 1
+		m.pendingSkillLevel = lv
+		if m.healTargetIndex < 0 || m.healTargetIndex > partySize {
+			m.healTargetIndex = 0
+		}
+		m.clearNotice()
+		m.menuState = menuStateHealTarget
+	}
+}
+
+func (m *MenuScene) upgradeBlocked(skillIdx int) (blocked bool, reason string) {
+	if m.game.CanUpgradeSkill(m.skillCharIndex, skillIdx) {
+		return false, ""
+	}
+	curLv := m.game.PlayerSkillLv[m.skillCharIndex][skillIdx]
+	if curLv < 1 {
+		curLv = 1
+	}
+	if cost := SkillUpgradeCost(curLv); cost > 0 && m.game.PlayerSP[m.skillCharIndex] < cost {
+		return true, ""
+	}
+	return true, "これ以上強化できません"
 }
 
 func (m *MenuScene) skillUsable(skillIdx int) bool {
@@ -104,9 +195,15 @@ func (m *MenuScene) nextEnabledSkillIndex(from, dir int) int {
 	return from
 }
 
-// updateSkillSub：主人公(index0)選択時はHeroSkillsの4項目、他キャラは従来通り。
-// 「E」キーでスキル強化画面へ遷移(主人公のみ)。
 func (m *MenuScene) updateSkillSub() {
+	if idx, ok := m.hitTestPartyRows(); ok {
+		if idx != m.skillCharIndex {
+			m.enterSkillCharacter(idx)
+		}
+		return
+	}
+	areaTapped := tapInsideRect(menuMainContentRect())
+
 	skills := m.game.CharacterSkills(m.skillCharIndex)
 	n := len(skills)
 	if n == 0 {
@@ -123,9 +220,49 @@ func (m *MenuScene) updateSkillSub() {
 		reachable = maxLv
 	}
 
-	// ── Lv選択モード：左右でLvカーソル移動、決定で実行、ESCで行選択に戻る ──
 	if m.skillLevelSelecting {
-		if !isConfirmKeyDown() {
+		tappedLvConfirm := false
+		levelAreaTapped := false
+		if rowT, lvT, ok := m.hitTestAnySkillLevelCell(skills); ok {
+			levelAreaTapped = true
+			rowReachable := m.reachableSkillLevel(m.skillCharIndex, rowT)
+			if lvT > rowReachable {
+				lvT = rowReachable
+			}
+			if rowT != m.skillSubIndex {
+				m.skillSubIndex = rowT
+				m.skillLevelCursor = lvT
+				m.upgradeProgress = 0
+				m.upgradeHoldArmed = false
+				m.game.LastSkillSubIndex = m.skillSubIndex
+				m.game.LastSkillLevelCursor = m.skillLevelCursor
+				return
+			}
+			if lvT != m.skillLevelCursor {
+				m.upgradeProgress = 0
+				m.upgradeHoldArmed = false
+			}
+			tappedLvConfirm = tapSelectOrConfirm(lvT, true, &m.skillLevelCursor)
+			m.game.LastSkillLevelCursor = m.skillLevelCursor
+		} else if rowT, ok := m.hitTestSkillNameRows(n); ok {
+			levelAreaTapped = true
+			if rowT != m.skillSubIndex {
+				m.skillSubIndex = rowT
+				newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][rowT]
+				if newCurLv < 1 {
+					newCurLv = 1
+				}
+				m.skillLevelCursor = newCurLv
+				m.upgradeProgress = 0
+				m.upgradeHoldArmed = false
+				m.game.LastSkillSubIndex = m.skillSubIndex
+				m.game.LastSkillLevelCursor = m.skillLevelCursor
+				return
+			}
+		}
+		heldTouch := m.isSkillLevelCellHeld(m.skillSubIndex, m.skillLevelCursor)
+
+		if !isConfirmKeyDown() && !heldTouch {
 			m.upgradeHoldArmed = true
 			m.upgradeProgress = 0
 		}
@@ -134,42 +271,66 @@ func (m *MenuScene) updateSkillSub() {
 			m.upgradeHoldArmed = false
 			return
 		}
+		if unrelatedTapPressed(levelAreaTapped || areaTapped) {
+			m.skillLevelSelecting = false
+			m.upgradeHoldArmed = false
+			return
+		}
+		if up, down := isMenuUpRepeat(), isMenuDownRepeat(); up || down {
+			if up {
+				m.skillSubIndex = (m.skillSubIndex - 1 + n) % n
+			} else {
+				m.skillSubIndex = (m.skillSubIndex + 1) % n
+			}
+			newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
+			if newCurLv < 1 {
+				newCurLv = 1
+			}
+			m.skillLevelCursor = newCurLv
+			m.upgradeProgress = 0
+			m.upgradeHoldArmed = false
+			m.game.LastSkillSubIndex = m.skillSubIndex
+			m.game.LastSkillLevelCursor = m.skillLevelCursor
+			return
+		}
 		if isMenuRightPressed() {
 			if m.skillLevelCursor < reachable {
 				m.skillLevelCursor++
-				m.game.LastSkillLevelCursor = m.skillLevelCursor // ← 追加
+				m.game.LastSkillLevelCursor = m.skillLevelCursor
 			}
 		}
 		if isMenuLeftPressed() {
 			if m.skillLevelCursor > 1 {
 				m.skillLevelCursor--
-				m.game.LastSkillLevelCursor = m.skillLevelCursor // ← 追加
+				m.game.LastSkillLevelCursor = m.skillLevelCursor
 			}
+		}
+		if dg, ok := pressedDigitKey(); ok {
+			if dg > reachable {
+				dg = reachable
+			}
+			m.skillLevelCursor = dg
+			m.game.LastSkillLevelCursor = m.skillLevelCursor
 		}
 		skillIdx := m.skillSubIndex
 		lv := m.skillLevelCursor
 
 		if lv <= curLv {
-			if !isConfirmKeyPressed() {
+			if !isConfirmKeyPressed() && !tappedLvConfirm {
 				return
 			}
-			// ── 解放済みレベル：メニューから使用（回復系のみ） ──
-			data := skills[skillIdx].Levels[lv-1]
-			if data.IsHeal {
-				m.pendingSkill = skillIdx + 1
-				m.pendingSkillLevel = lv
-				m.healTargetIndex = 0
-				m.menuState = menuStateHealTarget
-			}
+			m.trySkillLevelConfirm(skills, skillIdx, lv)
 			return
 		}
 
-		// ── 未解放レベル：決定キー長押しで強化 ──
-		if !m.game.CanUpgradeSkill(m.skillCharIndex, m.skillSubIndex) {
+		if blocked, reason := m.upgradeBlocked(m.skillSubIndex); blocked {
 			m.upgradeProgress = 0
+			if reason != "" && (isConfirmKeyPressed() || tappedLvConfirm) {
+				m.showNotice(reason)
+			}
 			return
 		}
-		if !m.upgradeHoldArmed || !isConfirmKeyDown() {
+		if !m.upgradeHoldArmed || (!isConfirmKeyDown() && !heldTouch) {
 			m.upgradeProgress = 0
 			return
 		}
@@ -182,49 +343,76 @@ func (m *MenuScene) updateSkillSub() {
 		if m.game.UpgradeSkill(m.skillCharIndex, m.skillSubIndex) {
 			m.skillLevelCursor = m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 			m.game.LastSkillLevelCursor = m.skillLevelCursor
+			m.showNotice(fmt.Sprintf("%sをLv%dに強化しました", skills[m.skillSubIndex].Name, m.skillLevelCursor))
+			m.upgradeHoldArmed = false
 		}
 		return
 	}
 
-	// ── 行選択モード：上下でスキル行移動、決定でLv選択モードへ ──
 	if isEscapePressed() {
 		m.menuState = menuStateSkillCharSel
 		return
 	}
 
+	if rowT, lvT, ok := m.hitTestAnySkillLevelCell(skills); ok {
+		rowReachable := m.reachableSkillLevel(m.skillCharIndex, rowT)
+		if lvT > rowReachable {
+			lvT = rowReachable
+		}
+		m.skillSubIndex = rowT
+		m.skillLevelCursor = lvT
+		m.skillLevelSelecting = true
+		m.upgradeProgress = 0
+		m.upgradeHoldArmed = false
+		m.game.LastSkillSubIndex = m.skillSubIndex
+		m.game.LastSkillLevelCursor = m.skillLevelCursor
+		return
+	}
+
 	prevIndex := m.skillSubIndex
-	if isMenuDownPressed() {
+	if isMenuDownRepeat() {
 		m.skillSubIndex = (m.skillSubIndex + 1) % n
 	}
-	if isMenuUpPressed() {
+	if isMenuUpRepeat() {
 		m.skillSubIndex = (m.skillSubIndex - 1 + n) % n
 	}
+	tappedIdx, tappedOk := m.hitTestSkillNameRows(n)
+	tapConfirmed := tapSelectOrConfirm(tappedIdx, tappedOk, &m.skillSubIndex)
 	if m.skillSubIndex != prevIndex {
-		// 行を切り替えたら現在Lvにカーソルを合わせる
 		newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 		if newCurLv < 1 {
 			newCurLv = 1
 		}
 		m.skillLevelCursor = newCurLv
 
-		// ← 追加：行とLvカーソルを記憶
 		m.game.LastSkillSubIndex = m.skillSubIndex
 		m.game.LastSkillLevelCursor = m.skillLevelCursor
 	}
 
-	if !isConfirmKeyPressed() {
+	if isMenuRightPressed() {
+		m.skillLevelSelecting = true
+		m.upgradeProgress = 0
+		m.upgradeHoldArmed = false
+		if reachable := m.reachableSkillLevel(m.skillCharIndex, m.skillSubIndex); m.skillLevelCursor > reachable {
+			m.skillLevelCursor = reachable
+		}
+		m.game.LastSkillSubIndex = m.skillSubIndex
+		m.game.LastSkillLevelCursor = m.skillLevelCursor
 		return
 	}
-	m.skillLevelSelecting = true
-	m.upgradeProgress = 0
-	m.upgradeHoldArmed = false
-	// ★修正：Lv選択モードに入る直前にも到達可能上限でクランプし、
-	// 古いカーソル値が残っていてもLv2未強化のままLv3を選べないようにする。
-	if reachable := m.reachableSkillLevel(m.skillCharIndex, m.skillSubIndex); m.skillLevelCursor > reachable {
-		m.skillLevelCursor = reachable
+
+	if isConfirmKeyPressed() || tapConfirmed {
+		curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
+		if curLv < 1 {
+			curLv = 1
+		}
+		m.trySkillLevelConfirm(skills, m.skillSubIndex, curLv)
+		return
 	}
-	m.game.LastSkillSubIndex = m.skillSubIndex       // ← 追加（念のため）
-	m.game.LastSkillLevelCursor = m.skillLevelCursor // ← 追加（念のため）
+
+	if unrelatedTapPressed(tappedOk || areaTapped) {
+		m.menuState = menuStateSkillCharSel
+	}
 }
 
 func (m *MenuScene) updateHealTarget() {
@@ -233,31 +421,25 @@ func (m *MenuScene) updateHealTarget() {
 		m.menuState = menuStateSkillSub
 		return
 	}
+	const cycleLen = partySize + 1
 	if isMenuUpPressed() {
-		if m.healTargetIndex < 4 {
-			m.healTargetIndex = (m.healTargetIndex - 1 + 4) % 4
-		}
+		m.healTargetIndex = (m.healTargetIndex - 1 + cycleLen) % cycleLen
 	}
 	if isMenuDownPressed() {
-		if m.healTargetIndex < 4 {
-			m.healTargetIndex = (m.healTargetIndex + 1) % 4
+		m.healTargetIndex = (m.healTargetIndex + 1) % cycleLen
+	}
+	tappedIdx, tappedOk := m.hitTestPartyRowsWithAll(true)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &m.healTargetIndex)
+	if !isConfirmKeyPressed() && !tapped {
+		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.pendingSkill = 0
+			m.menuState = menuStateSkillSub
 		}
-	}
-	if isMenuRightPressed() {
-		m.healTargetIndex = 4
-	}
-	if isMenuLeftPressed() {
-		if m.healTargetIndex == 4 {
-			m.healTargetIndex = 0
-		}
-	}
-	if !isConfirmKeyPressed() {
 		return
 	}
 
 	caster := m.skillCharIndex
 
-	// ── 新スキル体系（主人公のHeroSkills）をメニューから使用する場合 ──
 	if m.pendingSkill > 0 {
 		skillIdx := m.pendingSkill - 1
 		lv := m.pendingSkillLevel
@@ -305,8 +487,6 @@ func (m *MenuScene) updateHealTarget() {
 			}
 		}
 
-		// ← 変更：使用直後に自動で戻さず、対象選択画面のまま連続で使えるようにする。
-		// MPが足りなくなった時だけスキル一覧画面へ戻す。
 		if m.game.PlayerMP[caster] < cost {
 			m.pendingSkill = 0
 			m.menuState = menuStateSkillSub
@@ -314,7 +494,6 @@ func (m *MenuScene) updateHealTarget() {
 		return
 	}
 
-	// ── 既存の旧仕様（固定値回復、主人公以外）はそのまま ──
 	if m.game.PlayerHP[caster] <= 0 || m.game.PlayerMP[caster] < mpCostHeal {
 		m.menuState = menuStateSkillSub
 		return

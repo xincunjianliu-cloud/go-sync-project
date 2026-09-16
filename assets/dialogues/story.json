@@ -1,0 +1,11 @@
+{
+  "gate_hint": {
+    "commands": [
+      { "speaker": "", "text": "校門の先は静かだ……" },
+      { "speaker": "player1", "text": "先に進んでみよう" }
+    ],
+    "speakerSlots": {
+      "player1": 0
+    }
+  }
+}

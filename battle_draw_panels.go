@@ -1,6 +1,5 @@
 package main
 
-// battle_draw_panels.go: 対象選択UI・リザルトパネル・各種描画ヘルパー
 import (
 	"fmt"
 	"image/color"
@@ -13,33 +12,42 @@ import (
 )
 
 func (s *BattleScene) drawTargetSelectUI(screen *ebiten.Image) {
-	if s.enemyImage != nil {
-		imgW := s.enemyImage.Bounds().Dx()
-		imgH := s.enemyImage.Bounds().Dy()
-		if imgW <= 32 && len(s.game.BossImgs) > 0 && s.game.BossImgs[0] != nil {
-			imgW = s.game.BossImgs[0].Bounds().Dx()
-			imgH = s.game.BossImgs[0].Bounds().Dy()
+	isAll := s.currentAttackIsAllTarget()
+
+	if s.currentTargetAllowsAll() {
+		s.drawEnemyAllTargetRow(screen, isAll)
+	}
+
+	for i := range s.enemies {
+		if s.enemies[i].HP <= 0 || s.enemies[i].Image == nil {
+			continue
+		}
+		x, y, _, h := s.enemyDrawRect(i)
+
+		showArrow := false
+		if isAll {
+			showArrow = true
+		} else {
+			showArrow = s.targetIndex == i
+		}
+		if !showArrow {
+			continue
 		}
 
-		xPos := 280.0 - float64(imgW)/2
-		yPos := 240.0 - float64(imgH)/2
-		if yPos < 12 {
-			yPos = 12
-		}
-
-		cursorX := xPos - 24.0
-		cursorY := yPos + float64(imgH)/2 - 8.0
+		cursorX := x - 24.0
+		cursorY := y + h/2 - 8.0
 
 		op := &text.DrawOptions{}
-		op.GeoM.Translate(cursorX+s.shakeX, cursorY+s.shakeY)
-		op.ColorScale.ScaleWithColor(uiColorText)
-
+		op.GeoM.Translate(cursorX, cursorY)
+		op.ColorScale.ScaleWithColor(uiColorSelect)
 		text.Draw(screen, "▶", s.game.FontFace(15), op)
 	}
 }
 
 func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 	isAll := s.healTargetIndex == partySize
+
+	s.drawAllTargetRow(screen, isAll)
 
 	for i := 0; i < partySize; i++ {
 		centerX := s.partyScreenX[i]
@@ -55,15 +63,12 @@ func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 		if showArrow {
 			arrowOp := &text.DrawOptions{}
 			arrowOp.GeoM.Translate(centerX-4, centerY+20)
-			arrowOp.ColorScale.ScaleWithColor(uiColorText)
+			arrowOp.ColorScale.ScaleWithColor(uiColorSelect)
 			text.Draw(screen, "▶", s.game.FontFace(15), arrowOp)
 		}
 	}
 }
 
-// targetSelectDescriptionAndHint は対象選択画面(phaseTargetSelect)での
-// 説明文とヒント文字列を返す。単体/全体を選べるスキルの場合のみ
-// 「←単体 / 全体→」に相当するヒントを表示する（回復画面と同じ考え方）。
 func (s *BattleScene) targetSelectDescriptionAndHint() (string, string) {
 	p := s.waitingActor
 	if p < 0 || p >= partySize || s.pendingSkill < 1 {
@@ -119,7 +124,6 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	titleOp.ColorScale.ScaleAlpha(panelAlpha)
 	text.Draw(screen, "Battle Results", s.game.FontFace(resultTitleFontSize), titleOp)
 
-	// 獲得EXP（ラベル・数字別X）
 	expLabelOp := &text.DrawOptions{}
 	expLabelOp.GeoM.Translate(resultExpLabelX, resultExpY)
 	expLabelOp.ColorScale.ScaleWithColor(uiColorText)
@@ -130,9 +134,8 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	expValueOp.GeoM.Translate(resultExpValueX, resultExpY)
 	expValueOp.ColorScale.ScaleWithColor(uiColorText)
 	expValueOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, fmt.Sprintf("%d", s.enemyExp), s.game.FontFace(resultExpFontSize), expValueOp)
+	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemyExp()), s.game.FontFace(resultExpFontSize), expValueOp)
 
-	// 獲得SP（ラベル・数字別X）
 	spLabelOp := &text.DrawOptions{}
 	spLabelOp.GeoM.Translate(resultSpLabelX, resultSpY)
 	spLabelOp.ColorScale.ScaleWithColor(uiColorText)
@@ -143,7 +146,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	spValueOp.GeoM.Translate(resultSpValueX, resultSpY)
 	spValueOp.ColorScale.ScaleWithColor(uiColorText)
 	spValueOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, fmt.Sprintf("%d", s.enemySP), s.game.FontFace(resultSpFontSize), spValueOp)
+	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemySP()), s.game.FontFace(resultSpFontSize), spValueOp)
 
 	ebitenutil.DrawRect(screen, resultDividerX, resultDividerY, resultDividerW, resultDividerH, uiColorText)
 
@@ -159,7 +162,6 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		barY := resultBarStartY + float64(i)*resultBarRowGap
 		barH := resultBarH
 
-		// プレイヤー名・レベル（別X）
 		nameOp := &text.DrawOptions{}
 		nameOp.GeoM.Translate(barX+resultNameOffsetX, barY+resultNameOffsetY)
 		nameOp.ColorScale.ScaleWithColor(nameColor)
@@ -175,8 +177,6 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		curExpStr := strconv.Itoa(s.drawPlayerEXP[i])
 		maxExpStr := fmt.Sprintf("/%d", s.drawPlayerMaxEXP[i])
 		expRightX := barX + barW
-		// resultExpTextOffsetYはresultExpLabelOffsetYと同じ「barYからの上端基準オフセット」。
-		// 下端揃え(SecondaryAlign=End)で描くので、実際の基準線はそこにフォントサイズ分を足した位置になる。
 		expBaseY := barY + resultExpTextOffsetY + resultExpCurFontSize
 
 		maxOp := &text.DrawOptions{}
@@ -276,7 +276,7 @@ func (s *BattleScene) drawControlHint(screen *ebiten.Image, hint string) {
 func (s *BattleScene) drawBottomDescription(screen *ebiten.Image, desc string, hint string) {
 	descOp := &text.DrawOptions{}
 	descOp.GeoM.Scale(descScale, descScale)
-	descOp.GeoM.Translate(descX+s.shakeX, descY+s.shakeY)
+	descOp.GeoM.Translate(descX, descY)
 	descOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, desc, s.game.FontFace(descFontSize), descOp)
 
@@ -286,7 +286,7 @@ func (s *BattleScene) drawBottomDescription(screen *ebiten.Image, desc string, h
 
 	hintOp := &text.DrawOptions{}
 	hintOp.GeoM.Scale(hintScale, hintScale)
-	hintOp.GeoM.Translate(descX+hintOffsetX+s.shakeX, descY+s.shakeY)
+	hintOp.GeoM.Translate(descX+hintOffsetX, descY)
 	hintOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, hint, s.game.FontFace(hintFontSize), hintOp)
 }
@@ -303,7 +303,7 @@ func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceL
 	for _, offset := range [][2]float64{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 		shadowOp := &text.DrawOptions{}
 		shadowOp.GeoM.Translate(x+offset[0], y+offset[1])
-		shadowOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, uint8(255 * alpha)}) // 影は専用色のため据え置き
+		shadowOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, uint8(255 * alpha)})
 		text.Draw(screen, curStr, faceLarge, shadowOp)
 
 		restShadowOp := &text.DrawOptions{}
@@ -383,51 +383,33 @@ func drawSlantedStatusBar(screen *ebiten.Image, x, y, w, h, slant, ratio float64
 }
 
 const (
-	namePlateOffsetX = -10.0 // ← 調整用：通常プレート(NameImg)を左にずらす量（マイナスで左へ）
-	namePlateOffsetY = 0.0   // 通常プレート(NameImg)のYオフセット
+	namePlateOffsetX = -10.0
+	namePlateOffsetY = 5.0
 
-	// 自分のターン用プレート(NameMyTurnImg)の位置。通常プレートとは独立して調整できる。
 	namePlateMyTurnOffsetX = -10.0
-	namePlateMyTurnOffsetY = 0.0
+	namePlateMyTurnOffsetY = 5.0
 )
 
-// drawPartyName は名前プレートを描画する。
-// ★変更：通常プレート(NameImg)は常に描画し、自分のターンの間だけ
-// 専用プレート(NameMyTurnImg)を消さずに上から重ねて同時に表示する
-// （以前は自分のターン中は通常プレートを専用プレートに置き換えていた）。
-// 2枚の画像はそれぞれ namePlateOffsetX/Y と namePlateMyTurnOffsetX/Y で個別に位置調整できる。
 func (s *BattleScene) drawPartyName(screen *ebiten.Image, i int, xPos, winY, alpha float64, isMyTurn bool) {
-	baseX := xPos + s.shakeX
-	baseY := winY + s.shakeY
+	baseX := xPos
+	baseY := winY
 
 	nameCol := uiColorText
 	if s.game.PlayerHP[i] <= 0 {
 		nameCol = uiColorDead
 	}
 
-	drewAnyImage := false
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(baseX+namePlateOffsetX, baseY+namePlateOffsetY)
+	op.ColorScale.ScaleAlpha(float32(alpha))
+	screen.DrawImage(s.game.NameImg, op)
 
-	if s.game.NameImg != nil {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(baseX+namePlateOffsetX, baseY+namePlateOffsetY)
-		op.ColorScale.ScaleAlpha(float32(alpha))
-		screen.DrawImage(s.game.NameImg, op)
-		drewAnyImage = true
-	}
-
-	if isMyTurn && s.game.NameMyTurnImg != nil {
+	if isMyTurn {
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(baseX+namePlateMyTurnOffsetX, baseY+namePlateMyTurnOffsetY)
 		op.ColorScale.ScaleAlpha(float32(alpha))
 		screen.DrawImage(s.game.NameMyTurnImg, op)
-		drewAnyImage = true
 	}
 
-	if !drewAnyImage {
-		drawBattleOutlinedText(screen, baseX+namePlateOffsetX, baseY+namePlateOffsetY+4, PlayerNames[i], s.game.FontFace(15), nameCol, alpha)
-		return
-	}
-
-	// プレート画像の上に名前テキストを重ねて表示
 	drawBattleOutlinedText(screen, baseX+namePlateOffsetX+6, baseY+namePlateOffsetY+4, PlayerNames[i], s.game.FontFace(13), nameCol, alpha)
 }

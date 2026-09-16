@@ -1,7 +1,5 @@
 package main
 
-// battle_logic.go: バトルのメインUpdateループ・デバッグチート・敵死亡演出
-
 import (
 	"math"
 	"math/rand"
@@ -22,7 +20,9 @@ func (s *BattleScene) applyDebugCheats() {
 
 	switch {
 	case inpututil.IsKeyJustPressed(ebiten.Key1):
-		s.enemyHP = 0
+		for i := range s.enemies {
+			s.enemies[i].HP = 0
+		}
 		s.checkBattleEnd()
 
 	case inpututil.IsKeyJustPressed(ebiten.Key2):
@@ -39,7 +39,9 @@ func (s *BattleScene) applyDebugCheats() {
 		}
 
 	case inpututil.IsKeyJustPressed(ebiten.Key4):
-		s.enemyExp = 9999
+		for i := range s.enemies {
+			s.enemies[i].Exp = 9999
+		}
 
 	case inpututil.IsKeyJustPressed(ebiten.Key5):
 		for i := 0; i < partySize; i++ {
@@ -87,6 +89,28 @@ func (s *BattleScene) applyDebugCheats() {
 			s.game.PlayerHP[i] = 0
 		}
 		s.checkBattleEnd()
+	}
+}
+
+func (s *BattleScene) triggerShake(tier hitTier) {
+	switch tier {
+	case hitTierNone:
+		return
+	case hitTierWeak:
+		s.shakeType = 2
+		s.shakeTimer = 0.2
+		s.shakeMaxDur = 0.2
+		s.shakePower = 5.0
+	case hitTierStrong:
+		s.shakeType = 3
+		s.shakeTimer = 0.6
+		s.shakeMaxDur = 0.6
+		s.shakePower = 16.0
+	case hitTierSynergy:
+		s.shakeType = 3
+		s.shakeTimer = 0.6
+		s.shakeMaxDur = 0.8
+		s.shakePower = 16.0
 	}
 }
 
@@ -141,7 +165,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 						s.playerPose[i] = poseWalk
 						s.playerAnimTimer[i] = 0
 					}
-					s.playerAnimTimer[i] += dt // ★追加：スライドイン中もコマを進める
+					s.playerAnimTimer[i] += dt
 				} else if s.playerPose[i] != poseIdle {
 					s.playerPose[i] = poseIdle
 					s.playerAnimTimer[i] = 0
@@ -193,75 +217,125 @@ func (s *BattleScene) Update(dt float64) Scene {
 		s.hitStopTimer -= dt
 		if s.hitStopTimer <= 0 {
 			s.hitStopTimer = 0
-			s.enemyHP -= s.pendingDamage
-			if s.enemyHP < 0 {
-				s.enemyHP = 0
-			}
 
-			if s.pendingDamage > 0 {
-				if s.pendingDamageShake >= 15.0 {
-					s.flashAlpha = 0.6
-					s.shakeType = 3
-					s.shakeTimer = 0.6
-					s.shakeMaxDur = 0.6
-					s.shakePower = 16.0
-				} else {
-					s.shakeType = 2
-					s.shakeTimer = 0.2
-					s.shakeMaxDur = 0.2
-					s.shakePower = 5.0
+			secondHasDamage := false
+			for _, h := range s.pendingPlayerHits2 {
+				if h.dmg > 0 {
+					secondHasDamage = true
+					break
 				}
 			}
-
-			initialTimer := 0.0
-			dx := 0.0
-			dy := 0.0
-			if s.pendingDamage2Scheduled && s.pendingDamage2 == 0 {
+			initialTimer, dx, dy := 0.0, 0.0, 0.0
+			if s.pendingDamage2Scheduled && !secondHasDamage {
 				initialTimer = -0.18
 				dx = -12.0
 				dy = -8.0
 				s.pendingDamage2Scheduled = false
 			}
 
-			if s.pendingDamage > 0 {
+			maxDmg := 0
+			for _, hit := range s.pendingPlayerHits {
+				s.applyDamageToEnemySlot(hit.slot, hit.dmg)
+				if hit.dmg > maxDmg {
+					maxDmg = hit.dmg
+				}
+				if hit.dmg <= 0 {
+					continue
+				}
+				x, y, w, _ := s.enemyDrawRect(hit.slot)
 				s.damagePops = append(s.damagePops, DamagePop{
-					Value: s.pendingDamage,
-					X:     s.pendingDamageX + dx,
-					Y:     s.pendingDamageY + dy,
-					Vy:    -180.0,
-					Timer: initialTimer,
+					Value:  hit.dmg,
+					X:      x + w/2 - 10.0 + dx,
+					Y:      y - 15.0 + dy,
+					Vy:     -180.0,
+					Timer:  initialTimer,
+					IsCrit: hit.crit,
 				})
 			}
 
-			if s.pendingDamage2 > 0 {
-				second := s.pendingDamage2
-				s.pendingDamage2 = 0
-				s.pendingDamage = second
+			if maxDmg > 0 {
+				tier := hitTierWeak
+				if s.attackAnimType != animNormal {
+					tier = hitTierStrong
+				}
+				s.triggerShake(tier)
+			}
+
+			if s.pendingDamage2Scheduled && secondHasDamage {
+				s.pendingDamage2Scheduled = false
+				s.pendingPlayerHits = s.pendingPlayerHits2
+				s.pendingPlayerHits2 = nil
 				s.activeAttacker = s.waitingActor
 				s.attackPhaseTimer = 0.0
 				return s
 			}
+			s.pendingPlayerHits = nil
+			s.pendingPlayerHits2 = nil
 
 			s.enemyActionWaitTimer = 0.8
 		}
 		return s
 	}
 
-	if s.flashAlpha > 0 {
-		s.flashAlpha -= dt * 4.0
-		if s.flashAlpha < 0 {
-			s.flashAlpha = 0
+	if s.enemyHitStopTimer > 0 {
+		s.enemyHitStopTimer -= dt
+		if s.enemyHitStopTimer <= 0 {
+			s.enemyHitStopTimer = 0
+			s.applyEnemyPendingHits()
+		}
+		return s
+	}
+
+	for i := range s.enemies {
+		if s.enemies[i].HitFlashTimer > 0 {
+			s.enemies[i].HitFlashTimer -= dt
+			if s.enemies[i].HitFlashTimer < 0 {
+				s.enemies[i].HitFlashTimer = 0
+			}
 		}
 	}
 
-	const returnDelayDuration = 0.4 // ← 調整用：アニメーション終了後、戻り始めるまでの秒数
+	for i := 0; i < partySize; i++ {
+		if s.playerFlashTimer[i] > 0 {
+			s.playerFlashTimer[i] -= dt
+			if s.playerFlashTimer[i] < 0 {
+				s.playerFlashTimer[i] = 0
+			}
+		}
+	}
+
+	if s.battlePhase == phaseBattleEnd && !s.isWon {
+		if s.battleLogTimer > 0 {
+			s.battleLogTimer -= dt
+			if s.battleLogTimer < 0 {
+				s.battleLogTimer = 0
+			}
+			return s
+		}
+		if isMenuUpPressed() || isMenuDownPressed() {
+			s.gameOverIdx = (s.gameOverIdx + 1) % 2
+		}
+		if isConfirmKeyPressed() {
+			if s.gameOverIdx == 0 {
+				for i := 0; i < partySize; i++ {
+					s.game.PlayerHP[i] = s.preBattlePlayerHP[i]
+					s.game.PlayerMP[i] = s.preBattlePlayerMP[i]
+				}
+				return NewBattleScene(s.game, s.originMap, s.originX, s.originY, s.originDir, s.enemyType, s.enemyNames)
+			}
+			return NewTitleScene(s.game)
+		}
+		return s
+	}
+
+	const returnDelayDuration = 0.4
 
 	for i := 0; i < partySize; i++ {
 		if s.waitCancelHold[i] > 0 {
 			s.waitCancelHold[i] -= dt
 			if s.waitCancelHold[i] < 0 {
 				s.waitCancelHold[i] = 0
-				s.atbGauge[i] = 0
+				s.resetPlayerGauge(i)
 				s.readySlideX[i] = 0
 			}
 		}
@@ -269,10 +343,10 @@ func (s *BattleScene) Update(dt float64) Scene {
 		isSelecting := s.playerPose[i] == poseReady || s.playerPose[i] == poseReadyGlow || s.playerPose[i] == poseHealCast
 
 		if isSelecting || isAttacking {
-			s.readySlideX[i] += (-60.0 - s.readySlideX[i]) * (1.0 - math.Pow(0.001, dt))
-			s.returnDelayTimer[i] = returnDelayDuration // 行動中は常に0.2秒にリセット
+			s.readySlideX[i] += (-100.0 - s.readySlideX[i]) * (1.0 - math.Pow(0.001, dt))
+			s.returnDelayTimer[i] = returnDelayDuration
 		} else if s.returnDelayTimer[i] > 0 {
-			s.returnDelayTimer[i] -= dt // 待機中は位置を維持（decayさせない）
+			s.returnDelayTimer[i] -= dt
 		} else {
 			s.readySlideX[i] += (0.0 - s.readySlideX[i]) * (1.0 - math.Pow(0.01, dt))
 		}
@@ -295,7 +369,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 	s.updateAllPoses(dt)
 
-	// ← 変更：攻撃演出をanimNormal/animCharge/animFireMagicで分岐
 	if s.activeAttacker >= 0 {
 		s.attackPhaseTimer += dt
 		p := s.activeAttacker
@@ -306,11 +379,11 @@ func (s *BattleScene) Update(dt float64) Scene {
 			const attackDur = 0.45
 			if s.attackPhaseTimer < approachDur {
 				s.playerPose[p] = poseChargeApproach
-				s.chargeApproachOffset = (s.attackPhaseTimer / approachDur) * 40.0
+				s.chargeApproachOffset = (s.attackPhaseTimer / approachDur) * 80.0
 			} else if s.attackPhaseTimer < approachDur+attackDur {
 				s.playerPose[p] = poseChargeAttack
 			} else {
-				s.hitStopTimer = 0.15
+				s.hitStopTimer = hitStopStrong
 				s.activeAttacker = -1
 				s.chargeApproachOffset = 0
 			}
@@ -329,15 +402,15 @@ func (s *BattleScene) Update(dt float64) Scene {
 					s.playerAnimTimer[p] = 0
 				}
 			} else {
-				s.hitStopTimer = 0.15
+				s.hitStopTimer = hitStopStrong
 				s.activeAttacker = -1
 			}
 
-		default: // animNormal
+		default:
 			const atkDur = 0.45
 			s.playerPose[p] = poseAttack
 			if s.attackPhaseTimer >= atkDur {
-				s.hitStopTimer = 0.15
+				s.hitStopTimer = hitStopWeak
 				s.activeAttacker = -1
 			}
 		}
@@ -355,10 +428,23 @@ func (s *BattleScene) Update(dt float64) Scene {
 	}
 	s.damagePops = activePops
 
+	if s.enemyWindupTimer > 0 {
+		s.enemyWindupTimer -= dt
+		if s.enemyWindupTimer <= 0 {
+			s.enemyWindupTimer = 0
+			s.rollEnemyAction()
+		}
+		return s
+	}
+
 	if s.enemyActionWaitTimer > 0 {
 		s.enemyActionWaitTimer -= dt
 		if s.enemyActionWaitTimer <= 0 {
 			s.enemyActionWaitTimer = 0
+			if s.enemyIsActing {
+				s.enemyIsActing = false
+				s.resetEnemyGauge(s.actingEnemySlot)
+			}
 
 			for i := 0; i < partySize; i++ {
 				if s.playerPose[i] != poseDead && s.playerPose[i] != poseWin {
@@ -413,27 +499,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 		s.updateItemTargetSelect()
 
 	case phaseBattleEnd:
-		if !s.isWon {
-			if s.battleLogTimer > 0 {
-				return s
-			}
-			if isMenuUpPressed() || isMenuDownPressed() {
-				s.gameOverIdx = (s.gameOverIdx + 1) % 2
-			}
-			if isConfirmKeyPressed() {
-				if s.gameOverIdx == 0 {
-					for i := 0; i < partySize; i++ {
-						s.game.PlayerHP[i] = s.preBattlePlayerHP[i]
-						s.game.PlayerMP[i] = s.preBattlePlayerMP[i]
-					}
-					return NewBattleScene(s.game, s.originMap, s.originX, s.originY, s.originDir, s.enemyType, s.enemyName)
-				}
-				return NewTitleScene(s.game)
-			}
-			return s
-		}
-
-		if s.enemyDeathPhase < 3 {
+		if !s.allEnemyDeathAnimDone() {
 			s.updateEnemyDeath(dt)
 			return s
 		}
@@ -464,7 +530,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 					s.drawPlayerEXP[i] = s.expStartEXP[i]
 					s.drawPlayerEXPF[i] = float64(s.expStartEXP[i])
 					s.isLevelUp[i] = s.game.PlayerLv[i] > s.drawPlayerLv[i]
-					ratio := float64(s.enemyExp) / float64(s.drawPlayerMaxEXP[i])
+					ratio := float64(s.totalEnemyExp()) / float64(s.drawPlayerMaxEXP[i])
 					if ratio > 1.0 {
 						ratio = 1.0
 					}
@@ -479,7 +545,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			}
 
 		case resSubBarAnimate:
-			if isConfirmKeyPressed() {
+			if isResultAdvancePressed() {
 				for i := 0; i < partySize; i++ {
 					if s.game.PlayerHP[i] <= 0 {
 						continue
@@ -526,7 +592,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 					continue
 				}
 
-				// ゲージが右端まで到達済み：しばらく満タン表示のまま待ってからレベルアップ処理をする。
 				if s.levelUpPauseTimer[i] > 0 {
 					allFinished = false
 					s.levelUpPauseTimer[i] -= dt
@@ -565,7 +630,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 					s.drawPlayerEXP[i] = targetEXP
 					s.drawPlayerEXPF[i] = float64(targetEXP)
 					if s.drawPlayerLv[i] < s.game.PlayerLv[i] {
-						// ゲージが右端に達した状態をひと呼吸見せてからレベルアップする。
 						s.levelUpPauseTimer[i] = levelUpPauseDuration
 						allFinished = false
 					}
@@ -576,7 +640,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			}
 
 		case resSubDoneWait:
-			if isConfirmKeyPressed() {
+			if isResultAdvancePressed() {
 				s.exitBattleToField()
 			}
 		}
@@ -586,68 +650,74 @@ func (s *BattleScene) Update(dt float64) Scene {
 }
 
 func (s *BattleScene) updateEnemyDeath(dt float64) {
-	switch s.enemyDeathPhase {
-	case 1:
-		s.enemyDeathTimer += dt
-		s.enemyAlpha = 1.0 - (s.enemyDeathTimer / 0.6)
-		if s.enemyDeathTimer >= 0.6 {
-			s.enemyAlpha = 0.0
-			s.enemyDeathPhase = 2
-			s.enemyDeathTimer = 0.0
-			cx, cy := s.enemyCenter()
-			_, _, w, h := s.enemyDrawRect()
-			spreadX := w / 4
-			spreadY := h / 8
-			for i := 0; i < 50; i++ {
-				angle := rand.Float64() * math.Pi * 2
-				speed := rand.Float64()*15 + 5
-				s.deathParticles = append(s.deathParticles, DeathParticle{
-					X:    cx + rand.Float64()*spreadX*2 - spreadX,
-					Y:    cy + rand.Float64()*spreadY*2 - spreadY,
-					Vx:   math.Cos(angle) * speed,
-					Vy:   math.Sin(angle) * speed,
-					Life: 1.0,
-					Size: rand.Float64()*2.5 + 0.5,
-				})
+	for i := range s.enemies {
+		e := &s.enemies[i]
+		switch e.DeathPhase {
+		case 1:
+			e.DeathTimer += dt
+			e.Alpha = 1.0 - (e.DeathTimer / 0.6)
+			if e.DeathTimer >= 0.6 {
+				e.Alpha = 0.0
+				e.DeathPhase = 2
+				e.DeathTimer = 0.0
+				cx, cy := s.enemyCenter(i)
+				_, _, w, h := s.enemyDrawRect(i)
+				spreadX := w / 4
+				spreadY := h / 8
+				for n := 0; n < 50; n++ {
+					angle := rand.Float64() * math.Pi * 2
+					speed := rand.Float64()*15 + 5
+					s.deathParticles = append(s.deathParticles, DeathParticle{
+						X:    cx + rand.Float64()*spreadX*2 - spreadX,
+						Y:    cy + rand.Float64()*spreadY*2 - spreadY,
+						Vx:   math.Cos(angle) * speed,
+						Vy:   math.Sin(angle) * speed,
+						Life: 1.0,
+						Size: rand.Float64()*2.5 + 0.5,
+					})
+				}
 			}
-		}
-	case 2:
-		s.enemyDeathTimer += dt
-		alive := s.deathParticles[:0]
-		for i := range s.deathParticles {
-			p := &s.deathParticles[i]
-			p.Vx += (rand.Float64()*40 - 20) * dt
-			p.Vy += (rand.Float64()*40 - 20) * dt
-			maxSpeed := 30.0
-			if p.Vx > maxSpeed {
-				p.Vx = maxSpeed
+		case 2:
+			e.DeathTimer += dt
+			if e.DeathTimer >= 1.8 {
+				e.DeathPhase = 3
 			}
-			if p.Vx < -maxSpeed {
-				p.Vx = -maxSpeed
-			}
-			if p.Vy > maxSpeed {
-				p.Vy = maxSpeed
-			}
-			if p.Vy < -maxSpeed {
-				p.Vy = -maxSpeed
-			}
-			p.X += p.Vx * dt
-			p.Y += p.Vy * dt
-			p.Life -= dt / 1.8
-			if p.Life > 0 {
-				alive = append(alive, *p)
-			}
-		}
-		s.deathParticles = alive
-		if s.enemyDeathTimer >= 1.8 {
-			s.enemyDeathPhase = 3
 		}
 	}
+
+	if len(s.deathParticles) == 0 {
+		return
+	}
+	alive := s.deathParticles[:0]
+	for i := range s.deathParticles {
+		p := &s.deathParticles[i]
+		p.Vx += (rand.Float64()*40 - 20) * dt
+		p.Vy += (rand.Float64()*40 - 20) * dt
+		maxSpeed := 30.0
+		if p.Vx > maxSpeed {
+			p.Vx = maxSpeed
+		}
+		if p.Vx < -maxSpeed {
+			p.Vx = -maxSpeed
+		}
+		if p.Vy > maxSpeed {
+			p.Vy = maxSpeed
+		}
+		if p.Vy < -maxSpeed {
+			p.Vy = -maxSpeed
+		}
+		p.X += p.Vx * dt
+		p.Y += p.Vy * dt
+		p.Life -= dt / 1.8
+		if p.Life > 0 {
+			alive = append(alive, *p)
+		}
+	}
+	s.deathParticles = alive
 }
 
 func (s *BattleScene) updateAllPoses(dt float64) {
 	for i := 0; i < partySize; i++ {
-		// ★追加：回避で右にずらしたスプライトを、時間経過で元の位置に戻す。
 		if s.evadeOffsetX[i] > 0 {
 			s.evadeOffsetX[i] -= evadeDodgeReturnSpeed * dt
 			if s.evadeOffsetX[i] < 0 {
@@ -682,7 +752,7 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 		}
 
 		if s.playerPose[i] == poseDamage {
-			if s.playerAnimTimer[i] >= 0.2 {
+			if s.playerAnimTimer[i] >= hitFlashDuration {
 				s.playerPose[i] = poseIdle
 				s.playerAnimTimer[i] = 0
 			}
@@ -721,7 +791,6 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 			continue
 		}
 
-		// ← 変更：スキルメニュー中は発光pose、それ以外は通常ready
 		if s.waitingActor == i &&
 			(s.battlePhase == phasePlayerMenu ||
 				s.battlePhase == phaseSkillMenu ||
@@ -730,7 +799,10 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 				s.battlePhase == phaseItemMenu ||
 				s.battlePhase == phaseItemTarget) {
 
-			if s.battlePhase == phaseSkillMenu {
+			isSkillSelecting := s.battlePhase == phaseSkillMenu || s.battlePhase == phaseHealSelect ||
+				(s.battlePhase == phaseTargetSelect && s.pendingSkill >= 1)
+
+			if isSkillSelecting {
 				lv := s.skillLevelCursors[i][s.skillIndex]
 				if lv < 1 {
 					lv = 1

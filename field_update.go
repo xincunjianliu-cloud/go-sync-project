@@ -11,12 +11,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
-// chestTriggerMargin はチェスト本体（当たり判定あり）の周囲、何ピクセル分から
-// 調べられるようにするか。16px=1マス分。
 const chestTriggerMargin = 32
 
-// openMessageLog は会話ログ画面を開く。開くたびに、スクロール位置・カーソルは
-// どちらも「一番新しい（一番下の）ログ」を指すようにリセットする。
 func (s *FieldScene) openMessageLog() {
 	s.isLogActive = true
 	s.logScrollOffset = 0
@@ -26,8 +22,6 @@ func (s *FieldScene) openMessageLog() {
 	}
 }
 
-// moveLogCursor はログ画面のカーソルを delta 件分（-1で古い方、+1で新しい方）動かし、
-// カーソルが表示中の4件からはみ出す場合はスクロール位置も追従させる。
 func (s *FieldScene) moveLogCursor(delta int) {
 	n := len(s.msgLog)
 	if n == 0 {
@@ -42,7 +36,6 @@ func (s *FieldScene) moveLogCursor(delta int) {
 		s.logCursorIndex = n - 1
 	}
 
-	// 現在のスクロール位置での表示範囲 [startIndex, endIndex-1] を再現する。
 	endIndex := n - int(s.logScrollOffset)
 	startIndex := endIndex - logVisibleCount
 	if startIndex < 0 {
@@ -50,13 +43,11 @@ func (s *FieldScene) moveLogCursor(delta int) {
 	}
 
 	if s.logCursorIndex < startIndex {
-		// カーソルが表示範囲より上（古い方）にはみ出した：スクロールして追従
 		s.logScrollOffset = float64(n - s.logCursorIndex - logVisibleCount)
 		if s.logScrollOffset < 0 {
 			s.logScrollOffset = 0
 		}
 	} else if s.logCursorIndex > endIndex-1 {
-		// カーソルが表示範囲より下（新しい方）にはみ出した：スクロールして追従
 		s.logScrollOffset = float64(n - s.logCursorIndex - 1)
 		if s.logScrollOffset < 0 {
 			s.logScrollOffset = 0
@@ -69,9 +60,8 @@ func (s *FieldScene) Update(dt float64) Scene {
 		return s
 	}
 
-	// -------------------------------------------------------------------------
-	// 会話ログ画面を開いている間は、閉じる操作以外を受け付けない
-	// -------------------------------------------------------------------------
+	s.updateTouchStick()
+
 	if s.isLogActive {
 		if isMenuUpPressed() {
 			s.moveLogCursor(-1)
@@ -79,6 +69,49 @@ func (s *FieldScene) Update(dt float64) Scene {
 		if isMenuDownPressed() {
 			s.moveLogCursor(1)
 		}
+
+		maxLogScroll := float64(len(s.msgLog) - logVisibleCount)
+		if maxLogScroll < 0 {
+			maxLogScroll = 0
+		}
+
+		barX, barY, barW, barH := logScrollBarRect(s.game, len(s.msgLog))
+		if scrollBarMoveAmt := s.logScrollBarDrag.step(barX, barY, barW, barH); scrollBarMoveAmt != 0 {
+			_, _, _, _, moveRange := logScrollBarGeometry(s.game, len(s.msgLog))
+			if moveRange > 0 {
+				s.logScrollBarDrag.stepContinuousScroll(-scrollBarMoveAmt/moveRange*maxLogScroll, &s.logScrollOffset, 0, maxLogScroll)
+			}
+		}
+		scrollBarHeld := s.logScrollBarDrag.active
+
+		rowPitch := float64(s.game.LogEntryImg.Bounds().Dy()) + logEntryGap
+
+		if _, wheelY := ebiten.Wheel(); wheelY != 0 && !scrollBarHeld && rowPitch > 0 {
+			s.logDrag.stepContinuousScroll(wheelY*wheelScrollPxPerNotch/rowPitch, &s.logScrollOffset, 0, maxLogScroll)
+		}
+
+		if !scrollBarHeld {
+			barX, _, _, _, _ := logScrollBarGeometry(s.game, len(s.msgLog))
+			moveAmt := s.logDrag.step(0, 0, barX-scrollBarTouchPad, float64(gameHeight))
+			if moveAmt != 0 && rowPitch > 0 {
+				s.logDrag.stepContinuousScroll(moveAmt/rowPitch, &s.logScrollOffset, 0, maxLogScroll)
+			}
+			if s.logDrag.justTapped {
+				if idx, ok := hitTestLogEntries(s.game, len(s.msgLog), s.logScrollOffset, s.logDrag.tapX, s.logDrag.tapY); ok {
+					s.logCursorIndex = idx
+				}
+			}
+		}
+
+		imgW := float64(s.game.LogEntryImg.Bounds().Dx())
+		imgH := float64(s.game.LogEntryImg.Bounds().Dy())
+		contentH := float64(logVisibleCount)*imgH + float64(logVisibleCount-1)*logEntryGap
+		logRect := tapRect{x: logImageStartX, y: logImageStartY, w: imgW, h: contentH}
+		barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
+		if unrelatedTapOutsideRects(logRect, barRect) {
+			s.isLogActive = false
+		}
+
 		if isConfirmKeyPressed() || isEscapePressed() || isLogTogglePressed() {
 			s.isLogActive = false
 		}
@@ -92,7 +125,6 @@ func (s *FieldScene) Update(dt float64) Scene {
 		s.msg.Tick()
 		s.msg.UpdateCharaAnim(currentSpeaker, s.game.CharaImgs)
 	}
-	// ★追加：選択肢（はい/いいえ）操作中の処理
 	if s.isChoiceActive {
 		if isMenuUpPressed() || isMenuDownPressed() {
 			s.choiceIndex = 1 - s.choiceIndex
@@ -110,40 +142,43 @@ func (s *FieldScene) Update(dt float64) Scene {
 		return s
 	}
 
-	// -------------------------------------------------------------------------
-	// アイテム入手ポップアップ（画面中央の専用ウィンドウ）表示中の処理
-	// -------------------------------------------------------------------------
+	if s.wallFadeActive {
+		s.updateWallFade(dt)
+		return s
+	}
+
 	if s.isItemGetActive {
-		if isConfirmKeyPressed() || isEscapePressed() {
+		if isConfirmKeyPressed() || isEscapePressed() || len(justPressedTouchPoints()) > 0 {
 			s.isItemGetActive = false
 			s.itemGetName = ""
+			s.itemGetSubLabel = ""
+			s.itemGetPlainMessage = false
 		}
 		return s
 	}
 
-	// -------------------------------------------------------------------------
-	// ボスを倒した直後のクリアダイアログ割り込み処理
-	// -------------------------------------------------------------------------
 	if s.justDefeatedBoss > 0 {
 		cd := bossClearDialogues[s.justDefeatedBoss]
 		s.msgTexts = cd.Commands
 		s.msg.SpeakerToSlot = cd.SpeakerSlots
 		s.msgIndex = 0
-		s.beginMessage() // ← この中でReset()される
+		s.beginMessage()
 		s.justDefeatedBoss = 0
 		return s
 	}
 
-	// -------------------------------------------------------------------------
-	// カットシーン（自動移動イベントなど）実行中の更新処理
-	// -------------------------------------------------------------------------
+	if s.pendingAutoHealMessage {
+		s.pendingAutoHealMessage = false
+		s.openCenterMessagePopup(autoHealIntroMessage)
+		return s
+	}
+
 	if s.isCutscene || s.cseFadeMode == 2 || s.cseFadeMode == 3 || s.cseFadeMode == 4 {
-		// フェードアウト中
 		if s.cseFadeMode == 2 {
 			s.cseFadeAlpha += s.cseFadeSpeed * dt
 			if s.cseFadeAlpha >= 1.0 {
 				s.cseFadeAlpha = 1.0
-				s.cseFadeMode = 3 // フェードイン待ちへ
+				s.cseFadeMode = 3
 				if s.onDarkCallback != nil {
 					cb := s.onDarkCallback
 					s.onDarkCallback = nil
@@ -153,7 +188,6 @@ func (s *FieldScene) Update(dt float64) Scene {
 			}
 		}
 
-		// フェードイン中
 		if s.cseFadeMode == 4 {
 			s.cseFadeAlpha -= s.cseFadeSpeed * dt
 			if s.cseFadeAlpha <= 0 {
@@ -182,12 +216,11 @@ func (s *FieldScene) Update(dt float64) Scene {
 				if s.cseFadeInSpeed > 0 {
 					s.cseFadeSpeed = s.cseFadeInSpeed
 				} else {
-					s.cseFadeSpeed = 1.0 / 0.4 // 従来のトリガー移動用デフォルト
+					s.cseFadeSpeed = 1.0 / 0.4
 				}
 			}
 		}
 
-		// 移動処理
 		if s.isCutscene {
 			cutsceneSpeed := 100.0 * dt
 			movedThisFrame := false
@@ -227,13 +260,11 @@ func (s *FieldScene) Update(dt float64) Scene {
 				s.animCount = 0
 			}
 
-			// 歩き始めてN秒後にフェードアウト開始
 			if s.cseFadeMode == 1 && s.cseElapsed >= s.CseFadeOutDelay {
 				s.cseFadeMode = 2
 				s.cseFadeSpeed = 1.0 / 0.4
 			}
 
-			// 移動完了
 			if s.routeIndex >= len(s.cutsceneRoute) {
 				s.isCutscene = false
 				s.animCount = 0
@@ -241,22 +272,13 @@ func (s *FieldScene) Update(dt float64) Scene {
 				s.px = math.Floor(s.px/16) * 16
 				s.py = math.Floor(s.py/16) * 16
 				if s.cutsceneMessage != "" {
-					bd := GetEventCommands(s.cutsceneMessage, s.game)
-					s.msgTexts = bd.Commands
-					bossType := strings.TrimPrefix(s.cutsceneMessage, "event_")
-					s.msgTexts = append(s.msgTexts, EventCommand{
-						Speaker: "SYSTEM_COMMAND",
-						Text:    "START_BATTLE_" + bossType,
-					})
-					s.msg.SpeakerToSlot = bd.SpeakerSlots
+					s.applyCutsceneMessage()
 					s.msgIndex = 0
 				}
 
-				// 移動完了したら暗転待機へ（まだ暗転中でなければ強制暗転）
 				if s.cseFadeMode == 0 {
 					s.beginMessage()
 				} else if s.cseFadeMode != 4 {
-					// 暗転待機をリセットして待機継続
 					s.cseDarkElapsed = 0
 				}
 			}
@@ -264,13 +286,10 @@ func (s *FieldScene) Update(dt float64) Scene {
 		return s
 	}
 
-	// -------------------------------------------------------------------------
-	// メッセージ（会話）ウィンドウ表示中の更新処理
-	// -------------------------------------------------------------------------
 	if s.isMsgActive {
 		s.msg.Speed = s.game.MessageSpeedTicks()
 
-		if isSkipKeyDown() {
+		if isSkipKeyDown() || isSkipIconHeld() {
 			s.msgSkipHoldElapsed += dt
 			if s.msgSkipHoldElapsed >= endingSkipHoldSeconds {
 				s.msgSkipHoldElapsed = 0
@@ -280,31 +299,26 @@ func (s *FieldScene) Update(dt float64) Scene {
 			s.msgSkipHoldElapsed = 0
 		}
 
-		// オートON/OFFの切り替え
-		if isAutoTogglePressed() {
+		if isAutoTogglePressed() || isAutoIconJustPressed() {
 			s.autoMode = !s.autoMode
 			s.autoWaitElapsed = 0
 		}
 
-		// 会話ログ画面を開く
-		if isLogTogglePressed() {
+		if isLogTogglePressed() || isLogIconJustPressed() {
 			s.openMessageLog()
 			return s
 		}
 
 		finished := s.msg.IsFinished(s.msgTexts[s.msgIndex])
 
-		if isConfirmKeyPressed() {
-			// テキストがまだ表示中なら全文スキップ
+		if isMessageAdvancePressed() {
 			if !finished {
 				s.msg.SkipToEnd(s.msgTexts[s.msgIndex])
 				return s
 			}
-			// 表示完了済みなら次のページへ
 			return s.advanceMessage()
 		}
 
-		// オート送り：表示完了後、文字数に応じた待機時間が経過したら自動で次へ
 		if s.autoMode && finished {
 			s.autoWaitElapsed += dt
 			if s.autoWaitElapsed >= autoWaitDuration(s.msgTexts[s.msgIndex]) {
@@ -322,15 +336,22 @@ func (s *FieldScene) Update(dt float64) Scene {
 	playerFootY := s.py
 
 	if isConfirmKeyPressed() {
-		// ★追加：ドア（ワープ）が優先。近くにいれば遷移して終了。
+		if s.isPushingBlock {
+			s.endPushingBlock()
+			return s
+		}
+
 		if s.nearDoorEvent {
 			if next := s.triggerDoorWarp(); next != nil {
 				return next
 			}
 		}
 
-		// ★変更：向いている方向へのオフセットを廃止。
-		// 壁に貼るのではなく床に置いたイベントに「乗ったらEnterで反応」する形にする。
+		if s.nearBlockID != "" {
+			s.beginPushingBlock(s.nearBlockID)
+			return s
+		}
+
 		for _, layer := range s.tileMap.Layers {
 			if !strings.HasPrefix(layer.Name, "events") {
 				continue
@@ -339,12 +360,24 @@ func (s *FieldScene) Update(dt float64) Scene {
 				p := objProps(obj)
 				evType := p["type"]
 				evText := p["text"]
-				isChest := strings.HasPrefix(evText, "event_chest_")
+				isKeyChest := strings.HasPrefix(evText, "event_chest_key_")
+				isItemChest := strings.HasPrefix(evText, "event_chest_") && !isKeyChest
+				isChest := isKeyChest || isItemChest
+				isLockedWall := evText == "event_wall" && p["lever"] == ""
+				isLeverControlledWall := evText == "event_wall" && p["lever"] != ""
+				isLever := evText == "event_lever"
 
-				// チェストは本体に当たり判定があって乗れないため、
-				// 周囲1マス分（chestTriggerMargin）からでも調べられるようにする。
-				// それ以外のイベントは従来どおりオブジェクトに乗った時だけ反応する。
-				if isChest {
+				if isLockedWall && s.wallIsOpen(obj) {
+					continue
+				}
+				if isLeverControlledWall {
+					continue
+				}
+				if evText == "event_block" || evText == "event_blockspot" || evText == "event_blockdoor" {
+					continue
+				}
+
+				if isChest || isLockedWall || isLever {
 					if !objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
 						continue
 					}
@@ -353,27 +386,20 @@ func (s *FieldScene) Update(dt float64) Scene {
 				}
 
 				if evType == "event" && !strings.HasPrefix(evText, "event_boss_") {
-					if isChest {
+					if isKeyChest {
+						s.openKeyChest(obj, strings.TrimPrefix(evText, "event_chest_key_"))
+						return s
+					} else if isItemChest {
 						s.openChest(obj, strings.TrimPrefix(evText, "event_chest_"))
 						return s
-					} else if evText == "event_rest" {
-						s.startRestEvent(obj)
+					} else if isLockedWall {
+						s.examineWall(obj)
+						return s
+					} else if isLever {
+						s.pullLever(obj)
 						return s
 					} else if evText != "" {
-						if strings.HasPrefix(evText, "event_story_") {
-							d := GetEventCommands(evText, s.game)
-							s.msgTexts = d.Commands
-							s.msg.SpeakerToSlot = d.SpeakerSlots
-						} else {
-							pages := strings.Split(evText, "|")
-							s.msgTexts = []EventCommand{}
-							for _, pageText := range pages {
-								s.msgTexts = append(s.msgTexts, EventCommand{
-									Speaker: "",
-									Text:    pageText,
-								})
-							}
-						}
+						s.msgTexts, s.msg.SpeakerToSlot = resolveEventDialogue(evText)
 					} else {
 						s.msgTexts = []EventCommand{{Speaker: "", Text: "調べるとなにかあるかもしれない"}}
 					}
@@ -390,24 +416,28 @@ func (s *FieldScene) Update(dt float64) Scene {
 		s.game.IsDashing = !s.game.IsDashing
 	}
 
+	s.isDashingNow = s.game.IsDashing || s.touchStickDash()
+
 	perFrame := s.playerCfg.MoveSpeed * dt
-	if s.game.IsDashing {
+	if s.isDashingNow && !s.isPushingBlock {
 		perFrame *= s.playerCfg.DashSpeedMultiplier
 	}
+	touchDx, touchDy := s.touchMoveDir()
+
 	moveX, moveY := 0.0, 0.0
-	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
+	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) || touchDy < 0 {
 		moveY = -perFrame
 		s.dir = 3
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) {
+	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) || touchDy > 0 {
 		moveY = perFrame
 		s.dir = 0
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
+	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) || touchDx < 0 {
 		moveX = -perFrame
 		s.dir = 1
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) {
+	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) || touchDx > 0 {
 		moveX = perFrame
 		s.dir = 2
 	}
@@ -415,16 +445,17 @@ func (s *FieldScene) Update(dt float64) Scene {
 	prevPx, prevPy := s.px, s.py
 
 	actualMovedDist := 0.0
-	if moveX != 0 && moveY != 0 {
+	if s.isPushingBlock {
+		actualMovedDist += s.updateBlockPush(dt, moveX != 0 || moveY != 0)
+	} else if moveX != 0 && moveY != 0 {
 		actualMovedDist += s.moveBoth(moveX, moveY)
 	} else {
 		actualMovedDist += s.moveAxis(moveX, true)
 		actualMovedDist += s.moveAxis(moveY, false)
 	}
 
-	// エンカウント判定用の実移動距離（斜め移動時の二重加算を防ぐため、直線距離で算出）
 	encounterMovedDist := math.Hypot(s.px-prevPx, s.py-prevPy)
-	if s.isWall(s.px, s.py) {
+	if !s.isPushingBlock && s.isWall(s.px, s.py) {
 		s.resolveEmbeddedPosition()
 	}
 
@@ -437,8 +468,13 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 	s.checkDoorProximity()
 	s.updateObjectiveGuide()
+	s.updateDarkness()
+	if !s.isPushingBlock {
+		s.updateBlockDoors()
+	}
+	s.updateScreenShake(dt)
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyM) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyM) || fieldTouchMenuPressed() {
 		full := ebiten.NewImage(gameWidth, gameHeight)
 		s.Draw(full)
 		s.game.captureMenuEntryThumb(full)
@@ -451,115 +487,136 @@ func (s *FieldScene) Update(dt float64) Scene {
 	}
 
 	var targetEnemiesStr string
+	targetMaxCount := 1
 	s.nearExamineEvent = false
+	s.nearBlockID = ""
 
-	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
-			continue
+	if !s.isPushingBlock {
+		for _, b := range s.blocks {
+			if blockNear(b, playerFootX, playerFootY) {
+				s.nearBlockID = b.ID
+				s.nearExamineEvent = true
+				break
+			}
 		}
-		for _, obj := range layer.Objects {
-			p := objProps(obj)
-			evType := p["type"]
-			evText := p["text"]
-			routeStr := p["route"]
 
-			if evType == "event" && strings.HasPrefix(evText, "event_chest_") {
-				// チェストは本体に当たり判定があって乗れないため、
-				// 調べるプロンプトも周囲(chestTriggerMargin)から出す。
-				// ただし開封済みのチェストにはもう何もないのでプロンプトを出さない。
-				if !s.game.OpenedChests[chestKey(s.currentMap, obj)] &&
-					objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
+		for _, layer := range s.tileMap.Layers {
+			if !strings.HasPrefix(layer.Name, "events") {
+				continue
+			}
+			for _, obj := range layer.Objects {
+				p := objProps(obj)
+				evType := p["type"]
+				evText := p["text"]
+				routeStr := p["route"]
+
+				if evType == "event" && strings.HasPrefix(evText, "event_chest_") {
+					if !s.game.OpenedChests[chestKey(s.currentMap, obj)] &&
+						objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
+						s.nearExamineEvent = true
+					}
+				} else if evType == "event" && evText == "event_wall" && p["lever"] == "" {
+					if !s.wallIsOpen(obj) &&
+						objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
+						s.nearExamineEvent = true
+					}
+				} else if evType == "event" && evText == "event_wall" && p["lever"] != "" {
+				} else if evType == "event" && evText == "event_lever" {
+					if objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
+						s.nearExamineEvent = true
+					}
+				} else if evType == "event" && (evText == "event_block" || evText == "event_blockspot" || evText == "event_blockdoor") {
+				} else if evType == "event" && objContains(obj, playerFootX, playerFootY) {
 					s.nearExamineEvent = true
 				}
-			} else if evType == "event" && objContains(obj, playerFootX, playerFootY) {
-				s.nearExamineEvent = true
-			}
 
-			if evType == "trigger" {
-				bossID, hasBossID := objPropInt(obj, "bossid")
-				instant, _ := objPropBool(obj, "instant")
+				if evType == "trigger" {
+					bossID, hasBossID := objPropInt(obj, "bossid")
+					instant, _ := objPropBool(obj, "instant")
 
-				if hasBossID && isBossDefeated(s.game, bossID) {
-					continue
-				}
-
-				if objContains(obj, playerFootX, playerFootY) {
-
-					if hasBossID {
-						s.pendingCutsceneMsg = fmt.Sprintf("event_boss_%d", bossID)
-					} else {
-						s.pendingCutsceneMsg = evText
+					if hasBossID && isBossDefeated(s.game, bossID) {
+						continue
 					}
 
-					if instant || routeStr == "" || routeStr == "<nil>" {
-						s.cutsceneMessage = s.pendingCutsceneMsg
-						s.cseFadeAlpha = 0
-						s.cseFadeMode = 2
-						s.cseFadeSpeed = 1.0 / 0.4
-						s.onDarkCallback = nil
-						s.onFadeCompleteCallback = func() {
-							bd := GetEventCommands(s.cutsceneMessage, s.game)
-							s.msgTexts = bd.Commands
-							bossType := strings.TrimPrefix(s.cutsceneMessage, "event_")
-							s.msgTexts = append(s.msgTexts, EventCommand{
-								Speaker: "SYSTEM_COMMAND",
-								Text:    "START_BATTLE_" + bossType,
-							})
-							s.msg.SpeakerToSlot = bd.SpeakerSlots
-							s.msgIndex = 0
-							s.beginMessage()
+					if segmentIntersectsRect(prevPx, prevPy, s.px, s.py, obj.X, obj.Y, obj.Width, obj.Height) {
+
+						if hasBossID {
+							s.pendingCutsceneMsg = fmt.Sprintf("event_boss_%d", bossID)
+						} else {
+							s.pendingCutsceneMsg = evText
 						}
+						s.cutsceneHasBossID = hasBossID
+
+						if instant || routeStr == "" || routeStr == "<nil>" {
+							s.cutsceneMessage = s.pendingCutsceneMsg
+							s.cseFadeAlpha = 0
+							s.cseFadeMode = 2
+							s.cseFadeSpeed = 1.0 / 0.4
+							s.onDarkCallback = nil
+							s.onFadeCompleteCallback = func() {
+								s.applyCutsceneMessage()
+								s.msgIndex = 0
+								s.beginMessage()
+							}
+							return s
+						}
+
+						s.pendingCutsceneRoute = []MoveStep{}
+
+						if routeStr != "" && routeStr != "<nil>" {
+							steps := strings.Split(routeStr, ",")
+							for _, step := range steps {
+								step = strings.TrimSpace(step)
+								var dir int
+								var distStr string
+								if strings.HasPrefix(step, "down") {
+									dir = 0
+									distStr = strings.TrimPrefix(step, "down")
+								} else if strings.HasPrefix(step, "left") {
+									dir = 1
+									distStr = strings.TrimPrefix(step, "left")
+								} else if strings.HasPrefix(step, "right") {
+									dir = 2
+									distStr = strings.TrimPrefix(step, "right")
+								} else if strings.HasPrefix(step, "up") {
+									dir = 3
+									distStr = strings.TrimPrefix(step, "up")
+								}
+								dist, _ := strconv.ParseFloat(distStr, 64)
+								s.pendingCutsceneRoute = append(s.pendingCutsceneRoute, MoveStep{Dir: dir, Dist: dist})
+							}
+						} else {
+							s.pendingCutsceneRoute = append(s.pendingCutsceneRoute, MoveStep{Dir: s.dir, Dist: 0})
+						}
+
+						totalDist := 0.0
+						for _, step := range s.pendingCutsceneRoute {
+							totalDist += step.Dist
+						}
+						s.cseTotalDuration = totalDist / 100.0
+
+						s.isCutscene = true
+						s.cutsceneMessage = s.pendingCutsceneMsg
+						s.cutsceneRoute = s.pendingCutsceneRoute
+						s.routeIndex = 0
+						s.currentStepDist = 0
+						s.cseElapsed = 0
+						s.cseFadeAlpha = 0
+						s.cseFadeMode = 1
 						return s
 					}
-
-					s.pendingCutsceneRoute = []MoveStep{}
-
-					if routeStr != "" && routeStr != "<nil>" {
-						steps := strings.Split(routeStr, ",")
-						for _, step := range steps {
-							step = strings.TrimSpace(step)
-							var dir int
-							var distStr string
-							if strings.HasPrefix(step, "down") {
-								dir = 0
-								distStr = strings.TrimPrefix(step, "down")
-							} else if strings.HasPrefix(step, "left") {
-								dir = 1
-								distStr = strings.TrimPrefix(step, "left")
-							} else if strings.HasPrefix(step, "right") {
-								dir = 2
-								distStr = strings.TrimPrefix(step, "right")
-							} else if strings.HasPrefix(step, "up") {
-								dir = 3
-								distStr = strings.TrimPrefix(step, "up")
-							}
-							dist, _ := strconv.ParseFloat(distStr, 64)
-							s.pendingCutsceneRoute = append(s.pendingCutsceneRoute, MoveStep{Dir: dir, Dist: dist})
-						}
-					} else {
-						s.pendingCutsceneRoute = append(s.pendingCutsceneRoute, MoveStep{Dir: s.dir, Dist: 0})
-					}
-
-					totalDist := 0.0
-					for _, step := range s.pendingCutsceneRoute {
-						totalDist += step.Dist
-					}
-					s.cseTotalDuration = totalDist / 100.0
-
-					s.isCutscene = true
-					s.cutsceneMessage = s.pendingCutsceneMsg
-					s.cutsceneRoute = s.pendingCutsceneRoute
-					s.routeIndex = 0
-					s.currentStepDist = 0
-					s.cseElapsed = 0
-					s.cseFadeAlpha = 0
-					s.cseFadeMode = 1 // 移動開始、フェードアウト待ち
-					return s
 				}
-			}
 
-			if evType == "enemy" && objContains(obj, playerFootX, playerFootY) {
-				targetEnemiesStr = evText
+				if evType == "enemy" && objContains(obj, playerFootX, playerFootY) {
+					targetEnemiesStr = evText
+					targetMaxCount = 1
+					if n, ok := objPropInt(obj, "maxcount"); ok && n > 1 {
+						targetMaxCount = n
+						if targetMaxCount > maxEnemies {
+							targetMaxCount = maxEnemies
+						}
+					}
+				}
 			}
 		}
 	}
@@ -575,9 +632,12 @@ func (s *FieldScene) Update(dt float64) Scene {
 				if rand.Float64()*100.0 < s.encounterWeight {
 					s.encounterWeight = 0.0
 					allowedEnemies := strings.Split(targetEnemiesStr, ",")
-					chosenEnemyName := strings.TrimSpace(allowedEnemies[rand.Intn(len(allowedEnemies))])
-					// ← s.dir を渡す
-					battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, "enemy", chosenEnemyName)
+					count := targetMaxCount
+					chosenEnemyNames := make([]string, count)
+					for i := 0; i < count; i++ {
+						chosenEnemyNames[i] = strings.TrimSpace(allowedEnemies[rand.Intn(len(allowedEnemies))])
+					}
+					battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, "enemy", chosenEnemyNames)
 					s.game.ChangeSceneWithFade(battleScene, fadeTimeBattleIn)
 					return s
 				}
@@ -594,17 +654,52 @@ func rectsOverlap(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2 float64) bool {
 	return ax1 < bx2 && ax2 > bx1 && ay1 < by2 && ay2 > by1
 }
 
+func segmentIntersectsRect(x1, y1, x2, y2, rx, ry, rw, rh float64) bool {
+	dx := x2 - x1
+	dy := y2 - y1
+	p := [4]float64{-dx, dx, -dy, dy}
+	q := [4]float64{x1 - rx, rx + rw - x1, y1 - ry, ry + rh - y1}
+	tMin, tMax := 0.0, 1.0
+	for i := 0; i < 4; i++ {
+		if p[i] == 0 {
+			if q[i] < 0 {
+				return false
+			}
+			continue
+		}
+		t := q[i] / p[i]
+		if p[i] < 0 {
+			if t > tMax {
+				return false
+			}
+			if t > tMin {
+				tMin = t
+			}
+		} else {
+			if t < tMin {
+				return false
+			}
+			if t < tMax {
+				tMax = t
+			}
+		}
+	}
+	return true
+}
+
 func (s *FieldScene) collisionRectAt(x, y float64) (left, top, right, bottom float64) {
-	return s.playerCfg.CollisionRectAt(x, y)
+	return s.playerCfg.CollisionRectForDirAt(s.dir, x, y)
 }
 
 func (s *FieldScene) isWall(x, y float64) bool {
 	if s.tileMap.TileWidth == 0 || s.tileMap.TileHeight == 0 {
 		return true
 	}
-
 	left, top, right, bottom := s.collisionRectAt(x, y)
-	// --- タイルレイヤー(kabe)によるチェック ---
+	return s.rectHitsObstacles(left, top, right, bottom, "")
+}
+
+func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, excludeBlockID string) bool {
 	checkPoints := [][2]float64{{left, top}, {right, top}, {left, bottom}, {right, bottom}}
 	for _, pt := range checkPoints {
 		tileX := int(pt[0] / float64(s.tileMap.TileWidth))
@@ -620,15 +715,39 @@ func (s *FieldScene) isWall(x, y float64) bool {
 		}
 	}
 
-	// --- Tiledで置いたオブジェクト(collisionレイヤー)によるチェック ---
 	for _, r := range s.collisions {
 		if rectsOverlap(left, top, right, bottom, r.X, r.Y, r.X+r.Width, r.Y+r.Height) {
 			return true
 		}
 	}
 
-	// ★追加：斜めの壁など多角形オブジェクトによるチェック。
-	// 判定用の矩形(left,top,right,bottom)の4隅のいずれかが多角形の内側にあれば壁とみなす。
+	for _, layer := range s.tileMap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			p := objProps(obj)
+			if p["type"] != "event" {
+				continue
+			}
+			switch p["text"] {
+			case "event_wall":
+				if s.wallIsOpen(obj) {
+					continue
+				}
+			case "event_blockdoor":
+				if s.blockDoorIsOpen(obj) {
+					continue
+				}
+			default:
+				continue
+			}
+			if rectsOverlap(left, top, right, bottom, obj.X, obj.Y, obj.X+obj.Width, obj.Y+obj.Height) {
+				return true
+			}
+		}
+	}
+
 	for _, poly := range s.collisionPolygons {
 		for _, pt := range checkPoints {
 			if pointInPolygon(pt[0], pt[1], poly.Points) {
@@ -637,10 +756,18 @@ func (s *FieldScene) isWall(x, y float64) bool {
 		}
 	}
 
+	for _, b := range s.blocks {
+		if b.ID == excludeBlockID {
+			continue
+		}
+		if rectsOverlap(left, top, right, bottom, b.X, b.Y, b.X+b.Width, b.Y+b.Height) {
+			return true
+		}
+	}
+
 	return false
 }
 
-// pointInPolygon は点(x,y)が多角形poly内にあるかをレイキャスト法で判定する。
 func pointInPolygon(x, y float64, poly []TiledPoint) bool {
 	inside := false
 	n := len(poly)
@@ -763,8 +890,6 @@ func (s *FieldScene) moveBoth(dx, dy float64) float64 {
 	return moved
 }
 
-// checkDoor は足元がドア範囲内かを判定し、pendingDoor情報をセットするだけにする。
-// 実際の遷移は Update 内で決定キーが押されたときに行う。
 func (s *FieldScene) checkDoorProximity() {
 	px, py := s.px, s.py
 	s.nearDoorEvent = false
@@ -785,9 +910,6 @@ func (s *FieldScene) checkDoorProximity() {
 				continue
 			}
 
-			// ★追加：requireboss（ボスID）が設定されている場合、
-			// そのボスを倒す(isBossDefeated)までドアは反応しない（未解放のまま）。
-			// 通常のドアはrequirebossを設定しなければ今まで通り常に反応する。
 			if bossID, ok := objPropInt(obj, "requireboss"); ok && bossID > 0 && !isBossDefeated(s.game, bossID) {
 				continue
 			}
@@ -803,7 +925,6 @@ func (s *FieldScene) checkDoorProximity() {
 	}
 }
 
-// triggerDoorWarp は決定キーが押されたときに実際にマップ遷移を行う
 func (s *FieldScene) triggerDoorWarp() Scene {
 	if !s.nearDoorEvent {
 		return nil
@@ -816,40 +937,33 @@ func (s *FieldScene) triggerDoorWarp() Scene {
 	return s
 }
 
-// 会話を開始する：メッセージウィンドウを開き、会話BGMに切り替える
 func (s *FieldScene) beginMessage() {
-	s.msg.Reset() // ← 追加：新しい会話を開始するたびに立ち絵状態をリセット
+	s.msg.Reset()
 	s.isMsgActive = true
 	s.msg.Start()
 	s.game.Audio.PlayBGM(bgmMessage)
 }
 
-// 会話を終了する：メッセージウィンドウを閉じ、フィールドBGMに戻す
 func (s *FieldScene) endMessage() {
 	s.isMsgActive = false
 	s.msgTexts = nil
 	s.msgIndex = 0
-	s.autoMode = false // 🔥 追加：会話ごとにオートはリセットする
+	s.autoMode = false
 	s.autoWaitElapsed = 0
-	s.nearExamineEvent = false // ★追加：会話終了時にプロンプト状態をリセット
+	s.nearExamineEvent = false
 	s.game.Audio.PlayBGM(bgmFieldSchool)
 }
 
-// --- オート送り・ログ関連 ---
-
 const (
-	autoBaseSeconds    = 0.4  // オート時、表示完了後の最低待機秒数
-	autoPerCharSeconds = 0.06 // オート時、1文字あたりの追加待機秒数
-	msgLogMaxEntries   = 30   // 会話ログの最大保持件数
+	autoBaseSeconds    = 0.4
+	autoPerCharSeconds = 0.06
+	msgLogMaxEntries   = 30
 )
 
-// autoWaitDuration はオート送りの待機時間を文字数に比例して算出する。
 func autoWaitDuration(cmd EventCommand) float64 {
 	return autoBaseSeconds + float64(len([]rune(cmd.Text)))*autoPerCharSeconds
 }
 
-// appendMessageLog は表示し終えたページをログに追加する。
-// SYSTEM_COMMAND（戦闘開始・エンディング開始などの内部制御コマンド）は記録しない。
 func (s *FieldScene) appendMessageLog(cmd EventCommand) {
 	if cmd.Speaker == "SYSTEM_COMMAND" || cmd.Text == "" {
 		return
@@ -860,8 +974,6 @@ func (s *FieldScene) appendMessageLog(cmd EventCommand) {
 	}
 }
 
-// advanceMessage は現在のページの表示が完了した状態で「次へ進む」処理をまとめたもの。
-// 決定キーによる手動送りと、オート送りの両方から呼ばれる。
 func (s *FieldScene) advanceMessage() Scene {
 	s.appendMessageLog(s.msgTexts[s.msgIndex])
 
@@ -874,10 +986,9 @@ func (s *FieldScene) advanceMessage() Scene {
 			s.isMsgActive = false
 			s.msgTexts = nil
 			s.msgIndex = 0
-			s.autoMode = false // 🔥 追加：戦闘に入るのでオートは解除
+			s.autoMode = false
 
-			// ← s.dir を渡す
-			battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, "")
+			battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
 			s.game.ChangeSceneWithFade(battleScene, fadeTimeBossIn)
 			return s
 		}
@@ -885,7 +996,7 @@ func (s *FieldScene) advanceMessage() Scene {
 			s.isMsgActive = false
 			s.msgTexts = nil
 			s.msgIndex = 0
-			s.autoMode = false // 🔥 追加：エンディングに入るのでオートは解除
+			s.autoMode = false
 			thumb := ebiten.NewImage(gameWidth, gameHeight)
 			s.Draw(thumb)
 			s.game.captureMenuEntryThumb(thumb)
@@ -894,12 +1005,12 @@ func (s *FieldScene) advanceMessage() Scene {
 			s.game.ChangeSceneWithFade(endingScene, fadeTimeBossOut)
 			return s
 		}
-		s.msg.Start() // 次のページのタイプライターをリセット
+		s.msg.Start()
 	}
 
 	if s.msgIndex >= len(s.msgTexts) {
 		if s.onChoiceConfirm != nil {
-			s.autoMode = false // 🔥 追加：選択肢に入るのでオートは解除（誤送り防止）
+			s.autoMode = false
 			s.isChoiceActive = true
 			s.choiceIndex = 0
 		} else {
@@ -909,11 +1020,8 @@ func (s *FieldScene) advanceMessage() Scene {
 	return s
 }
 
-// skipMessage は会話を長押しスキップしたときに呼ばれる。
-// 会話の途中にSYSTEM_COMMAND（戦闘開始やエンディング開始）が含まれていれば
-// それを即座に実行し、無ければ会話をそのまま終了する。
 func (s *FieldScene) skipMessage() Scene {
-	s.autoMode = false // 🔥 追加：長押しスキップした場合もオートは解除
+	s.autoMode = false
 	for _, cmd := range s.msgTexts {
 		if cmd.Speaker != "SYSTEM_COMMAND" {
 			continue
@@ -923,7 +1031,7 @@ func (s *FieldScene) skipMessage() Scene {
 			s.isMsgActive = false
 			s.msgTexts = nil
 			s.msgIndex = 0
-			battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, "")
+			battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
 			s.game.ChangeSceneWithFade(battleScene, fadeTimeBossIn)
 			return s
 		}

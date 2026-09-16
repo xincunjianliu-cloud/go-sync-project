@@ -1,7 +1,5 @@
 package main
 
-// battle_draw.go: バトル画面の基本描画（背景・敵・パーティスプライト・UI振り分け）
-
 import (
 	"fmt"
 	"image"
@@ -62,45 +60,42 @@ func (s *BattleScene) battleBgImage() *ebiten.Image {
 }
 
 func (s *BattleScene) drawEnemyHeader(screen *ebiten.Image) {
-	if s.enemyDeathPhase == 3 {
-		return
-	}
-	if s.enemyDeathPhase == 2 {
-		for _, p := range s.deathParticles {
-			a := uint8(255 * p.Life)
-			size := p.Size
-			ebitenutil.DrawRect(screen, p.X-size/2+s.shakeX, p.Y-size/2+s.shakeY, size, size,
-				color.RGBA{255, 255, 255, a})
+	for i := range s.enemies {
+		e := &s.enemies[i]
+		if e.DeathPhase == 3 || e.DeathPhase == 2 {
+			continue
 		}
-		return
-	}
-	if s.enemyImage == nil {
-		return
+		if e.Image == nil {
+			continue
+		}
+
+		x, y, _, _ := s.enemyDrawRect(i)
+
+		var g ebiten.GeoM
+		g.Translate(x+s.shakeX, y+s.shakeY)
+		if e.DeathPhase == 1 {
+			op := &ebiten.DrawImageOptions{GeoM: g}
+			op.ColorScale.ScaleAlpha(float32(e.Alpha))
+			screen.DrawImage(e.Image, op)
+			continue
+		}
+
+		intensity := 0.0
+		if e.HitFlashTimer > 0 {
+			r := e.HitFlashTimer / spriteFlashDuration
+			intensity = r * r
+		}
+		drawWithHitFlash(screen, e.Image, g, intensity)
 	}
 
-	imgW := s.enemyImage.Bounds().Dx()
-	imgH := s.enemyImage.Bounds().Dy()
-	if imgW <= 32 && len(s.game.BossImgs) > 0 && s.game.BossImgs[0] != nil {
-		s.enemyImage = s.game.BossImgs[0]
-		imgW = s.enemyImage.Bounds().Dx()
-		imgH = s.enemyImage.Bounds().Dy()
+	for _, p := range s.deathParticles {
+		a := uint8(255 * p.Life)
+		size := p.Size
+		ebitenutil.DrawRect(screen, p.X-size/2+s.shakeX, p.Y-size/2+s.shakeY, size, size,
+			color.RGBA{255, 255, 255, a})
 	}
-
-	xPos := 280.0 - float64(imgW)/2
-	yPos := 240.0 - float64(imgH)/2
-	if yPos < 12 {
-		yPos = 12
-	}
-
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(xPos+s.shakeX, yPos+s.shakeY)
-	if s.enemyDeathPhase == 1 {
-		op.ColorScale.ScaleAlpha(float32(s.enemyAlpha))
-	}
-	screen.DrawImage(s.enemyImage, op)
 }
 
-// drawPartySprites：新レイアウト（96x144グリッド、poseAnimテーブル方式）で全キャラ共通描画
 func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 	for i := 0; i < partySize; i++ {
 		spriteSheet := s.game.PlayerAttackSprites[i]
@@ -127,7 +122,7 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 		case poseFireCast:
 			frame = frameFromProgress(s.attackPhaseTimer/0.30, poseFireCast)
 		case poseReady:
-			frame = 0 // 4行目・左端（スキル以外）
+			frame = 0
 		case poseReadyGlow:
 			frame = glowFrameForLevel(s.skillGlowLevel, s.playerAnimTimer[i])
 		case poseWalk:
@@ -159,15 +154,14 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 
 		op := &ebiten.DrawImageOptions{}
 		baseX := 640.0
-		baseY := 170.0
-		centerX := baseX + float64(i)*10.0
-		centerY := baseY + float64(i)*50.0
+		baseY := 142.0
+		centerX := baseX + float64(i)*20.0
+		centerY := baseY + float64(i)*52.0
 
 		centerX += s.readySlideX[i]
 		centerX += s.introCharOffsetX
-		centerX += s.evadeOffsetX[i] // ★追加：回避時にスプライトシートを右側にずらす演出
+		centerX += s.evadeOffsetX[i]
 
-		// 強撃だけ、選択時の前進位置からさらに接近する
 		if s.activeAttacker == i && (pose == poseChargeApproach || pose == poseChargeAttack) {
 			centerX -= s.chargeApproachOffset
 		}
@@ -176,30 +170,23 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 		s.partyScreenY[i] = centerY
 
 		if pose == poseWin {
-			// 予備：勝利ポーズ演出用の微調整余地（現状フレームは通常と同じ）
 		}
 
 		op.GeoM.Translate(centerX+s.shakeX, centerY+s.shakeY)
 
-		switch pose {
-		case poseDead:
+		if pose == poseDead {
 			pulse := float32(0.5 + 0.5*math.Sin(s.playerAnimTimer[i]*2.2))
 			op.ColorScale.Scale(1.0, 1.0-pulse*0.85, 1.0-pulse*0.85, 1.0)
-		case poseDamage:
-			t := s.playerAnimTimer[i]
-			flashStrength := float32(1.0 - t/0.4)
-			if flashStrength < 0 {
-				flashStrength = 0
-			}
-			op.ColorScale.Scale(
-				1.0+flashStrength*0.8,
-				1.0+flashStrength*0.8,
-				1.0+flashStrength*0.8,
-				1.0,
-			)
+			screen.DrawImage(frameImg, op)
+			continue
 		}
 
-		screen.DrawImage(frameImg, op)
+		intensity := 0.0
+		if s.playerFlashTimer[i] > 0 {
+			r := s.playerFlashTimer[i] / spriteFlashDuration
+			intensity = r * r
+		}
+		drawWithHitFlash(screen, frameImg, op.GeoM, intensity)
 	}
 }
 
@@ -231,29 +218,53 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 			}
 			alpha = uint8(255 * fade)
 		}
+
 		msg := fmt.Sprintf("%d", pop.Value)
+		numScale := 2.2
+		mainColor := color.RGBA{255, 255, 255, alpha}
+		switch {
+		case pop.IsMiss:
+			msg = "MISS"
+			mainColor = color.RGBA{170, 170, 170, alpha}
+		case pop.IsHeal:
+			mainColor = color.RGBA{140, 255, 160, alpha}
+		case pop.IsCrit:
+			numScale = 2.6
+			mainColor = color.RGBA{255, 130, 40, alpha}
+		}
 
 		for _, offset := range [][2]float64{{-1.2, 0}, {1.2, 0}, {0, -1.2}, {0, 1.2}} {
 			shadowOp := &text.DrawOptions{}
-			shadowOp.GeoM.Scale(2.2, 2.2)
+			shadowOp.GeoM.Scale(numScale, numScale)
 			shadowOp.GeoM.Translate(pop.X+offset[0]+s.shakeX, pop.Y+offset[1]+s.shakeY)
 			shadowOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, alpha})
 			text.Draw(screen, msg, s.game.FontFace(16), shadowOp)
 		}
 		op := &text.DrawOptions{}
-		op.GeoM.Scale(2.2, 2.2)
+		op.GeoM.Scale(numScale, numScale)
 		op.GeoM.Translate(pop.X+s.shakeX, pop.Y+s.shakeY)
-		if pop.IsHeal {
-			op.ColorScale.ScaleWithColor(color.RGBA{140, 255, 160, alpha})
-		} else {
-			op.ColorScale.ScaleWithColor(color.RGBA{255, 220, 80, alpha})
-		}
+		op.ColorScale.ScaleWithColor(mainColor)
 		text.Draw(screen, msg, s.game.FontFace(16), op)
+
+		if pop.IsCrit {
+			labelOp := &text.DrawOptions{}
+			labelOp.GeoM.Scale(1.3, 1.3)
+			labelOp.GeoM.Translate(pop.X+1.0+s.shakeX, pop.Y-18.0+s.shakeY)
+			labelOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, alpha})
+			text.Draw(screen, "CRITICAL", s.game.FontFace(16), labelOp)
+
+			labelOp2 := &text.DrawOptions{}
+			labelOp2.GeoM.Scale(1.3, 1.3)
+			labelOp2.GeoM.Translate(pop.X+s.shakeX, pop.Y-19.0+s.shakeY)
+			labelOp2.ColorScale.ScaleWithColor(color.RGBA{255, 130, 40, alpha})
+			text.Draw(screen, "CRITICAL", s.game.FontFace(16), labelOp2)
+		}
 	}
 
 	switch s.battlePhase {
 	case phasePlayerMenu:
 		s.drawCommandMenu(screen)
+		s.drawBattleShortcutButtons(screen)
 		s.drawBottomDescription(screen,
 			commandDescriptions[s.commandIndex],
 			"")
@@ -267,15 +278,11 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 		s.drawBottomDescription(screen, targetDesc, targetHint)
 	case phaseHealSelect:
 		s.drawHealTargetUI(screen)
-		healHint := "→:全体回復に切替"
-		if s.healTargetIndex == partySize {
-			healHint = "←:個人選択に戻す"
-		}
 		healDesc := ""
 		if skillIdx := s.pendingSkill - 1; skillIdx >= 0 {
 			healDesc = s.game.CurrentSkillLevelData(s.waitingActor, skillIdx).Description
 		}
-		s.drawBottomDescription(screen, healDesc, healHint)
+		s.drawBottomDescription(screen, healDesc, "")
 	case phaseItemMenu:
 		s.drawCommandMenu(screen)
 		s.drawItemSubMenu(screen)

@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -20,14 +19,15 @@ type TitleScene struct {
 	game           *Game
 	menuIndex      int
 	hasSaveFile    bool
-	confirmExit    bool // ← 追加：終了確認ダイアログを表示中か
-	exitConfirmIdx int  // ← 追加：0=はい, 1=いいえ
+	confirmExit    bool
+	exitConfirmIdx int
+	inputLockTicks int
 }
 
 func NewTitleScene(game *Game) *TitleScene {
 	hasSave := false
 	for i := 1; i <= maxSaveSlots; i++ {
-		if _, err := os.Stat(saveFilePath(i)); err == nil {
+		if runtimeFileExists(saveFilePath(i)) {
 			hasSave = true
 			break
 		}
@@ -51,6 +51,9 @@ func (s *TitleScene) Update(dt float64) Scene {
 	}
 
 	if s.confirmExit {
+		if consumeDialogInputLock(&s.inputLockTicks) {
+			return s
+		}
 		if isMenuUpPressed() || isMenuDownPressed() {
 			s.exitConfirmIdx = 1 - s.exitConfirmIdx
 		}
@@ -58,7 +61,9 @@ func (s *TitleScene) Update(dt float64) Scene {
 			s.confirmExit = false
 			return s
 		}
-		if isConfirmKeyPressed() {
+		tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
+		confirmTapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.exitConfirmIdx)
+		if isConfirmKeyPressed() || confirmTapped {
 			if s.exitConfirmIdx == 0 {
 				os.Exit(0)
 			}
@@ -74,13 +79,15 @@ func (s *TitleScene) Update(dt float64) Scene {
 		s.menuIndex = (s.menuIndex - 1 + 3) % 3
 	}
 
-	if isConfirmKeyPressed() {
+	tapped := false
+	if idx, ok := s.hitTestMainMenu(); ok {
+		s.menuIndex = idx
+		tapped = true
+	}
+
+	if isConfirmKeyPressed() || tapped {
 		if s.menuIndex == 0 {
-			for i := 0; i < 4; i++ {
-				s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
-				s.game.PlayerMP[i] = s.game.PlayerMaxMP[i]
-			}
-			s.game.TotalPlayTime = 0
+			s.game.ResetForNewGame()
 			field, err := NewRoomScene(s.game, "assets/maps/School_Map_1.tmj", 0, 0, "start_point", 0)
 			if err != nil {
 				return s
@@ -93,9 +100,21 @@ func (s *TitleScene) Update(dt float64) Scene {
 		} else if s.menuIndex == 2 {
 			s.confirmExit = true
 			s.exitConfirmIdx = 1
+			lockDialogInput(&s.inputLockTicks)
 		}
 	}
 	return s
+}
+
+func (s *TitleScene) hitTestMainMenu() (int, bool) {
+	face := s.game.FontFace(15)
+	centerX := float64(gameWidth) / 2
+	rects := []tapRect{
+		centeredTextRect(centerX, 260, "はじめから", face, 30),
+		centeredTextRect(centerX, 295, "つづきから", face, 30),
+		centeredTextRect(centerX, 330, "ゲームを終了する", face, 30),
+	}
+	return hitTestTapRects(rects)
 }
 
 func (s *TitleScene) Draw(screen *ebiten.Image) {
@@ -141,10 +160,6 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// SaveData
-// ---------------------------------------------------------------------------
-
 type SaveData struct {
 	SlotID            int       `json:"slot_id"`
 	LocationName      string    `json:"location_name"`
@@ -171,8 +186,14 @@ type SaveData struct {
 	PlayTime          float64   `json:"play_time"`
 	SavedAt           string    `json:"saved_at"`
 
-	Inventory    []InventorySlot `json:"inventory"`
-	OpenedChests map[string]bool `json:"opened_chests"`
+	Inventory            []InventorySlot       `json:"inventory"`
+	OpenedChests         map[string]bool       `json:"opened_chests"`
+	UnlockedWalls        map[string]bool       `json:"unlocked_walls"`
+	Keys                 map[string]int        `json:"keys"`
+	RaisedLevers         map[string]bool       `json:"raised_levers"`
+	SeenAutoHealMapIntro map[string]bool       `json:"seen_auto_heal_map_intro"`
+	BlockPositions       map[string][2]float64 `json:"block_positions"`
+	UnlockedBlockDoors   map[string]bool       `json:"unlocked_block_doors"`
 }
 
 func saveFilePath(slot int) string {
@@ -184,7 +205,7 @@ func thumbFilePath(slot int) string {
 }
 
 func LoadGame(slot int) (*SaveData, error) {
-	file, err := os.ReadFile(saveFilePath(slot))
+	file, err := readRuntimeFile(saveFilePath(slot))
 	if err != nil {
 		return nil, err
 	}
@@ -221,23 +242,23 @@ func LoadGame(slot int) (*SaveData, error) {
 }
 
 func LoadThumb(slot int) *ebiten.Image {
-	img, _, err := ebitenutil.NewImageFromFile(thumbFilePath(slot))
+	img, err := loadRuntimeImage(thumbFilePath(slot))
 	if err != nil {
 		return nil
 	}
 	return img
 }
 
-// ---------------------------------------------------------------------------
-// LoadSlotScene
-// ---------------------------------------------------------------------------
-
 type LoadSlotScene struct {
-	game       *Game
-	backScene  Scene
-	slotIndex  int
-	slotData   [maxSaveSlots]*SaveData
-	slotThumbs [maxSaveSlots]*ebiten.Image
+	game              *Game
+	backScene         Scene
+	slotIndex         int
+	slotScrollTop     int
+	slotData          [maxSaveSlots]*SaveData
+	slotThumbs        [maxSaveSlots]*ebiten.Image
+	slotDrag          dragScrollState
+	slotScrollBarDrag dragScrollState
+	slotDragAccum     float64
 }
 
 func NewLoadSlotScene(game *Game, backScene Scene) *LoadSlotScene {
@@ -256,6 +277,7 @@ func NewLoadSlotScene(game *Game, backScene Scene) *LoadSlotScene {
 			break
 		}
 	}
+	s.slotScrollTop = clampSlotScrollTop(0, s.slotIndex)
 	return s
 }
 
@@ -265,11 +287,43 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 	}
 	if isMenuUpPressed() {
 		s.slotIndex = (s.slotIndex - 1 + maxSaveSlots) % maxSaveSlots
+		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
 	}
 	if isMenuDownPressed() {
 		s.slotIndex = (s.slotIndex + 1) % maxSaveSlots
+		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
 	}
-	if isConfirmKeyPressed() {
+	cardH := float64(s.game.SaveThumbFrameImg.Bounds().Dy())
+
+	barX, barY, barW, barH := slotScrollBarRect(slotCardStartX-80, slotCardStartY)
+	if scrollBarMoveAmt := s.slotScrollBarDrag.step(barX, barY, barW, barH); scrollBarMoveAmt != 0 {
+		if moveRange := slotScrollBarMoveRange(); moveRange > 0 {
+			s.slotScrollBarDrag.stepScrollTop(-scrollBarMoveAmt/moveRange*float64(maxSlotScrollTop)*cardH, cardH, &s.slotScrollTop, maxSlotScrollTop, &s.slotDragAccum)
+		}
+	}
+	scrollBarHeld := s.slotScrollBarDrag.active
+
+	if _, wheelY := ebiten.Wheel(); wheelY != 0 && !scrollBarHeld {
+		s.slotDrag.stepScrollTop(wheelY*wheelScrollPxPerNotch, cardH, &s.slotScrollTop, maxSlotScrollTop, &s.slotDragAccum)
+	}
+
+	dragArea := cardH * slotsPerPageView
+	dragRight := slotScrollBarX(slotCardStartX-80) - scrollBarTouchPad
+	moveAmt := s.slotDrag.step(0, slotCardStartY, dragRight, dragArea)
+
+	tapped := false
+	if s.slotDrag.justTapped {
+		if idx, ok := hitTestSlotList(s.game, s.slotDrag.tapX, s.slotDrag.tapY, s.slotScrollTop, slotCardStartX-80, slotCardStartY); ok {
+			s.slotIndex = idx
+			tapped = true
+		}
+	}
+
+	if !scrollBarHeld {
+		s.slotDrag.stepScrollTop(moveAmt, cardH, &s.slotScrollTop, maxSlotScrollTop, &s.slotDragAccum)
+	}
+
+	if isConfirmKeyPressed() || tapped {
 		d := s.slotData[s.slotIndex]
 		if d == nil {
 			return s
@@ -293,6 +347,12 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.PlayerNextEXP = d.PlayerNextEXP
 		s.game.Inventory = d.Inventory
 		s.game.OpenedChests = d.OpenedChests
+		s.game.UnlockedWalls = d.UnlockedWalls
+		s.game.Keys = d.Keys
+		s.game.RaisedLevers = d.RaisedLevers
+		s.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
+		s.game.BlockPositions = d.BlockPositions
+		s.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
 		field, err := NewRoomScene(s.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
 		if err != nil {
@@ -301,14 +361,21 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.ChangeSceneWithFade(field, fadeTimeContinue)
 		return s
 	}
+
+	cardW := float64(s.game.SaveThumbFrameImg.Bounds().Dx())
+	cardRect := tapRect{x: slotCardStartX - 80, y: slotCardStartY, w: cardW, h: dragArea}
+	barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
+	if unrelatedTapOutsideRects(cardRect, barRect) {
+		return s.backScene
+	}
 	return s
 }
 
 func (s *LoadSlotScene) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{10, 10, 30, 255})
-	drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, false, slotsPerPageView/2, slotCardStartX-80, slotCardStartY)
+	drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, false, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
+	drawBackButton(screen, s.game)
 
-	// メニュー画面と同じ位置に説明文を表示
 	desc := menuCommandDescriptions["ロード"]
 	if desc != "" {
 		x := float64(gameWidth) - menuDescOffsetX

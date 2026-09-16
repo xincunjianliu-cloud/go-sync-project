@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>七不思議討滅録（動作確認用）</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #loading {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ccc;
+    font-family: sans-serif;
+    font-size: 14px;
+  }
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+</style>
+</head>
+<body>
+<div id="loading">読み込み中...(初回は少し時間がかかります)</div>
+<script src="wasm_exec.js"></script>
+<script>
+  const go = new Go();
+  WebAssembly.instantiateStreaming(fetch("game.wasm"), go.importObject).then((result) => {
+    document.getElementById("loading").remove();
+    go.run(result.instance);
+  }).catch((err) => {
+    document.getElementById("loading").textContent = "読み込みに失敗しました: " + err;
+    console.error(err);
+  });
+</script>
+</body>
+</html>

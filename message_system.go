@@ -1,42 +1,11 @@
 package main
 
 import (
-	"image/color"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
-
-// =========================================================
-// MessageSystem
-// フィールドシーン用のテキスト描画システム。
-// タイプライター効果・▼点滅・window.png対応。
-// キャラ立ち絵のスライドイン/アウト＋明暗フェード対応。
-//
-// 使い方:
-//   1. FieldScene に MessageSystem フィールドを追加する
-//      msg MessageSystem
-//sss
-//      g.CharaImgs = map[string]*ebiten.Image{ "パラガス": img, ... }
-//
-//   3. msg.SpeakerToSlot に話者名→スロット番号を登録する
-//      スロット 0 = 左側、スロット 1 = 右側
-//      s.msg.SpeakerToSlot = map[string]int{ "パラガス": 0, "ブロリー": 1 }
-//
-//   4. メッセージ開始時に Start() を呼ぶ
-//      s.msg.Start()
-
-//
-//   5. Update() 内で Tick() と UpdateCharaAnim() を呼ぶ（毎フレーム）
-//      s.msg.Tick()
-//      s.msg.UpdateCharaAnim(currentSpeaker, charaImgs)
-//
-//   6. Draw() 内で DrawChara() → Draw() の順に呼ぶ
-//      s.msg.DrawChara(screen, charaImgs)
-//      s.msg.Draw(screen, cmd, fontFace)
-// =========================================================
 
 const (
 	msgWinX             = 0
@@ -46,60 +15,49 @@ const (
 	msgTextSpeedDefault = 5
 	msgTextStartX       = msgWinX + 20
 
-	// ── キャラ立ち絵：左スロット(0) ──
-	charaInsideX  = -50.0  // 画面内で静止する位置（左端基準）
-	charaOutsideX = -300.0 // 画面外（登場前・退場後）の位置
+	charaInsideX  = -50.0
+	charaOutsideX = -300.0
 
-	// ── キャラ立ち絵：右スロット(1) ──
-	// 左と同じ考え方で、右端からの距離として管理する
-	charaRightInsideX  = 50.0  // 画面内で静止する時の、右端からの距離
-	charaRightOutsideX = 300.0 // 画面外（登場前・退場後）の、右端からの距離
+	charaRightInsideX  = 50.0
+	charaRightOutsideX = 300.0
 
 	charaSlideSpeed = 0.12
 	charaFadeSpeed  = 0.08
 	charaDarkTone   = 0.45
 
-	// ── テキスト位置：解像度に対する比率 ──
 	msgNameXRatio = 160.0 / float64(gameWidth)
 	msgNameYRatio = 410.0 / float64(gameHeight)
 
 	msgTextStartXRatio = 180.0 / float64(gameWidth)
-	msgTextStartYRatio = 450.0 / float64(gameHeight) // 話者名の有無に関わらず常にこの位置
+	msgTextStartYRatio = 450.0 / float64(gameHeight)
 
 	msgArrowXRatio = 720.0 / float64(gameWidth)
 	msgArrowYRatio = 510.0 / float64(gameHeight)
 
-	msgLineSpacingExtra = 8.0 // 行間の追加余白
+	msgLineSpacingExtra = 8.0
 	msgArrowFontSize    = 10.0
 )
 
-// charaState はキャラ1体分のアニメーション状態を持つ
-// charaState はキャラ1体分のアニメーション状態を持つ
 type charaState struct {
-	x       float64 // 現在の位置（左スロット=左基準のX、右スロット=右端からの距離）
-	targetX float64 // 目標位置
-	light   float32 // 現在の輝度 (0.0〜1.0)
-	spawned bool    // 一度でも登場したか
+	x       float64
+	targetX float64
+	light   float32
+	spawned bool
 }
 
 type MessageSystem struct {
 	ticks    int
 	msgStart int
 
-	Speed int // 文字送り速度（tick数）。0以下ならデフォルトを使う ← 追加
+	Speed int
 
 	WindowImg   *ebiten.Image
 	WindowAlpha float32
 
-	// 話者名 → スロット番号 (0=左, 1=右) のマッピング
-	// 外から設定する: s.msg.SpeakerToSlot = map[string]int{"パラガス": 0, "ブロリー": 1}
 	SpeakerToSlot map[string]int
 
-	// スロット 0（左）・スロット 1（右）のアニメーション状態
 	slots [2]charaState
 }
-
-// Start はメッセージ表示を開始する。新しいページに切り替わるたびに呼ぶこと。
 
 func (m *MessageSystem) speed() int {
 	if m.Speed <= 0 {
@@ -112,26 +70,21 @@ func (m *MessageSystem) Start() {
 
 }
 
-// Tick は毎フレーム Update() 内で呼ぶ。
 func (m *MessageSystem) Tick() {
 	m.ticks++
 }
 
-// IsFinished は現在のメッセージの文字がすべて表示されたか返す。
 func (m *MessageSystem) IsFinished(cmd EventCommand) bool {
 	runes := []rune(cmd.Text)
 	count := (m.ticks - m.msgStart) / m.speed()
 	return count >= len(runes)
 }
 
-// SkipToEnd は文字送りをスキップして全文を即時表示する。
 func (m *MessageSystem) SkipToEnd(cmd EventCommand) {
 	runes := []rune(cmd.Text)
 	m.msgStart = m.ticks - len(runes)*m.speed()
 }
 
-// UpdateCharaAnim はキャラのスライド・明暗を毎フレーム更新する。
-// currentSpeaker: 現在の話者名。charaImgs: game.CharaImgs を渡す。
 func (m *MessageSystem) UpdateCharaAnim(currentSpeaker string, charaImgs map[string]*ebiten.Image) {
 	if m.SpeakerToSlot == nil {
 		return
@@ -159,10 +112,8 @@ func (m *MessageSystem) UpdateCharaAnim(currentSpeaker string, charaImgs map[str
 			continue
 		}
 
-		// スライド更新（左右とも同じ式）
 		m.slots[i].x += (m.slots[i].targetX - m.slots[i].x) * charaSlideSpeed
 
-		// 明暗フェード更新
 		var target float32 = charaDarkTone
 		if i == activeSlot || activeSlot == -1 {
 			target = 1.0
@@ -181,8 +132,6 @@ func (m *MessageSystem) UpdateCharaAnim(currentSpeaker string, charaImgs map[str
 	}
 }
 
-// DrawChara はウィンドウより前、プレイヤーより後に呼ぶ（ウィンドウの手前に立つ）。
-// charaImgs: game.CharaImgs を渡す。
 func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*ebiten.Image) {
 	if m.SpeakerToSlot == nil {
 		return
@@ -193,10 +142,7 @@ func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*eb
 		if !s.spawned {
 			continue
 		}
-		img, ok := charaImgs[speaker]
-		if !ok || img == nil {
-			continue
-		}
+		img := charaImgs[speaker]
 
 		charaY := 0.0
 		imgW := float64(img.Bounds().Dx())
@@ -205,7 +151,6 @@ func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*eb
 		if slot == 0 {
 			drawX = s.x
 		} else {
-			// 右端基準：x=0の時、画像の右端が画面の右端にぴったり合う
 			drawX = float64(gameWidth) - imgW + s.x
 		}
 
@@ -217,26 +162,12 @@ func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*eb
 	}
 }
 
-// Draw はメッセージウィンドウとテキストを描画する。
-// isMsgActive が true のときだけ呼ぶこと。
 func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *text.GoTextFace) {
-	// --- 1. ウィンドウ背景 ---
-	alpha := m.WindowAlpha
-	if alpha == 0 {
-		alpha = 1.0
-	}
+	winOp := &ebiten.DrawImageOptions{}
+	winOp.GeoM.Translate(0, 0)
+	winOp.Filter = ebiten.FilterNearest
+	screen.DrawImage(m.WindowImg, winOp)
 
-	if m.WindowImg != nil {
-		winOp := &ebiten.DrawImageOptions{}
-		winOp.GeoM.Translate(0, 0)
-		winOp.Filter = ebiten.FilterNearest
-		screen.DrawImage(m.WindowImg, winOp)
-	} else {
-		alphaByte := uint8(255 * alpha)
-		ebitenutil.DrawRect(screen, msgWinX, msgWinY, msgWinWidth, msgWinHeight, color.RGBA{0, 0, 0, alphaByte})
-	}
-
-	// --- 2. 話者名 ---
 	if cmd.Speaker != "" && cmd.Speaker != "SYSTEM_COMMAND" {
 		nameOp := &text.DrawOptions{}
 		nameX := float64(gameWidth) * msgNameXRatio
@@ -246,7 +177,6 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 		text.Draw(screen, ""+cmd.Speaker+"", fontFace, nameOp)
 	}
 
-	// --- 3. タイプライター効果 ---
 	runes := []rune(cmd.Text)
 	count := (m.ticks - m.msgStart) / m.speed()
 	if count > len(runes) {
@@ -254,15 +184,12 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 	}
 	visibleText := string(runes[:count])
 
-	// 自動折り返しはせず、テキスト中の改行(\n)の位置をそのまま使う。
-	// 折り返し位置は書き手が入力時に決める（このシステムが調整するのは開始X座標のみ）。
 	lines := strings.Split(visibleText, "\n")
 
 	textOp := &text.DrawOptions{}
 	textOp.LineSpacing = fontFace.Metrics().HAscent + fontFace.Metrics().HDescent + msgLineSpacingExtra
 	textOp.ColorScale.ScaleWithColor(uiColorText)
 
-	// 話者名の有無に関わらず常に同じY座標
 	startY := float64(gameHeight) * msgTextStartYRatio
 	startX := float64(gameWidth) * msgTextStartXRatio
 
@@ -275,7 +202,6 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 		text.Draw(screen, line, fontFace, textOp)
 	}
 
-	// --- 4. ▼ 点滅 ---
 	if count >= len(runes) && len(runes) > 0 {
 		if (m.ticks/30)%2 == 0 {
 			arrowFace := &text.GoTextFace{Source: fontFace.Source, Size: msgArrowFontSize}
@@ -289,7 +215,6 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 	}
 }
 
-// message_system.go に追加
 func (m *MessageSystem) Reset() {
 	m.slots[0] = charaState{}
 	m.slots[1] = charaState{}

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"image"
 	"image/color"
 	"image/png"
-	"os"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -21,14 +24,11 @@ const (
 
 const maxPlayerLevel = 50
 
-// Scene はフィールド・バトル・メニューなど各画面が実装する共通インターフェース。
-// Game は currentScene にこれを保持し、Update/Draw を委譲する。
 type Scene interface {
 	Update(dt float64) Scene
 	Draw(screen *ebiten.Image)
 }
 
-// PlayerNames はパーティメンバーの表示名。
 var PlayerNames = [partySize]string{
 	"ブロリー",
 	"パラガス",
@@ -36,8 +36,6 @@ var PlayerNames = [partySize]string{
 	"トランクスルー",
 }
 
-// BossNames はボスの表示名（1章1ボスで全4体）。
-// 名前を変えたい時はここだけ書き換えればOK。
 var BossNames = [4]string{
 	"ボス1",
 	"ボス2",
@@ -60,26 +58,31 @@ type Game struct {
 	PlayerSpd           [4]int
 	PlayerLuck          [4]int
 	PlayerSP            [4]int
-	PlayerSkillLv       [4][8]int // ← 修正：スキル数増加に対応するため4→8に拡張
+	PlayerSkillLv       [4][8]int
 	PlayerLv            [4]int
 	PlayerEXP           [4]int
 	PlayerNextEXP       [4]int
 	PlayerAttackSprites [4]*ebiten.Image
 	CommandIcons        [4]*ebiten.Image
 	TimelineIcons       [4]*ebiten.Image
+	TimelineIconsLarge  [4]*ebiten.Image
 	SkillPanelImg       *ebiten.Image
 
-	BossDefeatedFlags [4]bool
-	EnemyImgs         map[string]*ebiten.Image
-	Tilesets          map[string]*ebiten.Image
-	TileImg           *ebiten.Image
-	SpriteSheet       *ebiten.Image
-	BossSpriteSheets  [4]*ebiten.Image
-	BossImgs          [4]*ebiten.Image
-	fadeAlpha         float64
-	fadeMode          int
-	fadeSpeed         float64
-	pendingScene      Scene
+	BossDefeatedFlags  [4]bool
+	EnemyImgs          map[string]*ebiten.Image
+	EnemyIconImgs      map[string]*ebiten.Image
+	EnemyIconLargeImgs map[string]*ebiten.Image
+	Tilesets           map[string]*ebiten.Image
+	TileImg            *ebiten.Image
+	SpriteSheet        *ebiten.Image
+	BossSpriteSheets   [4]*ebiten.Image
+	BossImgs           [4]*ebiten.Image
+	BossIconImgs       [4]*ebiten.Image
+	BossIconLargeImgs  [4]*ebiten.Image
+	fadeAlpha          float64
+	fadeMode           int
+	fadeSpeed          float64
+	pendingScene       Scene
 
 	GoalImg  *ebiten.Image
 	GaugeImg *ebiten.Image
@@ -87,8 +90,8 @@ type Game struct {
 	BattleBgImg *ebiten.Image
 	BossBgImgs  [4]*ebiten.Image
 
-	NameImg       *ebiten.Image // 通常時の名前プレート
-	NameMyTurnImg *ebiten.Image // 自分のターン時の名前プレート
+	NameImg       *ebiten.Image
+	NameMyTurnImg *ebiten.Image
 
 	TimelineBarImg     *ebiten.Image
 	TimelineBarVertImg *ebiten.Image
@@ -96,15 +99,13 @@ type Game struct {
 	WindowImg *ebiten.Image
 	CharaImgs map[string]*ebiten.Image
 
-	LogEntryImg *ebiten.Image // 会話ログ1件分のテキストボックス背景
+	LogEntryImg *ebiten.Image
 
-	// セーブ関連
-	SaveConfirmBgImg     *ebiten.Image    // セーブ確認.png（はい/いいえ確認ダイアログの背景）
-	SaveThumbFrameSelImg *ebiten.Image    // セーブスロット選択中.png（選択中の枠）
-	SaveThumbFrameImg    *ebiten.Image    // セーブスロット.png（通常の枠）
-	TotalPlayTime        float64          // 現在セッションの累積秒
-	MenuEntryThumb       *ebiten.Image    // Mキーを押した瞬間のフィールド画面（96x54に縮小済み）
-	SaveThumbs           [5]*ebiten.Image // ロード時に読み込んだサムネ
+	SaveThumbFrameSelImg *ebiten.Image
+	SaveThumbFrameImg    *ebiten.Image
+	TotalPlayTime        float64
+	MenuEntryThumb       *ebiten.Image
+	SaveThumbs           [5]*ebiten.Image
 
 	MenuBgImg *ebiten.Image
 
@@ -116,17 +117,19 @@ type Game struct {
 
 	MessageSpeed int
 
-	LastMenuIndex int // ← 追加：メニューの最後に選んだ項目を記憶
+	LastMenuIndex int
 
 	LastSkillCharIndex   int
 	LastSkillSubIndex    int
 	LastSkillLevelCursor int
 	LastStatusCharIndex  int
+	LastSlotIndex        int
 
-	// Game構造体に追加
 	Fullscreen   bool
 	WindowWidth  int
 	WindowHeight int
+
+	RememberCursor bool
 
 	lastWindowW             int
 	lastWindowH             int
@@ -137,23 +140,42 @@ type Game struct {
 	MinimapPlayerIconImg    *ebiten.Image
 	MinimapObjectiveIconImg *ebiten.Image
 
-	ChestImg *ebiten.Image // チェスト（宝箱）: 32x32を2フレーム横並び（0=未開封, 1=開封済み）
+	ChestImg      *ebiten.Image
+	KeyChestImg   *ebiten.Image
+	LockedWallImg *ebiten.Image
+	LeverWallImg  *ebiten.Image
+	LeverImg      *ebiten.Image
+
+	BlockImg     *ebiten.Image
+	BlockSpotImg *ebiten.Image
+	BlockDoorImg *ebiten.Image
+
+	LightMaskImg *ebiten.Image
+
+	fieldImageCache map[string]*ebiten.Image
 
 	Audio                  *AudioManager
 	mouseLastX, mouseLastY int
 	mouseIdleTime          float64
 	cursorHidden           bool
 
-	// ★追加：ダッシュのオン/オフ状態。マップ移動でFieldSceneが作り直されても
-	// ダッシュ状態が消えないよう、シーンをまたいで生きるGame側に持たせる。
 	IsDashing bool
 
-	// ── アイテム関連 ──
-	Inventory    []InventorySlot // 所持アイテム一覧
-	OpenedChests map[string]bool // 開封済みチェスト（"マップパス|X_Y"をキーとする）
+	MobileMode bool
+
+	Inventory     []InventorySlot
+	OpenedChests  map[string]bool
+	UnlockedWalls map[string]bool
+	Keys          map[string]int
+	RaisedLevers  map[string]bool
+
+	BlockPositions     map[string][2]float64
+	UnlockedBlockDoors map[string]bool
+
+	SeenAutoHealMapIntro map[string]bool
 }
 
-const mouseIdleHideDelay = 2.0 // マウスカーソルを隠すまでの無操作時間（秒）
+const mouseIdleHideDelay = 2.0
 
 const (
 	FadeNone = iota
@@ -165,16 +187,125 @@ func (g *Game) FontFace(size float64) *text.GoTextFace {
 	return &text.GoTextFace{Source: g.fontSource, Size: size}
 }
 
-func NewGame(source *text.GoTextFaceSource) (*Game, error) {
-	g := &Game{
-		fontSource:   source,
-		Tilesets:     make(map[string]*ebiten.Image),
-		CharaImgs:    make(map[string]*ebiten.Image),
-		OpenedChests: make(map[string]bool),
+func (g *Game) LoadFieldImage(filename string) *ebiten.Image {
+	if g.fieldImageCache == nil {
+		g.fieldImageCache = make(map[string]*ebiten.Image)
+	}
+	if img, cached := g.fieldImageCache[filename]; cached {
+		return img
 	}
 
-	// ★変更：初期ステータスは stats_config.go の PlayerStatsByLevel[0]（＝Lv1）を
-	// 単一の情報源として読み込む（値を変えたい場合は stats_config.go を編集する）。
+	img, err := loadAssetImage("assets/images/field/" + filename)
+	if err != nil {
+		fmt.Printf("警告: 画像 \"assets/images/field/%s\" の読み込みに失敗しました: %v\n", filename, err)
+		g.fieldImageCache[filename] = nil
+		return nil
+	}
+	g.fieldImageCache[filename] = img
+	return img
+}
+
+func generateLightMaskImage(size int) *ebiten.Image {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	cx, cy := float64(size)/2, float64(size)/2
+	maxR := float64(size) / 2
+
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			dx := float64(x) + 0.5 - cx
+			dy := float64(y) + 0.5 - cy
+			t := math.Sqrt(dx*dx+dy*dy) / maxR
+
+			var a float64
+			if t < 1 {
+				a = 1 - t*t*(3-2*t)
+			}
+			img.Set(x, y, color.RGBA{255, 255, 255, uint8(a * 255)})
+		}
+	}
+	return ebiten.NewImageFromImage(img)
+}
+
+const blockTileSize = 32
+
+func generateBlockImage(size int) *ebiten.Image {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	fill := color.RGBA{150, 105, 60, 255}
+	border := color.RGBA{90, 60, 30, 255}
+	const borderW = 3
+
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			if x < borderW || y < borderW || x >= size-borderW || y >= size-borderW {
+				img.Set(x, y, border)
+			} else {
+				img.Set(x, y, fill)
+			}
+		}
+	}
+
+	drawDiagonalCross(img, size, border)
+
+	return ebiten.NewImageFromImage(img)
+}
+
+func generateBlockSpotImage(size int) *ebiten.Image {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	markColor := color.RGBA{255, 225, 90, 220}
+	const thickness = 3
+
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			if x < thickness || y < thickness || x >= size-thickness || y >= size-thickness {
+				img.Set(x, y, markColor)
+			}
+		}
+	}
+
+	return ebiten.NewImageFromImage(img)
+}
+
+func generateBlockDoorImage(size int) *ebiten.Image {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	fill := color.RGBA{110, 118, 138, 255}
+	border := color.RGBA{55, 60, 74, 255}
+	const borderW = 3
+
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			if x < borderW || y < borderW || x >= size-borderW || y >= size-borderW {
+				img.Set(x, y, border)
+			} else {
+				img.Set(x, y, fill)
+			}
+		}
+	}
+
+	return ebiten.NewImageFromImage(img)
+}
+
+func drawDiagonalCross(img *image.RGBA, size int, c color.RGBA) {
+	const thickness = 2
+	for x := 0; x < size; x++ {
+		for _, y := range []int{x, size - 1 - x} {
+			for dy := -thickness; dy <= thickness; dy++ {
+				yy := y + dy
+				if yy >= 0 && yy < size {
+					img.Set(x, yy, c)
+				}
+			}
+		}
+	}
+}
+
+func (g *Game) rememberedIndex(v int) int {
+	if !g.RememberCursor {
+		return 0
+	}
+	return v
+}
+
+func (g *Game) ResetForNewGame() {
 	for i := 0; i < partySize; i++ {
 		st := PlayerStatsByLevel[0][i]
 		g.PlayerHP[i], g.PlayerMaxHP[i] = st.HP, st.HP
@@ -186,42 +317,77 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 		g.PlayerSpd[i] = st.Spd
 		g.PlayerLuck[i] = st.Luck
 		g.PlayerSP[i] = 0
-	}
-
-	for i := 0; i < partySize; i++ {
 		g.PlayerLv[i] = 1
 		g.PlayerEXP[i] = 0
 		g.PlayerNextEXP[i] = PlayerExpToNextByLevel[0]
 	}
 
-	// スキルレベルは1始まり。0のままだとLevels[lv-1]がLevels[-1]となりクラッシュするため必ず1で初期化する。
-	for i := 0; i < 4; i++ {
-		for j := 0; j < 8; j++ {
+	for i := 0; i < partySize; i++ {
+		for j := 0; j < len(g.PlayerSkillLv[i]); j++ {
 			g.PlayerSkillLv[i][j] = 1
 		}
 	}
+
+	g.BossDefeatedFlags = [4]bool{}
+	g.TotalPlayTime = 0
+	g.Inventory = nil
+	g.OpenedChests = make(map[string]bool)
+	g.UnlockedWalls = make(map[string]bool)
+	g.Keys = make(map[string]int)
+	g.RaisedLevers = make(map[string]bool)
+	g.SeenAutoHealMapIntro = make(map[string]bool)
+	g.BlockPositions = make(map[string][2]float64)
+	g.UnlockedBlockDoors = make(map[string]bool)
+
+	g.LastMenuIndex = 0
+	g.LastSkillCharIndex = 0
+	g.LastSkillSubIndex = 0
+	g.LastSkillLevelCursor = 0
+	g.LastStatusCharIndex = 0
+	g.LastSlotIndex = 0
+
+	g.UpdateObjective()
+}
+
+func NewGame(source *text.GoTextFaceSource) (*Game, error) {
+	g := &Game{
+		fontSource:           source,
+		Tilesets:             make(map[string]*ebiten.Image),
+		CharaImgs:            make(map[string]*ebiten.Image),
+		OpenedChests:         make(map[string]bool),
+		UnlockedWalls:        make(map[string]bool),
+		Keys:                 make(map[string]int),
+		RaisedLevers:         make(map[string]bool),
+		SeenAutoHealMapIntro: make(map[string]bool),
+		BlockPositions:       make(map[string][2]float64),
+		UnlockedBlockDoors:   make(map[string]bool),
+	}
+
+	g.ResetForNewGame()
+	g.MobileMode = detectMobileMode()
 
 	settings := LoadSettings()
 	g.MessageSpeed = settings.MessageSpeed
 	g.Fullscreen = settings.Fullscreen
 	g.WindowWidth = settings.WindowWidth
 	g.WindowHeight = settings.WindowHeight
+	g.RememberCursor = settings.RememberCursor
 
 	var err error
 
-	roukaImg, _, err := ebitenutil.NewImageFromFile("assets/images/Tile_set_School_Set.png")
+	roukaImg, err := loadAssetImage("assets/images/field/Tile_set_School_Set.png")
 	if err != nil {
 		return nil, fmt.Errorf("街のタイルセット画像の読み込みに失敗 %w", err)
 	}
 	g.Tilesets["rouka"] = roukaImg
 
-	dungeonImg, _, err := ebitenutil.NewImageFromFile("assets/images/Tile_set_School_Set (12).png")
+	dungeonImg, err := loadAssetImage("assets/images/field/Tile_set_School_Set (12).png")
 	if err != nil {
 		return nil, fmt.Errorf("ダンジョンのタイルセット画像の読み込みに失敗 %w", err)
 	}
 	g.Tilesets["dungeon"] = dungeonImg
 
-	defaultImg, _, err := ebitenutil.NewImageFromFile("assets/images/Tile_set_School_Set.png")
+	defaultImg, err := loadAssetImage("assets/images/field/Tile_set_School_Set.png")
 	if err != nil {
 		return nil, fmt.Errorf("デフォルトタイルセット画像の読み込みに失敗 %w", err)
 	}
@@ -234,242 +400,281 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 	}
 	g.UpdateObjective()
 
-	g.SpriteSheet, _, err = ebitenutil.NewImageFromFile("assets/images/player_walk.png")
+	g.SpriteSheet, err = loadAssetImage("assets/images/field/player_walk.png")
 	if err != nil {
 		return nil, fmt.Errorf("プレイヤースプライトの読み込みに失敗 %w", err)
 	}
 	for i := 0; i < 4; i++ {
-		path := fmt.Sprintf("assets/images/bossスプライト_%d.png", i+1)
-		g.BossSpriteSheets[i], _, err = ebitenutil.NewImageFromFile(path)
+		path := fmt.Sprintf("assets/images/field/bossスプライト_%d.png", i+1)
+		g.BossSpriteSheets[i], err = loadAssetImage(path)
 		if err != nil {
 			return nil, fmt.Errorf("ボス%dの歩行スプライト読み込みに失敗 %w", i+1, err)
 		}
 	}
 
 	for i := 0; i < 4; i++ {
-		path := fmt.Sprintf("assets/images/boss_%d.png", i+1)
-		g.BossImgs[i], _, err = ebitenutil.NewImageFromFile(path)
+		path := fmt.Sprintf("assets/images/battle/boss_%d.png", i+1)
+		g.BossImgs[i], err = loadAssetImage(path)
 		if err != nil {
 			return nil, fmt.Errorf("ボス%dの画像読み込みに失敗 %w", i+1, err)
 		}
 	}
 
-	g.EnemyImgs = make(map[string]*ebiten.Image)
-
-	if g.EnemyImgs["フリーザ"], _, err = ebitenutil.NewImageFromFile("assets/images/スプライト-0001.png"); err != nil {
-		return nil, fmt.Errorf("フリーザの画像読み込みに失敗 %w", err)
-	}
-	if g.EnemyImgs["セル"], _, err = ebitenutil.NewImageFromFile("assets/images/スプライト-0001.png"); err != nil {
-		return nil, fmt.Errorf("セルの画像読み込みに失敗 %w", err)
-	}
-	if g.EnemyImgs["魔人ブウ"], _, err = ebitenutil.NewImageFromFile("assets/images/スプライト-0001.png"); err != nil {
-		return nil, fmt.Errorf("魔人ブウの画像読み込みに失敗 %w", err)
+	for i := 0; i < 4; i++ {
+		path := fmt.Sprintf("assets/images/battle/boss_%d_icon.png", i+1)
+		img, ferr := loadAssetImage(path)
+		if ferr != nil {
+			return nil, fmt.Errorf("ボス%dのアイコン画像読み込みに失敗 %w", i+1, ferr)
+		}
+		g.BossIconImgs[i] = img
 	}
 
 	for i := 0; i < 4; i++ {
-		path := fmt.Sprintf("assets/images/player_attack_%d.png", i+1)
-		g.PlayerAttackSprites[i], _, err = ebitenutil.NewImageFromFile(path)
+		path := fmt.Sprintf("assets/images/battle/boss_%d_icon_large.png", i+1)
+		img, ferr := loadAssetImage(path)
+		if ferr != nil {
+			return nil, fmt.Errorf("ボス%dの拡大アイコン画像読み込みに失敗 %w", i+1, ferr)
+		}
+		g.BossIconLargeImgs[i] = img
+	}
+
+	g.EnemyImgs = make(map[string]*ebiten.Image)
+	g.EnemyIconImgs = make(map[string]*ebiten.Image)
+	g.EnemyIconLargeImgs = make(map[string]*ebiten.Image)
+
+	for _, enemy := range EnemyDatabase {
+		battlePath := fmt.Sprintf("assets/images/battle/enemy_%s.png", enemy.Name)
+		img, ferr := loadAssetImage(battlePath)
+		if ferr != nil {
+			return nil, fmt.Errorf("%sの画像読み込みに失敗 %w", enemy.Name, ferr)
+		}
+		g.EnemyImgs[enemy.Name] = img
+
+		iconPath := fmt.Sprintf("assets/images/battle/enemy_%s_icon.png", enemy.Name)
+		iconImg, ferr := loadAssetImage(iconPath)
+		if ferr != nil {
+			return nil, fmt.Errorf("%sのアイコン画像読み込みに失敗 %w", enemy.Name, ferr)
+		}
+		g.EnemyIconImgs[enemy.Name] = iconImg
+
+		iconLargePath := fmt.Sprintf("assets/images/battle/enemy_%s_icon_large.png", enemy.Name)
+		iconLargeImg, ferr := loadAssetImage(iconLargePath)
+		if ferr != nil {
+			return nil, fmt.Errorf("%sの拡大アイコン画像読み込みに失敗 %w", enemy.Name, ferr)
+		}
+		g.EnemyIconLargeImgs[enemy.Name] = iconLargeImg
+	}
+
+	for i := 0; i < 4; i++ {
+		path := fmt.Sprintf("assets/images/battle/player_attack_%d.png", i+1)
+		g.PlayerAttackSprites[i], err = loadAssetImage(path)
 		if err != nil {
-			if g.SpriteSheet != nil {
-				g.PlayerAttackSprites[i] = g.SpriteSheet
-				fmt.Printf("警告: %s が見つからないため、既存のSpriteSheetで代用します\n", path)
-			} else {
-				return nil, fmt.Errorf("プレイヤー%dの攻撃・アクション画像ロード失敗: %w", i+1, err)
-			}
+			return nil, fmt.Errorf("プレイヤー%dの攻撃・アクション画像ロード失敗: %w", i+1, err)
 		}
 	}
 
 	commandIconFiles := [4]string{
-		"assets/images/アタック.png",
-		"assets/images/スキル.png",
-		"assets/images/待機.png",
-		"assets/images/逃げる.png",
+		"assets/images/battle/アタック.png",
+		"assets/images/battle/スキル.png",
+		"assets/images/battle/待機.png",
+		"assets/images/battle/逃げる.png",
 	}
 	for i, path := range commandIconFiles {
-		img, _, ferr := ebitenutil.NewImageFromFile(path)
+		img, ferr := loadAssetImage(path)
 		if ferr != nil {
-			fmt.Printf("警告: %s の読み込みに失敗しました（アイコン非表示で続行）\n", path)
-			g.CommandIcons[i] = nil
-			continue
+			return nil, fmt.Errorf("コマンドアイコン画像読み込みに失敗 %w", ferr)
 		}
 		g.CommandIcons[i] = img
 	}
 
 	timelineIconFiles := [4]string{
-		"assets/images/timeline_p1.png",
-		"assets/images/timeline_p2.png",
-		"assets/images/timeline_p3.png",
-		"assets/images/timeline_p4.png",
+		"assets/images/battle/timeline_p1.png",
+		"assets/images/battle/timeline_p2.png",
+		"assets/images/battle/timeline_p3.png",
+		"assets/images/battle/timeline_p4.png",
 	}
 	for i, path := range timelineIconFiles {
-		img, _, ferr := ebitenutil.NewImageFromFile(path)
+		img, ferr := loadAssetImage(path)
 		if ferr != nil {
-			fmt.Printf("警告: %s の読み込みに失敗しました（デフォルト描画で代替）\n", path)
-			g.TimelineIcons[i] = nil
-			continue
+			return nil, fmt.Errorf("タイムラインアイコン画像読み込みに失敗 %w", ferr)
 		}
 		g.TimelineIcons[i] = img
 	}
 
-	g.TimelineBarImg, _, err = ebitenutil.NewImageFromFile("assets/images/タイムライン横.png")
-	if err != nil {
-		fmt.Printf("警告: タイムラインバー画像の読み込みに失敗しました（矩形描画で代替します）\n")
-		g.TimelineBarImg = nil
+	timelineIconLargeFiles := [4]string{
+		"assets/images/battle/timeline_p1_large.png",
+		"assets/images/battle/timeline_p2_large.png",
+		"assets/images/battle/timeline_p3_large.png",
+		"assets/images/battle/timeline_p4_large.png",
+	}
+	for i, path := range timelineIconLargeFiles {
+		img, ferr := loadAssetImage(path)
+		if ferr != nil {
+			return nil, fmt.Errorf("タイムライン拡大アイコン画像読み込みに失敗 %w", ferr)
+		}
+		g.TimelineIconsLarge[i] = img
 	}
 
-	g.GaugeImg, _, err = ebitenutil.NewImageFromFile("assets/images/ゲージ.png")
+	g.TimelineBarImg, err = loadAssetImage("assets/images/battle/タイムライン横.png")
 	if err != nil {
-		fmt.Printf("警告: ゲージ画像の読み込みに失敗しました\n")
-		g.GaugeImg = nil
+		return nil, fmt.Errorf("タイムラインバー画像の読み込みに失敗 %w", err)
 	}
 
-	g.GoalImg, _, err = ebitenutil.NewImageFromFile("assets/images/ゴール.png")
+	g.GaugeImg, err = loadAssetImage("assets/images/battle/ゲージ.png")
 	if err != nil {
-		fmt.Printf("警告: ゴール画像の読み込みに失敗しました\n")
-		g.GoalImg = nil
+		return nil, fmt.Errorf("ゲージ画像の読み込みに失敗 %w", err)
 	}
 
-	g.TimelineBarVertImg, _, err = ebitenutil.NewImageFromFile("assets/images/タイムラインバー縦.png")
+	g.GoalImg, err = loadAssetImage("assets/images/battle/ゴール.png")
 	if err != nil {
-		fmt.Printf("警告: タイムラインバー縦画像の読み込みに失敗しました\n")
-		g.TimelineBarVertImg = nil
+		return nil, fmt.Errorf("ゴール画像の読み込みに失敗 %w", err)
 	}
 
-	g.SkillPanelImg, _, err = ebitenutil.NewImageFromFile("assets/images/スキル拡張.png")
+	g.TimelineBarVertImg, err = loadAssetImage("assets/images/battle/タイムラインバー縦.png")
 	if err != nil {
-		fmt.Printf("警告: スキル拡張画像の読み込みに失敗しました\n")
-		g.SkillPanelImg = nil
+		return nil, fmt.Errorf("タイムラインバー縦画像の読み込みに失敗 %w", err)
 	}
 
-	g.BattleBgImg, _, err = ebitenutil.NewImageFromFile("assets/images/battle_bg.png")
+	g.SkillPanelImg, err = loadAssetImage("assets/images/battle/スキル拡張.png")
 	if err != nil {
-		fmt.Printf("警告: 通常戦闘の背景画像読み込みに失敗しました\n")
-		g.BattleBgImg = nil
+		return nil, fmt.Errorf("スキル拡張画像の読み込みに失敗 %w", err)
+	}
+
+	g.BattleBgImg, err = loadAssetImage("assets/images/battle/battle_bg.png")
+	if err != nil {
+		return nil, fmt.Errorf("通常戦闘の背景画像読み込みに失敗 %w", err)
 	}
 
 	for i := 0; i < 4; i++ {
-		path := fmt.Sprintf("assets/images/battle_bg_boss_%d.png", i+1)
-		img, _, ferr := ebitenutil.NewImageFromFile(path)
+		path := fmt.Sprintf("assets/images/battle/battle_bg_boss_%d.png", i+1)
+		img, ferr := loadAssetImage(path)
 		if ferr != nil {
-			fmt.Printf("警告: %s の読み込みに失敗しました（ボス%dは通常背景で代替）\n", path, i+1)
-			g.BossBgImgs[i] = nil
-			continue
+			return nil, fmt.Errorf("ボス%dの戦闘背景画像読み込みに失敗 %w", i+1, ferr)
 		}
 		g.BossBgImgs[i] = img
 	}
 
-	g.WindowImg, _, _ = ebitenutil.NewImageFromFile("assets/images/window.png")
-
-	g.NameImg, _, err = ebitenutil.NewImageFromFile("assets/images/name_normal.png")
+	g.WindowImg, err = loadAssetImage("assets/images/common/window.png")
 	if err != nil {
-		fmt.Printf("警告: 名前画像(通常)の読み込みに失敗しました（文字表示で代替します）\n")
-		g.NameImg = nil
+		return nil, fmt.Errorf("ウィンドウ画像の読み込みに失敗 %w", err)
 	}
 
-	g.NameMyTurnImg, _, err = ebitenutil.NewImageFromFile("assets/images/name_myturn.png")
+	g.NameImg, err = loadAssetImage("assets/images/battle/name_normal.png")
 	if err != nil {
-		fmt.Printf("警告: 名前画像(自分のターン)の読み込みに失敗しました（通常画像で代替します）\n")
-		g.NameMyTurnImg = nil
+		return nil, fmt.Errorf("名前画像(通常)の読み込みに失敗 %w", err)
 	}
 
-	g.LogEntryImg, _, err = ebitenutil.NewImageFromFile("assets/images/log_entry_box.png")
+	g.NameMyTurnImg, err = loadAssetImage("assets/images/battle/name_myturn.png")
 	if err != nil {
-		fmt.Printf("警告: ログウィンドウ画像の読み込みに失敗しました（単色背景で代替します）\n")
-		g.LogEntryImg = nil
+		return nil, fmt.Errorf("名前画像(自分のターン)の読み込みに失敗 %w", err)
 	}
 
-	g.ExamineIconImg, _, err = ebitenutil.NewImageFromFile("assets/images/調べる.png")
+	g.LogEntryImg, err = loadAssetImage("assets/images/battle/log_entry_box.png")
 	if err != nil {
-		fmt.Printf("警告: 調べるアイコン画像の読み込みに失敗しました\n")
-		g.ExamineIconImg = nil
+		return nil, fmt.Errorf("ログウィンドウ画像の読み込みに失敗 %w", err)
 	}
 
-	g.MinimapPlayerIconImg, _, err = ebitenutil.NewImageFromFile("assets/images/現在地.png")
+	g.ExamineIconImg, err = loadAssetImage("assets/images/field/調べる.png")
 	if err != nil {
-		fmt.Printf("警告: 現在地アイコン画像の読み込みに失敗しました\n")
-		g.MinimapPlayerIconImg = nil
+		return nil, fmt.Errorf("調べるアイコン画像の読み込みに失敗 %w", err)
 	}
 
-	g.MinimapObjectiveIconImg, _, err = ebitenutil.NewImageFromFile("assets/images/目的地.png")
+	g.MinimapPlayerIconImg, err = loadAssetImage("assets/images/field/現在地.png")
 	if err != nil {
-		fmt.Printf("警告: 目的地アイコン画像の読み込みに失敗しました\n")
-		g.MinimapObjectiveIconImg = nil
+		return nil, fmt.Errorf("現在地アイコン画像の読み込みに失敗 %w", err)
 	}
 
-	g.ChestImg, _, err = ebitenutil.NewImageFromFile("assets/images/chest.png")
+	g.MinimapObjectiveIconImg, err = loadAssetImage("assets/images/field/目的地.png")
 	if err != nil {
-		fmt.Printf("警告: チェスト画像の読み込みに失敗しました\n")
-		g.ChestImg = nil
+		return nil, fmt.Errorf("目的地アイコン画像の読み込みに失敗 %w", err)
 	}
+
+	g.ChestImg, err = loadAssetImage("assets/images/field/chest.png")
+	if err != nil {
+		return nil, fmt.Errorf("チェスト画像の読み込みに失敗 %w", err)
+	}
+
+	g.KeyChestImg, err = loadAssetImage("assets/images/field/key_chest.png")
+	if err != nil {
+		return nil, fmt.Errorf("鍵チェスト画像の読み込みに失敗 %w", err)
+	}
+
+	g.LockedWallImg, err = loadAssetImage("assets/images/field/locked_wall.png")
+	if err != nil {
+		return nil, fmt.Errorf("封印された壁画像の読み込みに失敗 %w", err)
+	}
+
+	g.LeverWallImg, err = loadAssetImage("assets/images/field/lever_wall.png")
+	if err != nil {
+		return nil, fmt.Errorf("レバーで開く壁画像の読み込みに失敗 %w", err)
+	}
+
+	g.LeverImg, err = loadAssetImage("assets/images/field/lever.png")
+	if err != nil {
+		return nil, fmt.Errorf("レバー画像の読み込みに失敗 %w", err)
+	}
+
+	g.LightMaskImg = generateLightMaskImage(256)
+
+	g.BlockImg = generateBlockImage(blockTileSize)
+	g.BlockSpotImg = generateBlockSpotImage(blockTileSize)
+	g.BlockDoorImg = generateBlockDoorImage(blockTileSize)
 
 	g.Audio = NewAudioManager()
-	g.Audio.SetVolume(settings.BGMVolume) // ← 追加
+	g.Audio.SetVolume(settings.BGMVolume)
 
 	g.currentScene = NewTitleScene(g)
 
 	for i := 0; i < 4; i++ {
 		bossNum := i + 1
-		path := fmt.Sprintf("assets/images/chara_boss%d.png", bossNum)
-		img, _, ferr := ebitenutil.NewImageFromFile(path)
+		path := fmt.Sprintf("assets/images/common/chara_boss%d.png", bossNum)
+		img, ferr := loadAssetImage(path)
 		if ferr != nil {
-			fmt.Printf("警告: %s の読み込みに失敗（立ち絵非表示で続行）\n", path)
-			continue
+			return nil, fmt.Errorf("ボス%dの立ち絵読み込みに失敗 %w", bossNum, ferr)
 		}
 		g.CharaImgs[BossNames[i]] = img
 	}
 
-	// ★追加：味方4人の立ち絵
 	for i := 0; i < partySize; i++ {
-		path := fmt.Sprintf("assets/images/chara_player_%d.png", i+1)
-		img, _, ferr := ebitenutil.NewImageFromFile(path)
+		path := fmt.Sprintf("assets/images/common/chara_player_%d.png", i+1)
+		img, ferr := loadAssetImage(path)
 		if ferr != nil {
-			fmt.Printf("警告: %s の読み込みに失敗（立ち絵非表示で続行）\n", path)
-			continue
+			return nil, fmt.Errorf("プレイヤー%dの立ち絵読み込みに失敗 %w", i+1, ferr)
 		}
 		g.CharaImgs[PlayerNames[i]] = img
 	}
 
-	g.MenuBgImg, _, err = ebitenutil.NewImageFromFile("assets/images/メニュー画面.png")
+	g.MenuBgImg, err = loadAssetImage("assets/images/menu/メニュー画面.png")
 	if err != nil {
 		return nil, fmt.Errorf("メニュー背景画像の読み込みに失敗 %w", err)
 	}
 
-	g.MenuSkillPanelImg, _, err = ebitenutil.NewImageFromFile("assets/images/メニュー画面拡張.png")
+	g.MenuSkillPanelImg, err = loadAssetImage("assets/images/menu/メニュー画面拡張.png")
 	if err != nil {
-		fmt.Printf("警告: メニュースキルパネル画像の読み込みに失敗しました\n")
-		g.MenuSkillPanelImg = nil
+		return nil, fmt.Errorf("メニュースキルパネル画像の読み込みに失敗 %w", err)
 	}
 
 	partyIconFiles := [4]string{
-		"assets/images/party_icon_1.png",
-		"assets/images/party_icon_2.png",
-		"assets/images/party_icon_3.png",
-		"assets/images/party_icon_4.png",
+		"assets/images/menu/party_icon_1.png",
+		"assets/images/menu/party_icon_2.png",
+		"assets/images/menu/party_icon_3.png",
+		"assets/images/menu/party_icon_4.png",
 	}
 	for i, path := range partyIconFiles {
-		img, _, ferr := ebitenutil.NewImageFromFile(path)
+		img, ferr := loadAssetImage(path)
 		if ferr != nil {
-			fmt.Printf("警告: %s の読み込みに失敗しました（丸枠のみ表示）\n", path)
-			g.PartyIconImgs[i] = nil
-			continue
+			return nil, fmt.Errorf("パーティアイコン画像の読み込みに失敗 %w", ferr)
 		}
 		g.PartyIconImgs[i] = img
 	}
 
-	g.SaveConfirmBgImg, _, err = ebitenutil.NewImageFromFile("assets/images/セーブ確認.png")
+	g.SaveThumbFrameSelImg, err = loadAssetImage("assets/images/menu/セーブスロット選択中.png")
 	if err != nil {
-		fmt.Printf("警告: セーブ確認画像の読み込みに失敗しました\n")
-		g.SaveConfirmBgImg = nil
+		return nil, fmt.Errorf("セーブ枠(選択中)画像の読み込みに失敗 %w", err)
 	}
-	g.SaveThumbFrameSelImg, _, err = ebitenutil.NewImageFromFile("assets/images/セーブスロット選択中.png")
+	g.SaveThumbFrameImg, err = loadAssetImage("assets/images/menu/セーブスロット.png")
 	if err != nil {
-		fmt.Printf("警告: セーブ枠(選択中)画像の読み込みに失敗しました\n")
-		g.SaveThumbFrameSelImg = nil
-	}
-	g.SaveThumbFrameImg, _, err = ebitenutil.NewImageFromFile("assets/images/セーブスロット.png")
-	if err != nil {
-		fmt.Printf("警告: セーブ枠画像の読み込みに失敗しました\n")
-		g.SaveThumbFrameImg = nil
+		return nil, fmt.Errorf("セーブ枠画像の読み込みに失敗 %w", err)
 	}
 
 	applyDisplayMode(g.Fullscreen, g.WindowWidth, g.WindowHeight)
@@ -489,10 +694,16 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 func (g *Game) Update() error {
 	dt := 1.0 / 60.0
 
-	g.updateMouseCursorVisibility(dt) // ★追加
+	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
+		g.MobileMode = !g.MobileMode
+	}
+	_, inFieldScene := g.currentScene.(*FieldScene)
+	fieldMobileControlsEnabled = g.MobileMode && inFieldScene
+	uiMobileArrowsEnabled = g.MobileMode
+
+	g.updateMouseCursorVisibility(dt)
 	g.updateWindowSizeTracking()
 
-	// プレイ時間の累積（フェード中も含めて常に加算）
 	g.TotalPlayTime += dt
 	g.Audio.Update(dt)
 
@@ -545,14 +756,25 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return gameWidth, gameHeight
 }
 
-func (g *Game) GetEnemyImage(name string) *ebiten.Image {
-	if img, exists := g.EnemyImgs[name]; exists {
-		return img
+func (g *Game) GetEnemyBattleImage(evType, name string) *ebiten.Image {
+	if idx, ok := bossIndexFromEnemyType(evType); ok {
+		return g.BossImgs[idx]
 	}
-	if len(g.BossImgs) > 0 {
-		return g.BossImgs[0]
+	return g.EnemyImgs[name]
+}
+
+func (g *Game) GetEnemyTimelineIcon(evType, name string) *ebiten.Image {
+	if idx, ok := bossIndexFromEnemyType(evType); ok {
+		return g.BossIconImgs[idx]
 	}
-	return nil
+	return g.EnemyIconImgs[name]
+}
+
+func (g *Game) GetEnemyTimelineIconLarge(evType, name string) *ebiten.Image {
+	if idx, ok := bossIndexFromEnemyType(evType); ok {
+		return g.BossIconLargeImgs[idx]
+	}
+	return g.EnemyIconLargeImgs[name]
 }
 
 func (g *Game) captureMenuEntryThumb(full *ebiten.Image) {
@@ -563,24 +785,21 @@ func (g *Game) captureMenuEntryThumb(full *ebiten.Image) {
 	g.MenuEntryThumb = thumb
 }
 
-// saveThumbToFile は保持しているサムネイルを指定スロットのPNGとして書き出す。
 func (g *Game) saveThumbToFile(slot int) {
 	if g.MenuEntryThumb == nil {
 		return
 	}
 	path := fmt.Sprintf("save_thumb_%d.png", slot)
-	f, err := os.Create(path)
-	if err != nil {
-		fmt.Printf("警告: サムネイルの保存に失敗しました: %v\n", err)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, g.MenuEntryThumb); err != nil {
+		fmt.Printf("警告: サムネイルのエンコードに失敗しました: %v\n", err)
 		return
 	}
-	defer f.Close()
-	if err := png.Encode(f, g.MenuEntryThumb); err != nil {
-		fmt.Printf("警告: サムネイルのエンコードに失敗しました: %v\n", err)
+	if err := writeRuntimeFile(path, buf.Bytes()); err != nil {
+		fmt.Printf("警告: サムネイルの保存に失敗しました: %v\n", err)
 	}
 }
 
-// FormatPlayTime は秒数を "HHH:MM" 形式（最大999:59）に変換する
 func FormatPlayTime(seconds float64) string {
 	m := int(seconds) / 60
 	h := m / 60
@@ -591,16 +810,14 @@ func FormatPlayTime(seconds float64) string {
 	return fmt.Sprintf("%03d:%02d", h, m%60)
 }
 
-// MessageSpeedTicks は現在のメッセージ速度設定に応じた、
-// 1文字表示するのに必要なtick数を返す（値が小さいほど速い）
 func (g *Game) MessageSpeedTicks() int {
 	switch g.MessageSpeed {
 	case 0:
-		return 9 // 遅い
+		return 9
 	case 2:
-		return 2 // 速い
+		return 2
 	default:
-		return 5 // 普通
+		return 5
 	}
 }
 

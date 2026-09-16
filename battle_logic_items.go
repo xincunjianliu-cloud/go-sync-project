@@ -1,10 +1,5 @@
 package main
 
-// battle_logic_items.go: バトル中のアイテム選択・使用対象選択の更新処理
-// スキル選択(phaseSkillMenu/phaseHealSelect)と全く同じ操作感になるようにしてある。
-
-// battleUsableItems はバトル中に使用できる（UsableInBattle）、
-// かつ所持数1以上のアイテムスロット一覧を返す。
 func (s *BattleScene) battleUsableItems() []InventorySlot {
 	var list []InventorySlot
 	for _, slot := range s.game.Inventory {
@@ -49,11 +44,13 @@ func (s *BattleScene) updateItemMenu(dt float64) {
 	if isMenuUpPressed() {
 		s.itemIndex = (s.itemIndex - 1 + len(items)) % len(items)
 	}
-	if isEscapePressed() {
+	tappedIdx, tappedOk := s.hitTestBattleSubRows(len(items))
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemIndex)
+	if isEscapePressed() || (!tappedOk && s.isTapOutsideBattleSubPanel()) {
 		s.battlePhase = phasePlayerMenu
 		return
 	}
-	if !isConfirmKeyPressed() {
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 
@@ -81,32 +78,27 @@ func (s *BattleScene) updateItemTargetSelect() {
 	}
 	allowAll := def.Target == TargetAll || def.Target == TargetBoth
 
+	cycleLen := partySize
+	if allowAll {
+		cycleLen = partySize + 1
+	}
 	if isMenuUpPressed() {
-		if s.itemTargetIndex < partySize {
-			s.itemTargetIndex = (s.itemTargetIndex - 1 + partySize) % partySize
-		}
+		s.itemTargetIndex = (s.itemTargetIndex - 1 + cycleLen) % cycleLen
 	}
 	if isMenuDownPressed() {
-		if s.itemTargetIndex < partySize {
-			s.itemTargetIndex = (s.itemTargetIndex + 1) % partySize
-		}
+		s.itemTargetIndex = (s.itemTargetIndex + 1) % cycleLen
 	}
-	if allowAll {
-		if isMenuRightPressed() {
-			s.itemTargetIndex = partySize
-		}
-		if isMenuLeftPressed() {
-			if s.itemTargetIndex == partySize {
-				s.itemTargetIndex = 0
-			}
-		}
-	}
-	if isEscapePressed() {
+
+	tappedIdx, tappedOk := s.hitTestItemTargets(allowAll)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemTargetIndex)
+
+	hadTouch := len(justPressedTouchPoints()) > 0
+	if isEscapePressed() || (hadTouch && !tappedOk) {
 		s.pendingItemID = ""
 		s.battlePhase = phaseItemMenu
 		return
 	}
-	if !isConfirmKeyPressed() {
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 
@@ -138,8 +130,6 @@ func (s *BattleScene) updateItemTargetSelect() {
 	s.finishPlayerTurn(true)
 }
 
-// applyItemToTargetInBattle はアイテム効果を対象1人に適用し、
-// 回復量をダメージポップ（回復表示）として出す。
 func (s *BattleScene) applyItemToTargetInBattle(def ItemDef, target int) bool {
 	if target < 0 || target >= partySize {
 		return false

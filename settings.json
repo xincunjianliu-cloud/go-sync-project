@@ -1,7 +1,8 @@
 {
   "bgmVolume": 0,
   "messageSpeed": 1,
-  "fullscreen": true,
+  "fullscreen": false,
   "windowWidth": 960,
-  "windowHeight": 540
+  "windowHeight": 540,
+  "rememberCursor": true
 }

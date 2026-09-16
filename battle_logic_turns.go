@@ -1,6 +1,5 @@
 package main
 
-// battle_logic_turns.go: ターン進行・ATB・プレイヤーメニュー・スキルメニューの更新処理
 import (
 	"math/rand"
 	"strings"
@@ -42,10 +41,7 @@ func (s *BattleScene) tickATB(dt float64) {
 		if s.waitStance[i] || s.waitCancelHold[i] > 0 || s.atbGauge[i] >= atbMax || s.game.PlayerHP[i] <= 0 {
 			continue
 		}
-		// ★変更：素早さは固定配列(playerSpeeds)ではなく、
-		// レベルアップで個別成長するステータス PlayerSpd を使う
-		// （＝「タイムライン上でアイコンが進む速さ」そのもの）。
-		speed := float64(s.game.PlayerSpd[i])
+		speed := atbBaseSpeed
 		if s.rewindActive {
 			speed *= 1.5
 		}
@@ -54,10 +50,17 @@ func (s *BattleScene) tickATB(dt float64) {
 			s.atbGauge[i] = atbMax
 		}
 	}
-	if s.atbGauge[enemyID] < atbMax {
-		s.atbGauge[enemyID] += s.enemySpeed * dt
-		if s.atbGauge[enemyID] > atbMax {
-			s.atbGauge[enemyID] = atbMax
+	for i := range s.enemies {
+		if s.enemies[i].HP <= 0 {
+			continue
+		}
+		actor := s.enemyActorIndex(i)
+		if s.atbGauge[actor] >= atbMax {
+			continue
+		}
+		s.atbGauge[actor] += atbBaseSpeed * dt
+		if s.atbGauge[actor] > atbMax {
+			s.atbGauge[actor] = atbMax
 		}
 	}
 }
@@ -82,7 +85,13 @@ func (s *BattleScene) fleeSuccessRate() int {
 	if strings.HasPrefix(s.enemyType, "boss_") {
 		return 0
 	}
-	rate := 70 + (s.game.PlayerLv[0]-s.enemyLv)*10
+	highestLv := 0
+	for i := range s.enemies {
+		if s.enemies[i].Lv > highestLv {
+			highestLv = s.enemies[i].Lv
+		}
+	}
+	rate := 70 + (s.game.PlayerLv[0]-highestLv)*10
 	if rate < 10 {
 		return 10
 	}
@@ -90,6 +99,33 @@ func (s *BattleScene) fleeSuccessRate() int {
 		return 100
 	}
 	return rate
+}
+
+const atbBaseSpeed = 5.0
+
+func speedReturnOffsetPercent(spd int) float64 {
+	if spd <= 0 {
+		return 0
+	}
+	return float64(spd / 10)
+}
+
+func atbHeadStart(spd int) float64 {
+	return speedReturnOffsetPercent(spd) / 100.0 * atbMax
+}
+
+func (s *BattleScene) resetPlayerGauge(actor int) {
+	if actor < 0 || actor >= partySize {
+		return
+	}
+	s.atbGauge[actor] = atbHeadStart(s.game.PlayerSpd[actor])
+}
+
+func (s *BattleScene) resetEnemyGauge(slot int) {
+	if slot < 0 || slot >= len(s.enemies) {
+		return
+	}
+	s.atbGauge[s.enemyActorIndex(slot)] = atbHeadStart(int(s.enemies[slot].Speed))
 }
 
 func (s *BattleScene) actorPosX(actor int) float64 {
@@ -126,15 +162,24 @@ func (s *BattleScene) tryStartNextActor() {
 		s.openPlayerMenu(best)
 		return
 	}
-	if s.isActorReady(enemyID) {
-		s.waitingActor = enemyID
-		s.executeEnemyAction()
-		s.atbGauge[enemyID] = 0
-		s.waitingActor = -1
-		s.tickDebuffs(enemyID, true)
-		if s.checkBattleEnd() {
-			return
+	bestEnemy := -1
+	for i := range s.enemies {
+		if s.enemies[i].HP <= 0 {
+			continue
 		}
+		actor := s.enemyActorIndex(i)
+		if !s.isActorReady(actor) {
+			continue
+		}
+		if bestEnemy < 0 || s.atbGauge[actor] > s.atbGauge[s.enemyActorIndex(bestEnemy)] {
+			bestEnemy = i
+		}
+	}
+	if bestEnemy >= 0 {
+		s.actingEnemySlot = bestEnemy
+		s.waitingActor = s.enemyActorIndex(bestEnemy)
+		s.enemyIsActing = true
+		s.enemyWindupTimer = enemyWindupDuration
 	}
 }
 
@@ -142,10 +187,25 @@ func (s *BattleScene) openPlayerMenu(actor int) {
 	s.waitingActor = actor
 	s.activePlayer = actor + 1
 	s.commandIndex = s.lastCommandIndex[actor]
+	s.commandTapArmed = false
+	s.rewindButtonArmed = false
+	s.itemButtonArmed = false
 	s.battlePhase = phasePlayerMenu
 	s.playerPose[actor] = poseReady
 	s.playerAnimTimer[actor] = 0
 	s.readySlideX[actor] = 0.0
+}
+
+func hitTestCommandMenu(game *Game) (int, bool) {
+	positions := commandIconPositions()
+	rects := make([]tapRect, 4)
+	for i, pos := range positions {
+		icon := game.CommandIcons[i]
+		iw := float64(icon.Bounds().Dx())
+		ih := float64(icon.Bounds().Dy())
+		rects[i] = tapRect{x: pos[0] - iw/2, y: pos[1] - ih/2, w: iw, h: ih}
+	}
+	return hitTestTapRects(rects)
 }
 
 func (s *BattleScene) updatePlayerMenu() Scene {
@@ -161,8 +221,28 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	if isMenuDownPressed() {
 		s.commandIndex = 3
 	}
+	tappedIdx, tappedOk := hitTestCommandMenu(s.game)
+	rewindTapped := isRewindButtonJustPressed(s.game)
+	itemTapped := isItemButtonJustPressed()
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyF) {
+	if tappedOk {
+		s.rewindButtonArmed = false
+		s.itemButtonArmed = false
+	}
+	if rewindTapped {
+		s.commandTapArmed = false
+		s.itemButtonArmed = false
+	}
+	if itemTapped {
+		s.commandTapArmed = false
+		s.rewindButtonArmed = false
+	}
+
+	tapped := tapArmSelectOrConfirm(tappedIdx, tappedOk, &s.commandIndex, &s.commandTapArmed)
+	rewindConfirm := tapArmButtonConfirm(rewindTapped, &s.rewindButtonArmed)
+	itemConfirm := tapArmButtonConfirm(itemTapped, &s.itemButtonArmed)
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyF) || rewindConfirm {
 		p := s.waitingActor
 		if p >= 0 && p < partySize && s.canUseRewind(p) {
 			s.executeRewind(p)
@@ -170,7 +250,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyI) || itemConfirm {
 		p := s.waitingActor
 		if p >= 0 && p < partySize && s.hasAnyBattleUsableItem() {
 			s.itemIndex = 0
@@ -179,7 +259,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		}
 	}
 
-	confirm := isConfirmKeyPressed()
+	confirm := isConfirmKeyPressed() || tapped
 
 	if !confirm {
 		return nil
@@ -197,6 +277,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	switch s.commandIndex {
 	case 0:
 		s.pendingSkill = 0
+		s.targetIndex = s.firstAliveEnemySlot()
 		s.battlePhase = phaseTargetSelect
 		return nil
 	case 1:
@@ -240,8 +321,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		if !alreadyInOrder {
 			s.waitOrder = append(s.waitOrder, p)
 		}
-		s.tryWaitSynergy()
-		if s.waitStance[p] {
+		if !s.tryWaitSynergy() {
 			s.waitingActor = -1
 			s.battlePhase = phaseATB
 			s.tryStartNextActor()
@@ -249,7 +329,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		return nil
 	case 3:
 		if rand.Intn(100) >= s.fleeSuccessRate() {
-			s.atbGauge[p] = 0
+			s.resetPlayerGauge(p)
 			s.waitingActor = -1
 			s.battlePhase = phaseATB
 			s.battleLog = "逃げられなかった"
@@ -286,6 +366,16 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		s.lastSkillIndex[p] = s.skillIndex
 	}
 
+	arrowTapped := s.handleSkillLevelArrowTaps(p, skills)
+	tappedIdx, tappedOk := -1, false
+	if !arrowTapped {
+		tappedIdx, tappedOk = s.hitTestBattleSubRows(menuLen)
+	}
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skillIndex)
+	if tappedOk {
+		s.lastSkillIndex[p] = s.skillIndex
+	}
+
 	curLv := s.game.PlayerSkillLv[p][s.skillIndex]
 	if curLv < 1 {
 		curLv = 1
@@ -311,7 +401,7 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 			s.skillLevelCursors[p][s.skillIndex]--
 		}
 	}
-	if isEscapePressed() {
+	if isEscapePressed() || (!arrowTapped && !tappedOk && s.isTapOutsideBattleSubPanel()) {
 		s.battlePhase = phasePlayerMenu
 		return
 	}
@@ -323,7 +413,7 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		}
 	}
 
-	confirm := isConfirmKeyPressed()
+	confirm := isConfirmKeyPressed() || tapped
 	if !confirm {
 		return
 	}
@@ -352,6 +442,11 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		s.selectedSkillTarget = TargetSingle
 	} else {
 		s.selectedSkillTarget = data.Target
+	}
+	if data.Target == TargetAll {
+		s.targetIndex = maxEnemies
+	} else {
+		s.targetIndex = s.firstAliveEnemySlot()
 	}
 	s.battlePhase = phaseTargetSelect
 }

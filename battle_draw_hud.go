@@ -1,6 +1,5 @@
 package main
 
-// battle_draw_hud.go: バトルHUD描画（タイムライン・ステータスバー・ゲージ・コマンド/スキルメニュー）
 import (
 	"fmt"
 	"image/color"
@@ -9,7 +8,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
-	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
@@ -27,25 +25,22 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 		introVertY = s.introVertOffsetY
 	}
 
-	if s.game.TimelineBarImg != nil {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(drawX+introX+s.shakeX, drawY+s.shakeY)
-		screen.DrawImage(s.game.TimelineBarImg, op)
-	} else {
-		ebitenutil.DrawRect(screen, trackX+introX, trackY, trackW, trackH, color.RGBA{35, 40, 55, 255})
-	}
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(drawX+introX, drawY)
+	screen.DrawImage(s.game.TimelineBarImg, op)
 
-	if (!s.introActive || s.introPhase >= 1) && s.game.TimelineBarVertImg != nil {
+	if !s.introActive || s.introPhase >= 1 {
+		vertX, vertY := s.timelineVertDrawOrigin()
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(goalX-timelineImgLayout.VertLineX+s.shakeX, introVertY+s.shakeY)
+		op.GeoM.Translate(vertX, vertY+introVertY)
 		screen.DrawImage(s.game.TimelineBarVertImg, op)
 	}
 
-	if (!s.introActive || s.introPhase >= 2) && s.game.GoalImg != nil {
+	if !s.introActive || s.introPhase >= 2 {
 		gw := float64(s.game.GoalImg.Bounds().Dx())
 		gh := float64(s.game.GoalImg.Bounds().Dy())
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(goalX-gw/2+s.shakeX, centerY-gh/2+s.shakeY)
+		op.GeoM.Translate(goalX-gw/2, centerY-gh/2)
 		screen.DrawImage(s.game.GoalImg, op)
 	}
 
@@ -53,95 +48,141 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 		return
 	}
 
-	order := make([]int, partySize+1)
+	frozen := s.battlePhase == phaseBattleEnd && !s.isWon
+
+	anyoneSelecting := s.waitingActor >= 0 &&
+		(s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu ||
+			s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
+
+	order := make([]int, partySize+len(s.enemies))
 	for i := range order {
 		order[i] = i
 	}
+
+	heldAtGoal := func(actor int) bool {
+		isDead := actor < partySize && s.game.PlayerHP[actor] <= 0
+		isActive := s.waitingActor == actor && (s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu || s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
+		isHoldingSize := !isDead && actor < partySize && s.returnDelayTimer[actor] > 0
+		isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == 2))
+		ready := !isDead && s.isActorReady(actor)
+		if isEnemyActor(actor) && s.enemyIsActing && enemySlotFromActor(actor) == s.actingEnemySlot {
+			ready = true
+		}
+		return ready || ((isActive || isHoldingSize) && !isMyselfWaiting)
+	}
+	less := func(a, b int) bool {
+		ha, hb := heldAtGoal(a), heldAtGoal(b)
+		if ha != hb {
+			return hb
+		}
+		return s.atbGauge[a] < s.atbGauge[b]
+	}
 	for i := 0; i < len(order); i++ {
 		for j := i + 1; j < len(order); j++ {
-			if s.atbGauge[order[j]] < s.atbGauge[order[i]] {
+			if less(order[j], order[i]) {
 				order[i], order[j] = order[j], order[i]
 			}
 		}
 	}
 
 	for _, actor := range order {
-		if actor == enemyID && s.enemyHP <= 0 {
+		if isEnemyActor(actor) && s.enemies[enemySlotFromActor(actor)].HP <= 0 {
 			continue
 		}
-		isDead := actor < partySize && s.game.PlayerHP[actor] <= 0
-		isActive := s.waitingActor == actor && (s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu || s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
-		// ★修正：位置の保持とサイズの保持を分ける
-		// 位置保持：returnDelayTimer > 0（戻り始めるまで）
-		isHoldingPosition := !isDead && actor < partySize && s.returnDelayTimer[actor] > 0
-		// サイズ保持：readySlideX < 0（スタート地点に到達したら通常サイズに戻す）
-		isHoldingSize := !isDead && actor < partySize && s.readySlideX[actor] < 0
-		isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == 2))
-		currentIconSize := float64(iconSize)
-		if (isActive || isHoldingSize) && !isMyselfWaiting {
-			currentIconSize = float64(iconSize) * 1.5
-		}
 
-		x := s.actorPosX(actor)
-		ready := !isDead && s.isActorReady(actor)
-		if actor < partySize && s.deadWaitStuck[actor] {
-			x = timelineStartX - (currentIconSize / 2)
-		}
-		if ready || ((isActive || isHoldingPosition) && !isMyselfWaiting) {
-			x = goalX - (currentIconSize / 2)
-		}
-		if actor < partySize && s.deadWaitStuck[actor] {
-			x = timelineStartX - (currentIconSize / 2)
-		}
+		useSnapshot := frozen && actor < partySize
 
-		y := centerY - currentIconSize/2
+		var x, y, currentIconSize float64
+		var isEnlarged bool
 
-		if isMyselfWaiting {
-			downCount := -1
-			waitingOrder := s.waitOrder
-			if actor < partySize && s.waitCancelHold[actor] > 0 {
-				waitingOrder = s.waitCancelOrder
+		if useSnapshot {
+			x = s.tlFrozenX[actor]
+			y = s.tlFrozenY[actor]
+			currentIconSize = s.tlFrozenSize[actor]
+			isEnlarged = s.tlFrozenLarge[actor]
+		} else {
+			isDead := actor < partySize && s.game.PlayerHP[actor] <= 0
+			isActive := s.waitingActor == actor && (s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu || s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
+			isHoldingPosition := !isDead && actor < partySize && s.returnDelayTimer[actor] > 0
+			isHoldingSize := isHoldingPosition
+			isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == 2))
+			currentIconSize = float64(iconSize)
+			if (isActive || isHoldingSize) && !isMyselfWaiting {
+				currentIconSize = float64(iconSize) * 1.5
 			}
-			for orderIdx, actorIdx := range waitingOrder {
-				if actorIdx == actor {
-					downCount = orderIdx
-					break
+
+			x = s.actorPosX(actor)
+			ready := !isDead && s.isActorReady(actor)
+			if isEnemyActor(actor) && s.enemyIsActing && enemySlotFromActor(actor) == s.actingEnemySlot {
+				ready = true
+			}
+			if actor < partySize && s.deadWaitStuck[actor] {
+				x = timelineStartX - (currentIconSize / 2)
+			}
+			if ready || ((isActive || isHoldingPosition) && !isMyselfWaiting) {
+				x = goalX - (currentIconSize / 2)
+			}
+			if actor < partySize && s.deadWaitStuck[actor] {
+				x = timelineStartX - (currentIconSize / 2)
+			}
+
+			y = centerY - currentIconSize/2
+
+			if isMyselfWaiting {
+				downCount := -1
+				waitingOrder := s.waitOrder
+				if actor < partySize && s.waitCancelHold[actor] > 0 {
+					waitingOrder = s.waitCancelOrder
 				}
+				for orderIdx, actorIdx := range waitingOrder {
+					if actorIdx == actor {
+						downCount = orderIdx
+						break
+					}
+				}
+				if downCount == -1 {
+					downCount = len(s.waitOrder)
+				}
+				y += 75.0 + float64(downCount)*55.0
 			}
-			if downCount == -1 {
-				downCount = len(s.waitOrder)
+
+			blockedByOther := anyoneSelecting && actor != s.waitingActor && actor < partySize
+			isEnlarged = (ready || isActive || isHoldingSize) && !isMyselfWaiting && !blockedByOther
+
+			if actor < partySize {
+				s.tlFrozenX[actor] = x
+				s.tlFrozenY[actor] = y
+				s.tlFrozenSize[actor] = currentIconSize
+				s.tlFrozenLarge[actor] = isEnlarged
 			}
-			y += 75.0 + float64(downCount)*55.0
 		}
 
 		var iconImg *ebiten.Image
 		if actor < partySize {
-			iconImg = s.game.TimelineIcons[actor]
-		} else {
-			iconImg = s.game.GetEnemyImage(s.enemyName)
-		}
-
-		if iconImg != nil {
-			iw := float64(iconImg.Bounds().Dx())
-			ih := float64(iconImg.Bounds().Dy())
-
-			imgScale := 1.0
-			if (ready || isActive) && !isMyselfWaiting {
-				imgScale = 1.7
+			if isEnlarged {
+				iconImg = s.game.TimelineIconsLarge[actor]
+			} else {
+				iconImg = s.game.TimelineIcons[actor]
 			}
-
-			scaledW := iw * imgScale
-			scaledH := ih * imgScale
-
-			offsetX := (currentIconSize - scaledW) / 2
-			offsetY := (currentIconSize - scaledH) / 2
-
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Scale(imgScale, imgScale)
-			op.GeoM.Translate(x+offsetX+s.shakeX, y+offsetY+s.shakeY)
-
-			screen.DrawImage(iconImg, op)
+		} else {
+			name := s.enemies[enemySlotFromActor(actor)].Name
+			if isEnlarged {
+				iconImg = s.game.GetEnemyTimelineIconLarge(s.enemyType, name)
+			} else {
+				iconImg = s.game.GetEnemyTimelineIcon(s.enemyType, name)
+			}
 		}
+
+		iw := float64(iconImg.Bounds().Dx())
+		ih := float64(iconImg.Bounds().Dy())
+
+		offsetX := (currentIconSize - iw) / 2
+		offsetY := (currentIconSize - ih) / 2
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(x+offsetX, y+offsetY)
+
+		screen.DrawImage(iconImg, op)
 	}
 }
 
@@ -169,8 +210,8 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 	for i := 0; i < partySize; i++ {
 		xPos := statusStartX + float64(i)*(statusBlockW+statusBlockGap)
 
-		sx := xPos + s.shakeX
-		sy := winY + s.shakeY
+		sx := xPos
+		sy := winY
 		barX := sx - statusBarSlant
 
 		isMyTurn := s.waitingActor == i &&
@@ -233,193 +274,93 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 				scaleAlpha(color.RGBA{41, 58, 94, 255}, alpha))
 		}
 
-		// ── デバフアイコン(簡易：文字表記)を名前欄の下に表示 ──
 		if len(s.PlayerDebuffs[i]) > 0 {
 			debuffOp := &text.DrawOptions{}
 			debuffOp.GeoM.Translate(sx, sy-12)
 			debuffOp.ColorScale.ScaleWithColor(color.RGBA{255, 120, 120, uint8(255 * alpha)})
 			text.Draw(screen, fmt.Sprintf("弱体x%d", len(s.PlayerDebuffs[i])), s.game.FontFace(11), debuffOp)
 		}
+		if len(s.PlayerBuffs[i]) > 0 {
+			buffOp := &text.DrawOptions{}
+			buffOp.GeoM.Translate(sx, sy-24)
+			buffOp.ColorScale.ScaleWithColor(color.RGBA{120, 200, 255, uint8(255 * alpha)})
+			text.Draw(screen, fmt.Sprintf("強化x%d", len(s.PlayerBuffs[i])), s.game.FontFace(11), buffOp)
+		}
 	}
 }
 
 func (s *BattleScene) drawGaugeTriangle(screen *ebiten.Image) {
-	// ★修正：shakeX/shakeYはSin波やランダム値による小数値なので、
-	// そのまま使うと塗りつぶし側だけmath.Floorで整数に丸められ、
-	// 枠画像側は小数位置のまま描画されるため、攻撃(揺れ)のたびに
-	// 塗りと枠が斜め方向に最大1pxずれて「足りない」ように見えていた。
-	// 揺れも含めた位置を先に整数ピクセルへ丸めることで、塗りと枠を
-	// 常に同じピクセルグリッド上に揃える。
-	x := math.Round(gaugeTriX + s.shakeX)
-	y := math.Round(gaugeTriY + s.shakeY)
-	pad := 1.0
-	w := gaugeTriW
-	h := gaugeTriH
-	if s.game.GaugeImg != nil {
-		w = float64(s.game.GaugeImg.Bounds().Dx())
-		h = float64(s.game.GaugeImg.Bounds().Dy())
-		// ★変更：新しいゲージ画像は縁の太さが2pxのドット絵なので、
-		// 塗りつぶしをその内側にぴったり収めるためpadを画像の縁幅に合わせる。
-		pad = gaugeImgBorder
-	}
+	x := gaugeTriX
+	y := gaugeTriY
+	w := float64(s.game.GaugeImg.Bounds().Dx())
+	h := float64(s.game.GaugeImg.Bounds().Dy())
+	pad := gaugeImgBorder
 	ix := x + pad
 	iy := y + pad
 	iw := w - pad*2
 	ih := h - pad*2
 
-	if s.game.GaugeImg != nil {
-		// ★変更：1ポイント=2px上昇だが、8ポイント(1段)ごとに区切り線2pxぶん
-		// 追加でジャンプさせることで、区切り線の位置とちょうど噛み合わせる。
-		// 例）8ポイント消化時点 = 16px(斜め上昇分) + 2px(区切り線をまたぐ分) = 18px
-		completedStages := s.gaugePoint / gaugePointsPerStage
-		remainder := s.gaugePoint % gaugePointsPerStage
-		filledHeight := float64(completedStages)*(float64(gaugePointsPerStage)*gaugeFillPerPoint+gaugeDividerHeight) +
-			float64(remainder)*gaugeFillPerPoint
-		if filledHeight > ih {
-			filledHeight = ih
-		}
-		if filledHeight < 0 {
-			filledHeight = 0
-		}
-
-		ixI := int(math.Round(ix))
-		iyI := int(math.Round(iy))
-		iwI := int(math.Round(iw))
-		ihI := int(math.Round(ih))
-
-		stageSlot := float64(gaugePointsPerStage)*gaugeFillPerPoint + gaugeDividerHeight // 1段=18px
-
-		// 完了済みの段を、それぞれ固定の色で塗る
-		for stage := 0; stage < completedStages && stage < gaugeMaxStage; stage++ {
-			hStart := float64(stage) * stageSlot
-			hEnd := hStart + stageSlot
-			if hEnd > ih {
-				hEnd = ih
-			}
-			s.fillGaugeTriSegment(screen, ixI, iyI, iwI, ihI, hStart, hEnd, s.gaugeSegmentColor(stage))
-		}
-
-		// 現在進行中（未完了）の段を塗る
-		if remainder > 0 && completedStages < gaugeMaxStage {
-			hStart := float64(completedStages) * stageSlot
-			hEnd := hStart + float64(remainder)*gaugeFillPerPoint
-			if hEnd > ih {
-				hEnd = ih
-			}
-			s.fillGaugeTriSegment(screen, ixI, iyI, iwI, ihI, hStart, hEnd, s.gaugeSegmentColor(completedStages))
-		}
-
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(x, y)
-		screen.DrawImage(s.game.GaugeImg, op)
-		return
+	completedStages := s.gaugePoint / gaugePointsPerStage
+	remainder := s.gaugePoint % gaugePointsPerStage
+	filledHeight := float64(completedStages)*(float64(gaugePointsPerStage)*gaugeFillPerPoint+gaugeDividerHeight) +
+		float64(remainder)*gaugeFillPerPoint
+	if filledHeight > ih {
+		filledHeight = ih
+	}
+	if filledHeight < 0 {
+		filledHeight = 0
 	}
 
-	rows := gaugeMaxStage
-	rowH := ih / float64(rows)
+	ixI := int(math.Round(ix))
+	iyI := int(math.Round(iy))
+	iwI := int(math.Round(iw))
+	ihI := int(math.Round(ih))
 
-	filledColor := color.RGBA{255, 200, 60, 255}
-	emptyColor := color.RGBA{45, 42, 38, 255}
-	lineColor := color.RGBA{20, 20, 20, 255}
+	stageSlot := float64(gaugePointsPerStage)*gaugeFillPerPoint + gaugeDividerHeight
 
-	var stageRatio float64
-	if s.gaugeStage < gaugeMaxStage-1 {
-		need := gaugeStageThresholds[s.gaugeStage]
-		if need > 0 {
-			stageRatio = float64(s.gaugePoint) / float64(need)
+	for stage := 0; stage < completedStages && stage < gaugeMaxStage; stage++ {
+		hStart := float64(stage) * stageSlot
+		hEnd := hStart + stageSlot
+		if hEnd > ih {
+			hEnd = ih
 		}
-	} else {
-		stageRatio = float64(s.gaugePoint) / float64(gaugePointCap)
-	}
-	if stageRatio > 1.0 {
-		stageRatio = 1.0
-	}
-	if stageRatio < 0.0 {
-		stageRatio = 0.0
+		s.fillGaugeTriSegment(screen, ixI, iyI, iwI, ihI, hStart, hEnd, s.gaugeSegmentColor(stage))
 	}
 
-	for row := 0; row < rows; row++ {
-		topY := iy + ih - float64(row+1)*rowH
-		botY := iy + ih - float64(row)*rowH
-
-		leftX := ix
-		rightAtTop := ix + iw*(1.0-(topY-iy)/ih)
-		rightAtBot := ix + iw*(1.0-(botY-iy)/ih)
-
-		isFilled := row < s.gaugeStage
-		isCurrent := row == s.gaugeStage
-
-		var path vector.Path
-		path.MoveTo(float32(leftX), float32(botY))
-		path.LineTo(float32(rightAtBot), float32(botY))
-		path.LineTo(float32(rightAtTop), float32(topY))
-		path.LineTo(float32(leftX), float32(topY))
-		path.Close()
-
-		c := emptyColor
-		if isFilled {
-			c = filledColor
-		} else if isCurrent && stageRatio > 0 {
-			c = color.RGBA{
-				R: uint8(float64(emptyColor.R) + float64(filledColor.R-emptyColor.R)*stageRatio),
-				G: uint8(float64(emptyColor.G) + float64(filledColor.G-emptyColor.G)*stageRatio),
-				B: uint8(float64(emptyColor.B) + float64(filledColor.B-emptyColor.B)*stageRatio),
-				A: 255,
-			}
+	if remainder > 0 && completedStages < gaugeMaxStage {
+		hStart := float64(completedStages) * stageSlot
+		hEnd := hStart + float64(remainder)*gaugeFillPerPoint
+		if hEnd > ih {
+			hEnd = ih
 		}
-
-		drawOpts := &vector.DrawPathOptions{AntiAlias: true}
-		drawOpts.ColorScale.ScaleWithColor(c)
-		vector.FillPath(screen, &path, nil, drawOpts)
-
-		if row < rows {
-			var linePath vector.Path
-			linePath.MoveTo(float32(leftX), float32(topY))
-			linePath.LineTo(float32(rightAtTop), float32(topY))
-			strokeOpts := &vector.StrokeOptions{Width: 1}
-			lineDrawOpts := &vector.DrawPathOptions{AntiAlias: true}
-			lineDrawOpts.ColorScale.ScaleWithColor(lineColor)
-			vector.StrokePath(screen, &linePath, strokeOpts, lineDrawOpts)
-		}
+		s.fillGaugeTriSegment(screen, ixI, iyI, iwI, ihI, hStart, hEnd, s.gaugeSegmentColor(completedStages))
 	}
 
-	var outline vector.Path
-	outline.MoveTo(float32(x), float32(y+h))
-	outline.LineTo(float32(x+w), float32(y+h))
-	outline.LineTo(float32(x+w), float32(y))
-	outline.Close()
-	outlineStrokeOpts := &vector.StrokeOptions{Width: 1.5}
-	outlineDrawOpts := &vector.DrawPathOptions{AntiAlias: true}
-	outlineDrawOpts.ColorScale.ScaleWithColor(lineColor)
-	vector.StrokePath(screen, &outline, outlineStrokeOpts, outlineDrawOpts)
-
-	labelOp := &text.DrawOptions{}
-	labelOp.GeoM.Translate(x+w+8, y+h-14)
-	labelOp.ColorScale.ScaleWithColor(uiColorText)
-	if s.gaugeStage >= gaugeMaxStage-1 {
-		text.Draw(screen, fmt.Sprintf("MAX %d/%d", s.gaugePoint, gaugePointCap), s.game.FontFace(13), labelOp)
-	} else {
-		text.Draw(screen, fmt.Sprintf("Lv.%d", s.gaugeStage+1), s.game.FontFace(15), labelOp)
-	}
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(x, y)
+	screen.DrawImage(s.game.GaugeImg, op)
 }
 
-func (s *BattleScene) drawCommandMenu(screen *ebiten.Image) {
+func commandIconPositions() [4][2]float64 {
 	centerX := 860.0
 	centerY := 440.0
 	spacing := 48.0
 
-	positions := [4][2]float64{
-		{centerX, centerY - spacing},
+	attackX, attackY := attackIconCenter()
+
+	return [4][2]float64{
+		{attackX, attackY},
 		{centerX - spacing, centerY},
 		{centerX + spacing, centerY},
 		{centerX, centerY + spacing},
 	}
+}
+
+func (s *BattleScene) drawCommandMenu(screen *ebiten.Image) {
+	positions := commandIconPositions()
 
 	for i, pos := range positions {
 		icon := s.game.CommandIcons[i]
-		if icon == nil {
-			continue
-		}
 
 		iw := icon.Bounds().Dx()
 		ih := icon.Bounds().Dy()
@@ -441,46 +382,18 @@ func (s *BattleScene) drawCommandMenu(screen *ebiten.Image) {
 	}
 }
 
-// drawSkillSubMenu：主人公はHeroSkills(4項目)、他キャラは旧仕様(3項目)の説明・MP消費を表示
-// ★変更：コマンドボタンの上に即時表示（アニメーションなし）。行間・横位置は調整用変数で管理。
 func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
-	// コマンドメニューの中心（drawCommandMenuのcenterX, centerYと合わせる）
-	cmdCenterX := 860.0
-	cmdCenterY := 440.0
+	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
 
-	windowW := 140.0
-	windowH := 72.0
-	if s.game.SkillPanelImg != nil {
-		windowW = float64(s.game.SkillPanelImg.Bounds().Dx())
-		windowH = float64(s.game.SkillPanelImg.Bounds().Dy())
-	}
-
-	// ★調整用：ウィンドウ自体の位置（コマンドボタン中心に被せる）
-	windowX := cmdCenterX - windowW/2
-	windowY := cmdCenterY - windowH/2
-
-	if s.game.SkillPanelImg != nil {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(windowX, windowY)
-		screen.DrawImage(s.game.SkillPanelImg, op)
-	} else {
-		ebitenutil.DrawRect(screen, windowX, windowY, windowW, windowH, color.RGBA{10, 10, 20, 240})
-	}
-
-	// ★調整用：スキル項目の描画パラメータ
-	const (
-		labelOffsetX = 15.0 // ウィンドウ左端からラベルまでの距離
-		labelOffsetY = 20.0 // ウィンドウ上端から1行目までの距離
-		rowHeight    = 35.0 // 行間（大きくすると行が開く）
-		mpOffsetX    = 20.0 // ウィンドウ右端からMP表示までの距離
-	)
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(windowX, windowY)
+	screen.DrawImage(s.game.SkillPanelImg, op)
 
 	p := s.waitingActor
 	skills := s.game.CharacterSkills(p)
 
-	var labels []string
-	var costTexts []string
-	var disabledList []bool
+	skillListFace := s.game.FontFace(15)
+	skillListArrowGap := text.Advance("▶ ", skillListFace)
 
 	for i, sk := range skills {
 		curLv := s.game.PlayerSkillLv[p][i]
@@ -491,7 +404,6 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 			curLv = len(sk.Levels)
 		}
 
-		// 表示Lv：全行ともカーソル位置(skillLevelCursors)をそのまま表示する
 		lv := s.skillLevelCursors[p][i]
 		if lv < 1 {
 			lv = 1
@@ -501,44 +413,65 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		}
 
 		data := sk.Levels[lv-1]
-		labels = append(labels, fmt.Sprintf("%d:%s Lv%d", i+1, sk.Name, lv))
-		costTexts = append(costTexts, fmt.Sprintf("MP%d", s.effectiveMPCost(data.MPCost)))
-		disabledList = append(disabledList, s.game.PlayerMP[p] < s.effectiveMPCost(data.MPCost))
-	}
+		label := fmt.Sprintf("%d:%s", i+1, sk.Name)
+		costText := fmt.Sprintf("MP%d", s.effectiveMPCost(data.MPCost))
+		insufficient := s.game.PlayerMP[p] < s.effectiveMPCost(data.MPCost)
 
-	skillListFace := s.game.FontFace(15)
-	skillListArrowGap := text.Advance("▶ ", skillListFace)
-	for i, label := range labels {
 		labelCol := uiColorText
 		mpCol := uiColorText
-		insufficient := disabledList[i]
-
 		if insufficient {
-			mpCol = uiColorDanger // MPの数値だけ、不足していれば赤
+			mpCol = uiColorDanger
 		}
 		selected := i == s.skillIndex
 		if selected {
-			labelCol = uiColorSelect // 選択中は常にこの色（MP不足でも変えない）
+			labelCol = uiColorSelect
 		}
 
-		baseX := windowX + labelOffsetX
-		baseY := windowY + labelOffsetY + float64(i)*rowHeight
+		baseX := windowX + battleSubLabelOffsetX
+		baseY := windowY + battleSubLabelOffsetY + float64(i)*battleSubRowHeight
 		if selected {
 			arrowOp := &text.DrawOptions{}
 			arrowOp.GeoM.Translate(baseX, baseY)
 			arrowOp.ColorScale.ScaleWithColor(labelCol)
 			text.Draw(screen, "▶", skillListFace, arrowOp)
 		}
-		op := &text.DrawOptions{}
-		op.GeoM.Translate(baseX+skillListArrowGap, baseY)
-		op.ColorScale.ScaleWithColor(labelCol)
-		text.Draw(screen, label, skillListFace, op)
+		nameOp := &text.DrawOptions{}
+		nameOp.GeoM.Translate(baseX+skillListArrowGap, baseY)
+		nameOp.ColorScale.ScaleWithColor(labelCol)
+		text.Draw(screen, label, skillListFace, nameOp)
+
+		_, _, leftX, lvX, rightX, textY := s.skillLevelArrowRects(i, lv, skillListFace)
+
+		lvOp := &text.DrawOptions{}
+		lvOp.GeoM.Translate(lvX, textY)
+		lvOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, skillLvText(lv), skillListFace, lvOp)
+
+		if curLv > 1 {
+			leftCol := uiColorText
+			if lv <= 1 {
+				leftCol = uiColorDisabled
+			}
+			leftOp := &text.DrawOptions{}
+			leftOp.GeoM.Translate(leftX, textY)
+			leftOp.ColorScale.ScaleWithColor(leftCol)
+			text.Draw(screen, skillLvLeftArrow, skillListFace, leftOp)
+
+			rightCol := uiColorText
+			if lv >= curLv {
+				rightCol = uiColorDisabled
+			}
+			rightOp := &text.DrawOptions{}
+			rightOp.GeoM.Translate(rightX, textY)
+			rightOp.ColorScale.ScaleWithColor(rightCol)
+			text.Draw(screen, skillLvRightArrow, skillListFace, rightOp)
+		}
 
 		mpOp := &text.DrawOptions{}
-		mpOp.GeoM.Translate(windowX+windowW-mpOffsetX, windowY+labelOffsetY+float64(i)*rowHeight)
+		mpOp.GeoM.Translate(windowX+windowW-battleSubRightOffsetX, baseY)
 		mpOp.PrimaryAlign = text.AlignEnd
 		mpOp.ColorScale.ScaleWithColor(mpCol)
-		text.Draw(screen, costTexts[i], s.game.FontFace(15), mpOp)
+		text.Draw(screen, costText, s.game.FontFace(15), mpOp)
 	}
 }
 
@@ -548,11 +481,11 @@ func (s *BattleScene) drawLogWindowBackground(screen *ebiten.Image) {
 	winY := logPanelY
 	winH := 28.0
 	winImg := ebiten.NewImage(int(winW), int(winH))
-	winImg.Fill(color.RGBA{0, 0, 128, 200})
+	winImg.Fill(color.RGBA{0, 0, 0, 200})
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(winX, winY)
 	screen.DrawImage(winImg, op)
-	borderColor := color.RGBA{200, 200, 255, 255}
+	borderColor := color.RGBA{255, 255, 255, 255}
 	ebitenutil.DrawRect(screen, winX, winY, winW, 1, borderColor)
 	ebitenutil.DrawRect(screen, winX, winY+winH-1, winW, 1, borderColor)
 }

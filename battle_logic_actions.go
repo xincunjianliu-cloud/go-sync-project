@@ -1,8 +1,6 @@
 package main
 
-// battle_logic_actions.go: 巻き戻し実行・ダメージ確定・敵行動・勝敗判定・対象選択の更新処理
 import (
-	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -28,13 +26,13 @@ func (s *BattleScene) executeRewind(p int) {
 	s.finishPlayerTurn(true)
 }
 
-func (s *BattleScene) rollNormalDamage() int {
+func (s *BattleScene) rollNormalDamage(target int) int {
 	p := s.waitingActor
 	if p < 0 || p >= partySize {
 		return 5
 	}
 	atk := s.effectiveAtk(p)
-	def := s.effectiveEnemyDef(false)
+	def := s.effectiveEnemyDef(target, false)
 	if def < 1 {
 		def = 1
 	}
@@ -45,9 +43,10 @@ func (s *BattleScene) rollNormalDamage() int {
 func (s *BattleScene) finishPlayerTurn(resetGauge bool) {
 	if s.waitingActor >= 0 && s.waitingActor < partySize {
 		s.tickDebuffs(s.waitingActor, false)
+		s.tickBuffs(s.waitingActor)
 	}
 	if resetGauge && s.waitingActor >= 0 && s.waitingActor < partySize {
-		s.atbGauge[s.waitingActor] = 0
+		s.resetPlayerGauge(s.waitingActor)
 	}
 	s.waitingActor = -1
 	if s.checkBattleEnd() {
@@ -88,10 +87,10 @@ func (s *BattleScene) cancelWaitAfterDeath() {
 	s.battleLogTimer = battleLogDuration
 }
 
-func (s *BattleScene) tryWaitSynergy() {
+func (s *BattleScene) tryWaitSynergy() bool {
 	for i := 0; i < partySize; i++ {
 		if !s.waitStance[i] {
-			return
+			return false
 		}
 	}
 
@@ -102,7 +101,10 @@ func (s *BattleScene) tryWaitSynergy() {
 			s.waitStance[i] = false
 		}
 		s.waitOrder = []int{}
-		return
+		s.battlePhase = phaseATB
+		s.waitingActor = -1
+		s.tryStartNextActor()
+		return true
 	}
 
 	power := 100.0 + float64(s.gaugeAtkBonus())
@@ -118,39 +120,40 @@ func (s *BattleScene) tryWaitSynergy() {
 		atk += s.effectiveAtk(i)
 		luck += s.game.PlayerLuck[i]
 	}
-	def := s.effectiveEnemyDef(false)
-	dmg := s.rollDamage(float64(atk), power, float64(def), 1.0, luck)
-	s.enemyHP -= dmg
-	if s.enemyHP < 0 {
-		s.enemyHP = 0
+
+	for _, slot := range s.aliveEnemyIndices() {
+		def := s.effectiveEnemyDef(slot, false)
+		dmg := s.rollDamage(float64(atk), power, float64(def), 1.0, luck)
+		s.applyDamageToEnemySlot(slot, dmg)
+		cx, _ := s.enemyCenter(slot)
+		s.damagePops = append(s.damagePops, DamagePop{
+			Value:  dmg,
+			X:      cx - 8.0,
+			Y:      100.0,
+			Vy:     -180.0,
+			Timer:  0.0,
+			IsCrit: s.lastRollWasCrit,
+		})
 	}
 
-	s.flashAlpha = 0.8
-	s.shakeType = 3
-	s.shakeTimer = 0.6
-	s.shakeMaxDur = 0.8
-	s.shakePower = 16.0
-	s.damagePops = append(s.damagePops, DamagePop{
-		Value: dmg,
-		X:     s.enemyX - 8.0,
-		Y:     100.0,
-		Vy:    -180.0,
-		Timer: 0.0,
-	})
+	s.triggerShake(hitTierSynergy)
+	if s.allEnemiesDead() {
+		s.checkBattleEnd()
+		return true
+	}
+
 	for i := 0; i < partySize; i++ {
 		s.waitStance[i] = false
-		s.atbGauge[i] = 0
+		s.resetPlayerGauge(i)
 	}
 	s.waitOrder = []int{}
-	if s.checkBattleEnd() {
-		return
-	}
 	s.battlePhase = phaseATB
 	s.waitingActor = -1
 	s.tryStartNextActor()
+	return true
 }
 
-func (s *BattleScene) executeEnemyAction() {
+func (s *BattleScene) rollEnemyAction() {
 	var aliveList []int
 	for i := 0; i < partySize; i++ {
 		if s.game.PlayerHP[i] > 0 {
@@ -160,79 +163,159 @@ func (s *BattleScene) executeEnemyAction() {
 	if len(aliveList) == 0 {
 		return
 	}
+
+	skills := s.enemies[s.actingEnemySlot].Skills
+	if len(skills) > 0 && rand.Intn(100) < EnemySkillChance {
+		skill := skills[rand.Intn(len(skills))]
+		s.rollEnemySkill(skill, aliveList)
+		return
+	}
+
+	s.rollEnemyNormalAttack(aliveList)
+}
+
+func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
 	target := aliveList[rand.Intn(len(aliveList))]
 
-	targetX := s.partyScreenX[target]
-	targetY := s.partyScreenY[target] - 30.0
+	s.pendingEnemySkillName = ""
+	s.pendingEnemySkillEffects = nil
+	s.pendingEnemyIsAll = false
 
-	// ★追加：敵は運を持たないため会心はしないが、
-	// 味方側は自分の運に応じて回避（敵の攻撃を完全に無効化）できる。
 	if s.rollIsEvade(s.game.PlayerLuck[target]) {
-		s.lastEnemyAttackTarget = target
-		s.lastEnemyAttackPrevHP = s.game.PlayerHP[target]
-		s.lastEnemyAttackDamage = 0
+		s.pendingEnemyHits = []pendingEnemyHit{{target: target, evaded: true}}
+		s.pendingEnemyHitTier = hitTierNone
+		s.beginEnemyHitStop()
+		return
+	}
 
-		// ★追加：回避が発動した場合はダメージを食らわず、
-		// スプライトシートの表示位置を右側にずらして「かわした」動きを演出する。
-		s.evadeOffsetX[target] = evadeDodgeShiftX
+	def := s.effectivePlayerDef(target, false)
+	if def < 1 {
+		def = 1
+	}
+	dmg := s.rollDamage(float64(s.enemies[s.actingEnemySlot].PhysAtk), 100.0, float64(def), 1.0, 0)
+
+	s.pendingEnemyHits = []pendingEnemyHit{{target: target, dmg: dmg}}
+	s.pendingEnemyHitTier = hitTierWeak
+	s.beginEnemyHitStop()
+}
+
+func (s *BattleScene) rollEnemySkill(skill EnemySkill, aliveList []int) {
+	var targets []int
+	if skill.Target == TargetAll {
+		targets = aliveList
+	} else {
+		targets = []int{aliveList[rand.Intn(len(aliveList))]}
+	}
+
+	s.pendingEnemySkillName = skill.Name
+	s.pendingEnemySkillEffects = skill.Effects
+	s.pendingEnemyIsAll = skill.Target == TargetAll
+
+	var hits []pendingEnemyHit
+	anyHit := false
+	for _, target := range targets {
+		if s.rollIsEvade(s.game.PlayerLuck[target]) {
+			hits = append(hits, pendingEnemyHit{target: target, evaded: true})
+			continue
+		}
+		dmg := s.rollEnemySkillDamage(skill.Power, skill.Element, target)
+		hits = append(hits, pendingEnemyHit{target: target, dmg: dmg})
+		if dmg > 0 {
+			anyHit = true
+		}
+	}
+	s.pendingEnemyHits = hits
+	if anyHit {
+		s.pendingEnemyHitTier = hitTierStrong
+	} else {
+		s.pendingEnemyHitTier = hitTierNone
+	}
+	s.beginEnemyHitStop()
+}
+
+func (s *BattleScene) beginEnemyHitStop() {
+	switch s.pendingEnemyHitTier {
+	case hitTierNone:
+		s.enemyHitStopTimer = 0
+		s.applyEnemyPendingHits()
+	case hitTierWeak:
+		s.enemyHitStopTimer = hitStopWeak
+	default:
+		s.enemyHitStopTimer = hitStopStrong
+	}
+}
+
+func (s *BattleScene) applyEnemyPendingHits() {
+	for _, hit := range s.pendingEnemyHits {
+		target := hit.target
+		targetX := s.partyScreenX[target]
+		targetY := s.partyScreenY[target] - 30.0
+
+		if hit.evaded {
+			s.lastEnemyAttackTarget = target
+			s.lastEnemyAttackPrevHP = s.game.PlayerHP[target]
+			s.lastEnemyAttackDamage = 0
+			s.evadeOffsetX[target] = evadeDodgeShiftX
+			s.damagePops = append(s.damagePops, DamagePop{
+				X:      targetX,
+				Y:      targetY,
+				Vy:     -180.0,
+				Timer:  0.0,
+				IsMiss: true,
+			})
+			continue
+		}
+
+		dmg := hit.dmg
+		prevHP := s.game.PlayerHP[target]
+		s.lastEnemyAttackTarget = target
+		s.lastEnemyAttackPrevHP = prevHP
+		s.lastEnemyAttackDamage = dmg
+
+		s.game.PlayerHP[target] -= dmg
 
 		s.damagePops = append(s.damagePops, DamagePop{
-			Value: 0,
+			Value: dmg,
 			X:     targetX,
 			Y:     targetY,
 			Vy:    -180.0,
 			Timer: 0.0,
 		})
-		s.battleLog = "回避！"
-		s.battleLogTimer = battleLogDuration
-		s.enemyActionWaitTimer = 1.5
-		return
-	}
 
-	// ★変更：敵の攻撃は物理攻撃として扱い、敵の物理攻撃力(enemyPhysAtk)を基準に
-	// 対象の物理防御力(PlayerDef)で軽減する、味方側と同じ式にした
-	// ダメージ = 攻撃力 × 倍率(%) ÷ 防御力（物理攻撃に対しては物理防御が適応される仕様）
-	def := s.effectivePlayerDef(target, false)
-	if def < 1 {
-		def = 1
-	}
-	dmg := s.rollDamage(float64(s.enemyPhysAtk), 100.0, float64(def), 1.0, 0)
+		if s.game.PlayerHP[target] > 0 {
+			s.playerPose[target] = poseDamage
+			s.playerAnimTimer[target] = 0.0
+			s.playerFlashTimer[target] = spriteFlashDuration
+		} else {
+			s.game.PlayerHP[target] = 0
 
-	prevHP := s.game.PlayerHP[target]
-	s.lastEnemyAttackTarget = target
-	s.lastEnemyAttackPrevHP = prevHP
-	s.lastEnemyAttackDamage = dmg
+			if s.countWaitStance() > 0 {
+				s.cancelWaitAfterDeath()
+			}
+		}
 
-	s.game.PlayerHP[target] -= dmg
-
-	s.damagePops = append(s.damagePops, DamagePop{
-		Value: dmg,
-		X:     targetX,
-		Y:     targetY,
-		Vy:    -180.0,
-		Timer: 0.0,
-	})
-
-	if s.game.PlayerHP[target] > 0 {
-		s.playerPose[target] = poseDamage
-		s.playerAnimTimer[target] = 0.0
-
-		s.shakeType = 1
-		s.shakeTimer = 0.35
-		s.shakeMaxDur = 0.35
-		s.shakePower = 12.0
-	} else {
-		s.game.PlayerHP[target] = 0
-
-		if s.countWaitStance() > 0 {
-			s.cancelWaitAfterDeath()
+		if s.pendingEnemySkillEffects != nil {
+			s.applySkillEffects(s.pendingEnemySkillEffects, s.actingEnemySlot, false, target, s.pendingEnemyIsAll)
 		}
 	}
-	s.enemyActionWaitTimer = 1.5
+
+	s.triggerShake(s.pendingEnemyHitTier)
+
+	if s.pendingEnemySkillName != "" {
+		s.battleLog = s.pendingEnemySkillName
+	} else {
+		s.battleLog = s.enemies[s.actingEnemySlot].Name + "の攻撃"
+	}
+	s.battleLogTimer = enemyActionDuration
+	s.enemyActionWaitTimer = enemyActionDuration
+
+	s.waitingActor = -1
+	s.tickDebuffs(s.actingEnemySlot, true)
+	s.checkBattleEnd()
 }
 
 func (s *BattleScene) checkBattleEnd() bool {
-	if s.enemyHP <= 0 {
+	if s.allEnemiesDead() {
 		if !s.isWon {
 			if strings.HasPrefix(s.enemyType, "boss_") {
 				numStr := strings.TrimPrefix(s.enemyType, "boss_")
@@ -250,12 +333,10 @@ func (s *BattleScene) checkBattleEnd() bool {
 				s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 			}
 
-			// ★変更：レベルアップ時のステータス上昇は固定式ではなく、
-			// stats_config.go の PlayerStatsByLevel / PlayerExpToNextByLevel から、
-			// そのレベルの値をそのまま読み込む。
+			totalExp := s.totalEnemyExp()
 			for i := 0; i < partySize; i++ {
 				if s.game.PlayerLv[i] < maxPlayerLevel {
-					s.game.PlayerEXP[i] += s.enemyExp
+					s.game.PlayerEXP[i] += totalExp
 				}
 				for s.game.PlayerLv[i] < maxPlayerLevel && s.game.PlayerEXP[i] >= s.game.PlayerNextEXP[i] {
 					s.game.PlayerEXP[i] -= s.game.PlayerNextEXP[i]
@@ -273,30 +354,37 @@ func (s *BattleScene) checkBattleEnd() bool {
 				}
 			}
 
+			totalSP := s.totalEnemySP()
 			for i := 0; i < partySize; i++ {
-				s.game.PlayerSP[i] += s.enemySP
+				s.game.PlayerSP[i] += totalSP
 			}
 
 			s.earnedItems = nil
-			for _, drop := range s.enemyDrops {
-				if drop.Percent <= 0 {
-					continue
+			for ei := range s.enemies {
+				for _, drop := range s.enemies[ei].Drops {
+					if drop.Percent <= 0 {
+						continue
+					}
+					if rand.Intn(100) >= drop.Percent {
+						continue
+					}
+					qty := drop.rollCount()
+					s.game.AddItem(drop.ItemID, qty)
+					name := drop.ItemID
+					if def, ok := GetItemDef(drop.ItemID); ok {
+						name = def.Name
+					}
+					s.earnedItems = addEarnedItem(s.earnedItems, name, qty)
 				}
-				if rand.Intn(100) >= drop.Percent {
-					continue
-				}
-				qty := drop.rollCount()
-				s.game.AddItem(drop.ItemID, qty)
-				name := drop.ItemID
-				if def, ok := GetItemDef(drop.ItemID); ok {
-					name = def.Name
-				}
-				s.earnedItems = addEarnedItem(s.earnedItems, name, qty)
 			}
 
-			s.enemyDeathPhase = 1
-			s.enemyDeathTimer = 0.0
-			s.enemyAlpha = 1.0
+			for i := range s.enemies {
+				if s.enemies[i].HP <= 0 && s.enemies[i].DeathPhase == 0 {
+					s.enemies[i].DeathPhase = 1
+					s.enemies[i].DeathTimer = 0.0
+					s.enemies[i].Alpha = 1.0
+				}
+			}
 			s.isWon = true
 			s.game.Audio.PlayBGMWithIntro(bgmBattleEndIntro, bgmBattleEndLoop)
 			s.battlePhase = phaseBattleEnd
@@ -317,6 +405,7 @@ func (s *BattleScene) checkBattleEnd() bool {
 		s.battlePhase = phaseBattleEnd
 		s.battleLog = "全滅した…"
 		s.battleLogTimer = gameOverMessageDuration
+		s.damagePops = nil
 		return true
 	}
 	return false
@@ -344,17 +433,17 @@ func (s *BattleScene) exitBattleToField() {
 	s.game.ChangeSceneWithFade(field, 0.5)
 }
 
-// updateTargetSelect：通常攻撃・強撃・全体攻撃・炎魔法・デバフの実行分岐。
-func (s *BattleScene) updateTargetSelect() {
-	if isEscapePressed() {
-		if s.pendingSkill >= 1 {
-			s.battlePhase = phaseSkillMenu
-		} else {
-			s.battlePhase = phasePlayerMenu
-		}
-		return
+func (s *BattleScene) enemyTargetsForAttack(isAll bool) []int {
+	if isAll {
+		return s.aliveEnemyIndices()
 	}
+	if s.targetIndex >= 0 && s.targetIndex < len(s.enemies) && s.enemies[s.targetIndex].HP > 0 {
+		return []int{s.targetIndex}
+	}
+	return []int{s.firstAliveEnemySlot()}
+}
 
+func (s *BattleScene) updateTargetSelect() {
 	p := s.waitingActor
 	if p >= 0 && p < partySize && s.pendingSkill >= 1 {
 		skillIdx := s.pendingSkill - 1
@@ -364,25 +453,47 @@ func (s *BattleScene) updateTargetSelect() {
 			if data.Target == TargetBoth {
 				if isMenuRightPressed() {
 					s.selectedSkillTarget = TargetAll
+					s.targetIndex = maxEnemies
 				}
 				if isMenuLeftPressed() {
 					s.selectedSkillTarget = TargetSingle
+					if s.targetIndex == maxEnemies {
+						s.targetIndex = s.firstAliveEnemySlot()
+					}
 				}
 			}
 		}
 	}
 
-	if !isConfirmKeyPressed() {
+	tappedIdx, tappedOk := s.hitTestEnemyTarget()
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.targetIndex)
+	if tappedOk {
+		if s.targetIndex == maxEnemies {
+			s.selectedSkillTarget = TargetAll
+		} else {
+			s.selectedSkillTarget = TargetSingle
+		}
+	}
+
+	hadTouch := len(justPressedTouchPoints()) > 0
+	if isEscapePressed() || (hadTouch && !tappedOk) {
+		if s.pendingSkill >= 1 {
+			s.battlePhase = phaseSkillMenu
+		} else {
+			s.battlePhase = phasePlayerMenu
+		}
+		return
+	}
+
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 
 	if p < 0 || p >= partySize {
-		fmt.Println("waitingActor が不正")
 		return
 	}
 
 	if s.pendingSkill >= 1 {
-		// ── 新スキル体系（全キャラ共通） ──
 		skillIdx := s.pendingSkill - 1
 		lv := s.lastSkillLevel[p][skillIdx]
 		if lv < 1 {
@@ -390,58 +501,46 @@ func (s *BattleScene) updateTargetSelect() {
 		}
 		skills := s.game.CharacterSkills(p)
 		data := skills[skillIdx].Levels[lv-1]
-		isAll := data.Target == TargetAll || (data.Target == TargetBoth && s.selectedSkillTarget == TargetAll)
+		isAll := s.currentAttackIsAllTarget()
+		targets := s.enemyTargetsForAttack(isAll)
 
-		// ← 追加：スキル属性でアニメ種別を決定
 		if data.Element == ElemPhysicalNone {
 			s.attackAnimType = animCharge
 		} else {
 			s.attackAnimType = animFireMagic
 		}
 
-		dmg := s.rollSkillDamage(p, skillIdx, lv, isAll)
+		hits := make([]pendingPlayerHit, 0, len(targets))
+		for _, slot := range targets {
+			dmg := s.rollSkillDamage(p, skillIdx, lv, isAll, slot)
+			hits = append(hits, pendingPlayerHit{slot: slot, dmg: dmg, crit: s.lastRollWasCrit})
+		}
+		s.pendingPlayerHits = hits
 
 		if s.rewindActive {
-			second := s.rollSkillDamage(p, skillIdx, lv, isAll)
-			s.pendingDamage = dmg
-			s.pendingDamage2 = second
+			hits2 := make([]pendingPlayerHit, 0, len(targets))
+			for _, slot := range targets {
+				dmg2 := s.rollSkillDamage(p, skillIdx, lv, isAll, slot)
+				hits2 = append(hits2, pendingPlayerHit{slot: slot, dmg: dmg2, crit: s.lastRollWasCrit})
+			}
+			s.pendingPlayerHits2 = hits2
 			s.pendingDamage2Scheduled = true
 		} else {
-			s.pendingDamage = dmg
-			s.pendingDamage2 = 0
+			s.pendingPlayerHits2 = nil
+			s.pendingDamage2Scheduled = false
 		}
 
 		s.game.PlayerMP[p] -= s.effectiveMPCost(data.MPCost)
 		s.battleLog = skills[skillIdx].Name
-		s.battleLogTimer = battleLogDuration
-		if dmg >= 40 {
-			s.pendingDamageShake = 18.0
-		} else {
-			s.pendingDamageShake = 10.0
-		}
+		s.battleLogTimer = skillActionLogDuration
 
-		s.applySkillEffects(data.Effects, p, true, enemyID)
-		if s.rewindActive {
-			s.applySkillEffects(data.Effects, p, true, enemyID)
-		}
-		s.addGaugePoint(1)
-
-		imgW, imgH := 0, 0
-		if s.enemyImage != nil {
-			imgW = s.enemyImage.Bounds().Dx()
-			imgH = s.enemyImage.Bounds().Dy()
-			if imgW <= 32 && len(s.game.BossImgs) > 0 && s.game.BossImgs[0] != nil {
-				imgW = s.game.BossImgs[0].Bounds().Dx()
-				imgH = s.game.BossImgs[0].Bounds().Dy()
+		for _, slot := range targets {
+			s.applySkillEffects(data.Effects, p, true, slot, isAll)
+			if s.rewindActive {
+				s.applySkillEffects(data.Effects, p, true, slot, isAll)
 			}
 		}
-		_ = imgW
-		yPos := 240.0 - float64(imgH)/2
-		if yPos < 12 {
-			yPos = 12
-		}
-		s.pendingDamageX = 280.0 - 10.0
-		s.pendingDamageY = yPos - 15.0
+		s.addGaugePoint(1)
 
 		s.activeAttacker = p
 		s.attackPhaseTimer = 0.0
@@ -450,46 +549,23 @@ func (s *BattleScene) updateTargetSelect() {
 		return
 	}
 
-	// ── 通常攻撃の処理 ──
-	fmt.Printf("updateTargetSelect: p=%d pendingSkill=%d\n", p, s.pendingSkill)
-
-	s.attackAnimType = animNormal // ← 追加
-	firstDmg := s.rollNormalDamage()
+	s.attackAnimType = animNormal
+	targets := s.enemyTargetsForAttack(false)
+	target := targets[0]
+	firstDmg := s.rollNormalDamage(target)
+	s.pendingPlayerHits = []pendingPlayerHit{{slot: target, dmg: firstDmg, crit: s.lastRollWasCrit}}
 	if s.rewindActive {
-		secondDmg := s.rollNormalDamage()
-		s.pendingDamage = firstDmg
-		s.pendingDamage2 = secondDmg
+		secondDmg := s.rollNormalDamage(target)
+		s.pendingPlayerHits2 = []pendingPlayerHit{{slot: target, dmg: secondDmg, crit: s.lastRollWasCrit}}
 		s.pendingDamage2Scheduled = true
 	} else {
-		s.pendingDamage = firstDmg
-		s.pendingDamage2 = 0
+		s.pendingPlayerHits2 = nil
+		s.pendingDamage2Scheduled = false
 	}
 	s.battleLog = "通常攻撃"
 	s.battleLogTimer = battleLogDuration
-	s.pendingDamageShake = 10.0
-	fmt.Printf("通常攻撃: dmg=%d\n", s.pendingDamage)
 
 	s.addGaugePoint(1)
-
-	imgW := 0
-	imgH := 0
-	if s.enemyImage != nil {
-		imgW = s.enemyImage.Bounds().Dx()
-		imgH = s.enemyImage.Bounds().Dy()
-		if imgW <= 32 && len(s.game.BossImgs) > 0 && s.game.BossImgs[0] != nil {
-			imgW = s.game.BossImgs[0].Bounds().Dx()
-			imgH = s.game.BossImgs[0].Bounds().Dy()
-		}
-	}
-	_ = imgW
-
-	yPos := 240.0 - float64(imgH)/2
-	if yPos < 12 {
-		yPos = 12
-	}
-
-	s.pendingDamageX = 280.0 - 10.0
-	s.pendingDamageY = yPos - 15.0
 
 	s.activeAttacker = p
 	s.attackPhaseTimer = 0.0
@@ -500,29 +576,23 @@ func (s *BattleScene) updateTargetSelect() {
 func (s *BattleScene) updateHealTargetSelect() {
 	p := s.waitingActor
 
+	const cycleLen = partySize + 1
 	if isMenuUpPressed() {
-		if s.healTargetIndex < partySize {
-			s.healTargetIndex = (s.healTargetIndex - 1 + partySize) % partySize
-		}
+		s.healTargetIndex = (s.healTargetIndex - 1 + cycleLen) % cycleLen
 	}
 	if isMenuDownPressed() {
-		if s.healTargetIndex < partySize {
-			s.healTargetIndex = (s.healTargetIndex + 1) % partySize
-		}
+		s.healTargetIndex = (s.healTargetIndex + 1) % cycleLen
 	}
-	if isMenuRightPressed() {
-		s.healTargetIndex = partySize
-	}
-	if isMenuLeftPressed() {
-		if s.healTargetIndex == partySize {
-			s.healTargetIndex = 0
-		}
-	}
-	if isEscapePressed() {
+
+	tappedIdx, tappedOk := s.hitTestHealTargets()
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.healTargetIndex)
+
+	hadTouch := len(justPressedTouchPoints()) > 0
+	if isEscapePressed() || (hadTouch && !tappedOk) {
 		s.battlePhase = phaseSkillMenu
 		return
 	}
-	if !isConfirmKeyPressed() {
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 
@@ -562,6 +632,7 @@ func (s *BattleScene) updateHealTargetSelect() {
 				Timer:  0.0,
 				IsHeal: true,
 			})
+			s.applySkillEffects(data.Effects, p, false, i, true)
 			if s.rewindActive {
 				healAmount2 := s.rollSkillHeal(p, skillIdx, lv, true)
 				s.game.PlayerHP[i] += healAmount2
@@ -576,10 +647,10 @@ func (s *BattleScene) updateHealTargetSelect() {
 					Timer:  -0.18,
 					IsHeal: true,
 				})
+				s.applySkillEffects(data.Effects, p, false, i, true)
 			}
 		}
-		// 回復アニメーション中は即座にendCastを呼ばず、アニメーション完了後に戻す
-		s.healingAnimTimer[p] = 1.5 // アニメーション + 遅延時間
+		s.healingAnimTimer[p] = 1.5
 		s.battleLog = skills[skillIdx].Name + "（全体）"
 		s.battleLogTimer = battleLogDuration
 		s.addGaugePoint(1)
@@ -606,6 +677,7 @@ func (s *BattleScene) updateHealTargetSelect() {
 			Timer:  0.0,
 			IsHeal: true,
 		})
+		s.applySkillEffects(data.Effects, p, false, target, false)
 		if s.rewindActive {
 			healAmount2 := s.rollSkillHeal(p, skillIdx, lv, false)
 			s.game.PlayerHP[target] += healAmount2
@@ -620,9 +692,9 @@ func (s *BattleScene) updateHealTargetSelect() {
 				Timer:  -0.18,
 				IsHeal: true,
 			})
+			s.applySkillEffects(data.Effects, p, false, target, false)
 		}
-		// 回復アニメーション中は即座にendCastを呼ばず、アニメーション完了後に戻す
-		s.healingAnimTimer[p] = 1.5 // アニメーション + 遅延時間
+		s.healingAnimTimer[p] = 1.5
 		s.battleLog = skills[skillIdx].Name
 		s.battleLogTimer = battleLogDuration
 		s.addGaugePoint(1)

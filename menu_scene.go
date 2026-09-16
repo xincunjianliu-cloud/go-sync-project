@@ -1,7 +1,5 @@
 package main
 
-// menu_scene.go: メニューの状態定義・初期化・メイン/ステータス/セーブロードの更新処理
-
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -20,15 +18,16 @@ const (
 	menuStateLoadConfirm        = "loadConfirm"
 	menuStateSaveDone           = "saveDone"
 	menuStateOption             = "option"
-	menuStateOptionAdjust       = "optionAdjust"
-	menuStateMessageSpeedAdjust = "messageSpeedAdjust"
-	menuStateDisplayModeAdjust  = "displayModeAdjust"
-	menuStateReturnTitleConfirm = "returnTitleConfirm"
+	menuStateOptionResetConfirm = "optionResetConfirm"
+	menuStateOptionResetDone    = "optionResetDone"
 
 	maxSaveSlots = 20
 	slotsPerPage = 4
 
-	bgmVolumeStep = 0.05
+	bgmVolumeStep = 0.01
+
+	bgmVolumeRepeatDelayTicks    = 18
+	bgmVolumeRepeatIntervalTicks = 2
 )
 
 type skillDef struct {
@@ -49,68 +48,99 @@ const (
 	skillIdxBack   = 2
 )
 
-// ↓ メニューのコードの上の方（定数を定義している場所）
-const defaultBGMVolume = 0. // ★これ1つだけで管理します！
+const defaultBGMVolume = 0.
 
 const defaultMessageSpeed = 1
 const defaultFullscreen = false
 const defaultWindowWidth = gameWidth
 const defaultWindowHeight = gameHeight
-
-// ※ const resetBGMVolume = 0.4 は削除してOKです！
+const defaultRememberCursor = true
 
 type MenuScene struct {
-	game            *Game
-	backScene       Scene
-	menuIndex       int
-	commands        []string
-	menuState       string
-	skillCharIndex  int
-	skillSubIndex   int
-	healTargetIndex int
-	statusCharIndex int // ← 追加
-	nextScene       Scene
+	game              *Game
+	backScene         Scene
+	menuIndex         int
+	commands          []string
+	menuState         string
+	skillCharIndex    int
+	skillSubIndex     int
+	healTargetIndex   int
+	statusCharIndex   int
+	statusReturnState string
+	nextScene         Scene
 
 	optionIndex int
 
 	previewTicks int
 
-	slotIndex     int
-	slotData      [maxSaveSlots]*SaveData
-	slotThumbs    [maxSaveSlots]*ebiten.Image
-	saveMode      bool
-	saveResultMsg string
-	saveDoneIndex int
+	slotIndex         int
+	slotScrollTop     int
+	slotData          [maxSaveSlots]*SaveData
+	slotThumbs        [maxSaveSlots]*ebiten.Image
+	saveMode          bool
+	saveResultMsg     string
+	saveDoneIndex     int
+	slotDrag          dragScrollState
+	slotScrollBarDrag dragScrollState
+	slotDragAccum     float64
 
-	confirmIndex int
-	pendingSlot  int
+	volumeDragActive     bool
+	volumeLeftHoldTicks  int
+	volumeRightHoldTicks int
+
+	confirmIndex           int
+	pendingSlot            int
+	showReturnTitleConfirm bool
+	inputLockTicks         int
 
 	upgradeProgress     float64
 	upgradeHoldArmed    bool
-	skillLevelCursor    int // ← 追加：スキル行内での数字(Lv)カーソル
+	skillLevelCursor    int
 	skillLevelSelecting bool
-	pendingSkill        int // ← 追加：メニューからの回復スキル使用時、対象スキルIndex+1（0=未使用）
-	pendingSkillLevel   int // ← 追加：メニューからの回復スキル使用時、使用するLv
+	pendingSkill        int
+	pendingSkillLevel   int
 
-	// ── アイテム使用（メニュー）関連 ──
-	itemListIndex   int    // アイテム一覧でのカーソル位置
-	pendingItemID   string // 対象選択中に使用するアイテムID（""=未選択）
-	itemTargetIndex int    // アイテムの対象選択カーソル（0〜3=個別、partySize=全体）
+	itemListIndex   int
+	pendingItemID   string
+	itemTargetIndex int
+
+	notice      string
+	noticeTicks int
 }
 
 func NewMenuScene(game *Game, backScene Scene) *MenuScene {
 	return &MenuScene{
 		game:      game,
 		backScene: backScene,
-		menuIndex: game.LastMenuIndex,
-		commands:  []string{"アイテム", "スキル", "ステータス", "セーブ", "ロード", "オプション", "タイトルに戻る"}, // ← 追加
+		menuIndex: game.rememberedIndex(game.LastMenuIndex),
+		commands:  []string{"アイテム", "スキル", "ステータス", "セーブ", "ロード", "オプション", "タイトルに戻る"},
 		menuState: menuStateMain,
+		slotIndex: game.rememberedIndex(game.LastSlotIndex),
 	}
 }
 
 func (m *MenuScene) Update(dt float64) Scene {
 	m.nextScene = nil
 	m.previewTicks++
+	m.tickNotice()
+
+	if !m.isModalMenuState() && m.menuState != menuStateMain {
+		if idx, ok := m.hitTestMainCommandList(); ok {
+			m.enterCommand(idx)
+			if m.nextScene != nil {
+				return m.nextScene
+			}
+			return m
+		}
+	}
+
+	if m.showReturnTitleConfirm {
+		m.updateReturnTitleConfirm()
+		if m.nextScene != nil {
+			return m.nextScene
+		}
+		return m
+	}
 
 	switch m.menuState {
 	case menuStateMain:
@@ -125,7 +155,7 @@ func (m *MenuScene) Update(dt float64) Scene {
 		m.updateItemList()
 	case menuStateItemTarget:
 		m.updateItemTarget()
-	case menuStateStatus: // ← 追加
+	case menuStateStatus:
 		m.updateStatus()
 	case menuStateSaveSlot, menuStateLoadSlot:
 		m.updateSlot()
@@ -137,14 +167,10 @@ func (m *MenuScene) Update(dt float64) Scene {
 		m.updateSaveDone()
 	case menuStateOption:
 		m.updateOption()
-	case menuStateReturnTitleConfirm: // ← 追加
-		m.updateReturnTitleConfirm()
-	case menuStateOptionAdjust:
-		m.updateOptionAdjust()
-	case menuStateMessageSpeedAdjust:
-		m.updateMessageSpeedAdjust()
-	case menuStateDisplayModeAdjust: // ← 追加
-		m.updateDisplayModeAdjust() // ← 追加
+	case menuStateOptionResetConfirm:
+		m.updateOptionResetConfirm()
+	case menuStateOptionResetDone:
+		m.updateOptionResetDone()
 	}
 
 	if m.nextScene != nil {
@@ -153,71 +179,168 @@ func (m *MenuScene) Update(dt float64) Scene {
 	return m
 }
 
+func (m *MenuScene) hitTestMainCommandList() (int, bool) {
+	rects := make([]tapRect, len(m.commands))
+	for i := range m.commands {
+		y := cmdListStartY + float64(i)*cmdListRowGapY
+		rects[i] = tapRect{x: cmdListStartX - 4, y: y - 4, w: menuFrameDividerX - cmdListStartX, h: cmdListRowGapY}
+	}
+	return hitTestTapRects(rects)
+}
+
+const (
+	partyRowHitX = menuStatusOffsetX - 70
+	partyRowHitW = 290
+)
+
+func (m *MenuScene) hitTestPartyRows() (int, bool) {
+	rects := make([]tapRect, partySize)
+	for i := 0; i < partySize; i++ {
+		itemY := menuStatusStartY + float64(i)*menuStatusSpacingY
+		rects[i] = tapRect{x: partyRowHitX, y: itemY - 20, w: partyRowHitW, h: 100}
+	}
+	return hitTestTapRects(rects)
+}
+
+func (m *MenuScene) allTargetRowRect() tapRect {
+	y := menuStatusStartY + partySize*menuStatusSpacingY - drawAllTargetRowYOffset
+	return tapRect{x: partyRowHitX, y: y - 20, w: partyRowHitW, h: 60}
+}
+
+func (m *MenuScene) hitTestPartyRowsWithAll(allowAll bool) (int, bool) {
+	rects := make([]tapRect, 0, partySize+1)
+	for i := 0; i < partySize; i++ {
+		itemY := menuStatusStartY + float64(i)*menuStatusSpacingY
+		rects = append(rects, tapRect{x: partyRowHitX, y: itemY - 20, w: partyRowHitW, h: 100})
+	}
+	if allowAll {
+		rects = append(rects, m.allTargetRowRect())
+	}
+	return hitTestTapRects(rects)
+}
+
 func (m *MenuScene) updateMain() {
-	if isEscapePressed() {
+	if isEscapePressed() || isMenuCloseKeyPressed() {
 		m.nextScene = m.backScene
 		return
 	}
-	if isMenuDownPressed() {
+	if isMenuDownRepeat() {
 		m.menuIndex = (m.menuIndex + 1) % len(m.commands)
-		m.game.LastMenuIndex = m.menuIndex // ← 追加：移動しただけで記憶
+		m.game.LastMenuIndex = m.menuIndex
 	}
-	if isMenuUpPressed() {
+	if isMenuUpRepeat() {
 		m.menuIndex = (m.menuIndex - 1 + len(m.commands)) % len(m.commands)
-		m.game.LastMenuIndex = m.menuIndex // ← 追加：移動しただけで記憶
+		m.game.LastMenuIndex = m.menuIndex
 	}
-	if !isConfirmKeyPressed() {
+	tapped := false
+	if idx, ok := m.hitTestMainCommandList(); ok {
+		m.menuIndex = idx
+		m.game.LastMenuIndex = m.menuIndex
+		tapped = true
+	}
+	if !isConfirmKeyPressed() && !tapped {
+		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.nextScene = m.backScene
+		}
 		return
 	}
-	if !isConfirmKeyPressed() {
-		return
-	}
-	m.game.LastMenuIndex = m.menuIndex // ← この行は残しておいてOK（重複だが害はない、削除しても良い）
-	switch m.menuIndex {
-	case 0: // アイテム
-		m.itemListIndex = 0
-		m.menuState = menuStateItemList
-	case 1: // スキル
-		m.skillCharIndex = m.game.LastSkillCharIndex
-		m.menuState = menuStateSkillCharSel
-	case 2: // ステータス
-		m.statusCharIndex = m.game.LastStatusCharIndex
-		m.menuState = menuStateStatus
-	case 3: // セーブ
-		m.enterSlotScreen(true)
-	case 4: // ロード
-		m.enterSlotScreen(false)
-	case 5: // オプション
-		m.menuState = menuStateOption
-	case 6: // タイトルに戻る ← 追加
-		m.confirmIndex = 1 // デフォルト「いいえ」にしておくと事故防止になる
-		m.menuState = menuStateReturnTitleConfirm
+	m.enterCommand(m.menuIndex)
+}
 
+func (m *MenuScene) openStatusFor(idx int, back string) {
+	m.statusCharIndex = idx
+	m.game.LastStatusCharIndex = idx
+	m.statusReturnState = back
+	m.menuState = menuStateStatus
+}
+
+func (m *MenuScene) statusBackState() string {
+	if m.statusReturnState == "" {
+		return menuStateMain
 	}
+	return m.statusReturnState
+}
+
+func (m *MenuScene) enterCommand(idx int) {
+	m.menuIndex = idx
+	m.game.LastMenuIndex = idx
+	m.clearNotice()
+	switch idx {
+	case 0:
+		m.pendingItemID = ""
+		m.menuState = menuStateItemList
+	case 1:
+		m.skillCharIndex = m.game.rememberedIndex(m.game.LastSkillCharIndex)
+		m.menuState = menuStateSkillCharSel
+	case 2:
+		m.openStatusFor(m.game.rememberedIndex(m.game.LastStatusCharIndex), menuStateMain)
+	case 3:
+		m.enterSlotScreen(true)
+	case 4:
+		m.enterSlotScreen(false)
+	case 5:
+		m.menuState = menuStateOption
+	case 6:
+		m.confirmIndex = 1
+		m.showReturnTitleConfirm = true
+		lockDialogInput(&m.inputLockTicks)
+		m.resetSlotDrag()
+	}
+}
+
+func (m *MenuScene) hitTestStatusPartyIcons() (int, bool) {
+	rects := make([]tapRect, partySize)
+	for i := 0; i < partySize; i++ {
+		cx := statusPartyIconStartX + float64(i)*statusPartyIconGap
+		rects[i] = tapRect{x: cx - statusPartyIconGap/2, y: statusPartyIconY - 45, w: statusPartyIconGap, h: 90}
+	}
+	return hitTestTapRects(rects)
 }
 
 func (m *MenuScene) updateStatus() {
 	if isEscapePressed() {
-		m.menuState = menuStateMain
+		m.menuState = m.statusBackState()
 		return
 	}
 	if isMenuRightPressed() {
 		m.statusCharIndex = (m.statusCharIndex + 1) % partySize
-		m.game.LastStatusCharIndex = m.statusCharIndex // ← 追加
+		m.game.LastStatusCharIndex = m.statusCharIndex
 	}
 	if isMenuLeftPressed() {
 		m.statusCharIndex = (m.statusCharIndex - 1 + partySize) % partySize
-		m.game.LastStatusCharIndex = m.statusCharIndex // ← 追加
+		m.game.LastStatusCharIndex = m.statusCharIndex
+	}
+	if idx, ok := m.hitTestStatusPartyIcons(); ok {
+		m.statusCharIndex = idx
+		m.game.LastStatusCharIndex = m.statusCharIndex
+	}
+
+	leftArrowX, rightArrowX := statusPartyArrowX(m.game)
+	if hitTestLeftRightArrow(leftArrowX, statusPartyIconY) {
+		m.statusCharIndex = (m.statusCharIndex - 1 + partySize) % partySize
+		m.game.LastStatusCharIndex = m.statusCharIndex
+	}
+	if hitTestLeftRightArrow(rightArrowX, statusPartyIconY) {
+		m.statusCharIndex = (m.statusCharIndex + 1) % partySize
+		m.game.LastStatusCharIndex = m.statusCharIndex
+	}
+	if unrelatedTapOutsideRects(menuMainContentRect()) {
+		m.menuState = m.statusBackState()
 	}
 }
 
 func (m *MenuScene) enterSlotScreen(save bool) {
 	m.saveMode = save
-	m.slotIndex = 0
+	if m.slotIndex < 0 || m.slotIndex >= maxSaveSlots {
+		m.slotIndex = 0
+	}
+	m.slotScrollTop = clampSlotScrollTop(0, m.slotIndex)
+	m.slotDragAccum = 0
 	for i := 0; i < maxSaveSlots; i++ {
 		m.slotData[i], _ = LoadGame(i + 1)
 		m.slotThumbs[i] = LoadThumb(i + 1)
 	}
+	m.resetSlotDrag()
 	if save {
 		m.menuState = menuStateSaveSlot
 	} else {
@@ -225,7 +348,10 @@ func (m *MenuScene) enterSlotScreen(save bool) {
 	}
 }
 
-// reloadSlotData はスロット一覧だけを再読込する（カーソル位置は変更しない）
+func (m *MenuScene) resetSlotDrag() {
+	m.slotDrag = dragScrollState{suppressUntilRelease: true}
+}
+
 func (m *MenuScene) reloadSlotData() {
 	for i := 0; i < maxSaveSlots; i++ {
 		m.slotData[i], _ = LoadGame(i + 1)
@@ -238,46 +364,95 @@ func (m *MenuScene) updateSlot() {
 		m.menuState = menuStateMain
 		return
 	}
-	if isMenuUpPressed() {
+	if isMenuUpRepeat() {
 		m.slotIndex = (m.slotIndex - 1 + maxSaveSlots) % maxSaveSlots
+		m.slotScrollTop = clampSlotScrollTop(m.slotScrollTop, m.slotIndex)
+		m.slotDragAccum = 0
 	}
-	if isMenuDownPressed() {
+	if isMenuDownRepeat() {
 		m.slotIndex = (m.slotIndex + 1) % maxSaveSlots
+		m.slotScrollTop = clampSlotScrollTop(m.slotScrollTop, m.slotIndex)
+		m.slotDragAccum = 0
 	}
-	if !isConfirmKeyPressed() {
+
+	cardH := float64(m.game.SaveThumbFrameImg.Bounds().Dy())
+
+	barX, barY, barW, barH := slotScrollBarRect(slotCardStartX, slotCardStartY)
+	if scrollBarMoveAmt := m.slotScrollBarDrag.step(barX, barY, barW, barH); scrollBarMoveAmt != 0 {
+		if moveRange := slotScrollBarMoveRange(); moveRange > 0 {
+			m.slotScrollBarDrag.stepScrollTop(-scrollBarMoveAmt/moveRange*float64(maxSlotScrollTop)*cardH, cardH, &m.slotScrollTop, maxSlotScrollTop, &m.slotDragAccum)
+		}
+	}
+	scrollBarHeld := m.slotScrollBarDrag.active
+
+	if _, wheelY := ebiten.Wheel(); wheelY != 0 && !scrollBarHeld {
+		m.slotDrag.stepScrollTop(wheelY*wheelScrollPxPerNotch, cardH, &m.slotScrollTop, maxSlotScrollTop, &m.slotDragAccum)
+	}
+
+	dragArea := cardH * slotsPerPageView
+	dragRight := slotScrollBarX(slotCardStartX) - scrollBarTouchPad
+	moveAmt := m.slotDrag.step(menuFrameDividerX, slotCardStartY, dragRight-menuFrameDividerX, dragArea)
+
+	tapped := false
+	if m.slotDrag.justTapped {
+		if idx, ok := hitTestSlotList(m.game, m.slotDrag.tapX, m.slotDrag.tapY, m.slotScrollTop, slotCardStartX, slotCardStartY); ok {
+			m.slotIndex = idx
+			tapped = true
+		}
+	}
+
+	if !scrollBarHeld {
+		m.slotDrag.stepScrollTop(moveAmt, cardH, &m.slotScrollTop, maxSlotScrollTop, &m.slotDragAccum)
+	}
+
+	if !isConfirmKeyPressed() && !tapped {
+		cardW := float64(m.game.SaveThumbFrameImg.Bounds().Dx())
+		cardRect := tapRect{x: slotCardStartX, y: slotCardStartY, w: cardW, h: dragArea}
+		barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
+		if unrelatedTapOutsideRects(cardRect, barRect) {
+			m.menuState = menuStateMain
+		}
 		return
 	}
 
 	slot := m.slotIndex + 1
+	m.game.LastSlotIndex = m.slotIndex
 
 	if m.saveMode {
+		if _, ok := m.backScene.(*FieldScene); !ok {
+			m.showNotice("ここではセーブできません")
+			return
+		}
 		m.pendingSlot = slot
 		m.confirmIndex = 0
 		m.menuState = menuStateSaveConfirm
+		lockDialogInput(&m.inputLockTicks)
 	} else {
 		d := m.slotData[m.slotIndex]
 		if d == nil {
+			m.showNotice("このスロットにはセーブデータがありません")
 			return
 		}
 		m.pendingSlot = slot
 		m.confirmIndex = 0
 		m.menuState = menuStateLoadConfirm
+		lockDialogInput(&m.inputLockTicks)
 	}
 }
 
-func (m *MenuScene) updateSaveConfirm() {
-	if isMenuUpPressed() || isMenuDownPressed() {
-		m.confirmIndex = 1 - m.confirmIndex
+func (m *MenuScene) saveConfirmMessage() string {
+	if i := m.pendingSlot - 1; i >= 0 && i < maxSaveSlots && m.slotData[i] != nil {
+		return "上書きセーブしますか？"
 	}
-	if isEscapePressed() {
-		m.menuState = menuStateSaveSlot
-		return
-	}
-	if !isConfirmKeyPressed() {
-		return
-	}
+	return "セーブしますか？"
+}
 
-	if m.confirmIndex == 1 {
+func (m *MenuScene) updateSaveConfirm() {
+	switch m.pollConfirmDialog() {
+	case confirmPending:
+		return
+	case confirmNo:
+		m.resetSlotDrag()
 		m.menuState = menuStateSaveSlot
 		return
 	}
@@ -294,47 +469,35 @@ func (m *MenuScene) updateSaveConfirm() {
 		}
 	}
 	m.menuState = menuStateSaveDone
+	lockDialogInput(&m.inputLockTicks)
 }
 
 func (m *MenuScene) updateReturnTitleConfirm() {
-	if isMenuUpPressed() || isMenuDownPressed() {
-		m.confirmIndex = 1 - m.confirmIndex
-	}
-	if isEscapePressed() {
-		m.menuState = menuStateMain
+	switch m.pollConfirmDialog() {
+	case confirmPending:
+		return
+	case confirmNo:
+		m.showReturnTitleConfirm = false
 		return
 	}
-	if !isConfirmKeyPressed() {
-		return
-	}
-	if m.confirmIndex == 1 { // いいえ
-		m.menuState = menuStateMain
-		return
-	}
-	// はい：タイトルへ
 	m.nextScene = NewTitleScene(m.game)
 }
 
 func (m *MenuScene) updateLoadConfirm() {
-	if isMenuUpPressed() || isMenuDownPressed() {
-		m.confirmIndex = 1 - m.confirmIndex
-	}
-	if isEscapePressed() {
-		m.menuState = menuStateLoadSlot
+	switch m.pollConfirmDialog() {
+	case confirmPending:
 		return
-	}
-	if !isConfirmKeyPressed() {
-		return
-	}
-
-	if m.confirmIndex == 1 {
+	case confirmNo:
+		m.resetSlotDrag()
 		m.menuState = menuStateLoadSlot
 		return
 	}
 
 	d := m.slotData[m.pendingSlot-1]
 	if d == nil {
+		m.resetSlotDrag()
 		m.menuState = menuStateLoadSlot
+		m.showNotice("このスロットにはセーブデータがありません")
 		return
 	}
 	m.game.TotalPlayTime = d.PlayTime
@@ -356,26 +519,29 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.PlayerNextEXP = d.PlayerNextEXP
 	m.game.Inventory = d.Inventory
 	m.game.OpenedChests = d.OpenedChests
+	m.game.UnlockedWalls = d.UnlockedWalls
+	m.game.Keys = d.Keys
+	m.game.RaisedLevers = d.RaisedLevers
+	m.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
+	m.game.BlockPositions = d.BlockPositions
+	m.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
 	field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
 	if err != nil {
+		m.resetSlotDrag()
 		m.menuState = menuStateLoadSlot
+		m.showNotice("ロードに失敗しました")
 		return
 	}
 	m.game.ChangeSceneWithFade(field, fadeTimeContinue)
 }
 
 func (m *MenuScene) updateSaveDone() {
-	if isEscapePressed() {
-		m.reloadSlotData()
-		m.menuState = menuStateSaveSlot
+	if !m.pollMessageDialog() {
 		return
 	}
-	if !isConfirmKeyPressed() {
-		return
-	}
-	// セーブ画面に戻る（カーソルは保存したスロットのまま、一覧だけ最新化）
 	m.reloadSlotData()
 	m.slotIndex = m.pendingSlot - 1
+	m.resetSlotDrag()
 	m.menuState = menuStateSaveSlot
 }

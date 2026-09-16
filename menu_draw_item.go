@@ -1,8 +1,5 @@
 package main
 
-// menu_draw_item.go: メニュー画面のアイテム一覧・使用対象選択の描画
-// スキル拡張パネル(メニュー画面拡張.png)と同じ画像・レイアウトを流用する。
-
 import (
 	"fmt"
 
@@ -11,21 +8,12 @@ import (
 )
 
 const (
-	itemListRowGapY       = 40.0 // 行間（スキル一覧のskillSubRowGapYより狭くする）
-	itemListCountFontSize = 28.0 // 所持数(x個)の文字サイズ（名前より大きく）
+	itemRowGapY       = 40.0
+	itemCountFontSize = 28.0
+	itemCountX        = 922.0
 )
 
 func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
-	img := m.game.MenuSkillPanelImg
-	winX := skillSubPanelX
-	winY := skillSubPanelY
-
-	if img != nil {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(winX, winY)
-		screen.DrawImage(img, op)
-	}
-
 	items := m.usableFieldItems()
 	if len(items) == 0 {
 		return
@@ -36,7 +24,7 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 		if !ok {
 			continue
 		}
-		rowCenterY := winY + skillSubRowStartOffsetY + float64(i)*itemListRowGapY
+		rowCenterY := skillRowStartY + float64(i)*itemRowGapY
 
 		selected := false
 		if m.menuState == menuStateItemList {
@@ -50,25 +38,25 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 			nameCol = uiColorSelect
 		}
 
-		nameFace := m.game.FontFace(20)
+		nameFace := m.game.FontFace(skillNameFontSize)
 		if selected {
 			arrowOp := &text.DrawOptions{}
-			arrowOp.GeoM.Translate(winX+skillSubNameOffsetX, rowCenterY)
+			arrowOp.GeoM.Translate(skillNameX, rowCenterY)
 			arrowOp.SecondaryAlign = text.AlignCenter
 			arrowOp.ColorScale.ScaleWithColor(nameCol)
 			text.Draw(screen, "▶", nameFace, arrowOp)
 		}
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(winX+skillSubNameOffsetX+text.Advance("▶ ", nameFace), rowCenterY)
+		nameOp.GeoM.Translate(skillNameX+text.Advance("▶ ", nameFace), rowCenterY)
 		nameOp.SecondaryAlign = text.AlignCenter
 		nameOp.ColorScale.ScaleWithColor(nameCol)
 		text.Draw(screen, def.Name, nameFace, nameOp)
 
 		countOp := &text.DrawOptions{}
-		countOp.GeoM.Translate(winX+skillSubSPOffsetX, rowCenterY)
+		countOp.GeoM.Translate(itemCountX, rowCenterY)
 		countOp.SecondaryAlign = text.AlignCenter
 		countOp.PrimaryAlign = text.AlignEnd
 		countOp.ColorScale.ScaleWithColor(nameCol)
-		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), m.game.FontFace(itemListCountFontSize), countOp)
+		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), m.game.FontFace(itemCountFontSize), countOp)
 	}
 }

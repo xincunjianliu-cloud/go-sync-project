@@ -3,13 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
-// 方向: 0=下, 1=左, 2=右, 3=上
 type FieldDirectionConfig struct {
 	IdleRow int `json:"idleRow"`
 	WalkRow int `json:"walkRow"`
@@ -25,6 +22,30 @@ const (
 	MoveStateDash
 )
 
+type FieldDrawConfig struct {
+	FootOffsetX float64 `json:"footOffsetX"`
+	FootOffsetY float64 `json:"footOffsetY"`
+}
+
+type FieldHorizontalCollisionOverride struct {
+	OffsetX float64 `json:"offsetX"`
+}
+
+type FieldCollisionConfig struct {
+	Width   float64 `json:"width"`
+	Height  float64 `json:"height"`
+	OffsetX float64 `json:"offsetX"`
+	OffsetY float64 `json:"offsetY"`
+
+	Left  *FieldHorizontalCollisionOverride `json:"left,omitempty"`
+	Right *FieldHorizontalCollisionOverride `json:"right,omitempty"`
+}
+
+type FieldCameraConfig struct {
+	OffsetX float64 `json:"offsetX"`
+	OffsetY float64 `json:"offsetY"`
+}
+
 type FieldPlayerConfig struct {
 	Sprite      string  `json:"sprite"`
 	FrameWidth  int     `json:"frameWidth"`
@@ -33,22 +54,9 @@ type FieldPlayerConfig struct {
 
 	Directions [4]FieldDirectionConfig `json:"directions"`
 
-	Draw struct {
-		FootOffsetX float64 `json:"footOffsetX"`
-		FootOffsetY float64 `json:"footOffsetY"`
-	} `json:"draw"`
-
-	Collision struct {
-		Width   float64 `json:"width"`
-		Height  float64 `json:"height"`
-		OffsetX float64 `json:"offsetX"`
-		OffsetY float64 `json:"offsetY"`
-	} `json:"collision"`
-
-	Camera struct {
-		OffsetX float64 `json:"offsetX"`
-		OffsetY float64 `json:"offsetY"`
-	} `json:"camera"`
+	Draw      FieldDrawConfig      `json:"draw"`
+	Collision FieldCollisionConfig `json:"collision"`
+	Camera    FieldCameraConfig    `json:"camera"`
 
 	AnimFramesPerStep   int     `json:"animFramesPerStep"`
 	MoveSpeed           float64 `json:"moveSpeed"`
@@ -57,7 +65,7 @@ type FieldPlayerConfig struct {
 
 func DefaultFieldPlayerConfig() FieldPlayerConfig {
 	return FieldPlayerConfig{
-		Sprite:      "assets/images/player_walk.png",
+		Sprite:      "assets/images/field/player_walk.png",
 		FrameWidth:  64,
 		FrameHeight: 96,
 		Scale:       1,
@@ -67,29 +75,19 @@ func DefaultFieldPlayerConfig() FieldPlayerConfig {
 			{IdleRow: 2, WalkRow: 6, DashRow: 10, Frames: 4},
 			{IdleRow: 3, WalkRow: 7, DashRow: 11, Frames: 4},
 		},
-		Draw: struct {
-			FootOffsetX float64 `json:"footOffsetX"`
-			FootOffsetY float64 `json:"footOffsetY"`
-		}{FootOffsetX: 16, FootOffsetY: 10},
-		Collision: struct {
-			Width   float64 `json:"width"`
-			Height  float64 `json:"height"`
-			OffsetX float64 `json:"offsetX"`
-			OffsetY float64 `json:"offsetY"`
-		}{Width: 20, Height: 12, OffsetX: 0, OffsetY: -4},
-		Camera: struct {
-			OffsetX float64 `json:"offsetX"`
-			OffsetY float64 `json:"offsetY"`
-		}{OffsetX: 0, OffsetY: -14},
+		Draw:                FieldDrawConfig{FootOffsetX: 16, FootOffsetY: 10},
+		Collision:           FieldCollisionConfig{Width: 20, Height: 12, OffsetX: 0, OffsetY: -4},
+		Camera:              FieldCameraConfig{OffsetX: 0, OffsetY: -14},
 		AnimFramesPerStep:   10,
 		MoveSpeed:           300,
 		DashSpeedMultiplier: 1.8,
 	}
 }
+
 func LoadFieldPlayerConfig(path string) (FieldPlayerConfig, *ebiten.Image, error) {
 	cfg := DefaultFieldPlayerConfig()
 
-	data, err := os.ReadFile(path)
+	data, err := loadAssetBytes(path)
 	if err == nil {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			return cfg, nil, fmt.Errorf("field player config parse: %w", err)
@@ -118,7 +116,7 @@ func LoadFieldPlayerConfig(path string) (FieldPlayerConfig, *ebiten.Image, error
 		cfg.DashSpeedMultiplier = 1.8
 	}
 
-	img, _, err := ebitenutil.NewImageFromFile(cfg.Sprite)
+	img, err := loadAssetImage(cfg.Sprite)
 	if err != nil {
 		return cfg, nil, fmt.Errorf("load player sprite %q: %w", cfg.Sprite, err)
 	}
@@ -127,7 +125,25 @@ func LoadFieldPlayerConfig(path string) (FieldPlayerConfig, *ebiten.Image, error
 }
 
 func (cfg FieldPlayerConfig) CollisionRectAt(px, py float64) (left, top, right, bottom float64) {
-	cx := px + cfg.Collision.OffsetX
+	width, offsetX := cfg.Collision.Width, cfg.Collision.OffsetX
+	cx := px + offsetX
+	cy := py + cfg.Collision.OffsetY
+	return cx, cy, cx + width, cy + cfg.Collision.Height
+}
+
+func (cfg FieldPlayerConfig) CollisionRectForDirAt(dir int, px, py float64) (left, top, right, bottom float64) {
+	offsetX := cfg.Collision.OffsetX
+	switch dir {
+	case 1:
+		if cfg.Collision.Left != nil {
+			offsetX = cfg.Collision.Left.OffsetX
+		}
+	case 2:
+		if cfg.Collision.Right != nil {
+			offsetX = cfg.Collision.Right.OffsetX
+		}
+	}
+	cx := px + offsetX
 	cy := py + cfg.Collision.OffsetY
 	return cx, cy, cx + cfg.Collision.Width, cy + cfg.Collision.Height
 }

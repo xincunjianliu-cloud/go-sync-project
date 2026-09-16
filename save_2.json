@@ -2,57 +2,150 @@
   "slot_id": 2,
   "location_name": "ダンジョンA",
   "current_map": "assets/maps/ダンジョンA.tmj",
-  "player_x": 626,
-  "player_y": 407,
-  "player_dir": 2,
+  "player_x": 928,
+  "player_y": 1007,
+  "player_dir": 1,
   "player_hp": [
-    112,
-    78,
-    121,
-    99
+    100,
+    70,
+    110,
+    90
   ],
   "player_max_hp": [
-    112,
-    78,
-    121,
-    99
+    100,
+    70,
+    110,
+    90
   ],
   "player_mp": [
-    12,
-    47,
-    25,
-    14
+    15,
+    40,
+    20,
+    10
   ],
   "player_max_mp": [
-    19,
-    47,
-    25,
-    14
+    15,
+    40,
+    20,
+    10
   ],
   "player_atk": [
-    19,
-    9,
-    15,
-    15
+    1,
+    1,
+    1,
+    1
+  ],
+  "player_magic_atk": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "player_def": [
+    1000,
+    1000,
+    1000,
+    1000
+  ],
+  "player_magic_def": [
+    1000,
+    1000,
+    1000,
+    1000
+  ],
+  "player_spd": [
+    30,
+    30,
+    30,
+    30
+  ],
+  "player_luck": [
+    5,
+    8,
+    4,
+    10
+  ],
+  "player_sp": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "player_skill_lv": [
+    [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ]
   ],
   "player_lv": [
-    2,
-    2,
-    2,
-    2
+    1,
+    1,
+    1,
+    1
   ],
   "player_exp": [
-    95,
-    95,
-    92,
-    98
+    0,
+    0,
+    0,
+    0
   ],
   "player_next_exp": [
-    110,
-    115,
-    116,
-    109
+    65,
+    65,
+    65,
+    65
   ],
-  "play_time": 139.9500000000035,
-  "saved_at": "2026/09/09"
+  "boss_defeated_flags": [
+    false,
+    false,
+    false,
+    false
+  ],
+  "play_time": 81.24999999999667,
+  "saved_at": "2026/09/15",
+  "inventory": [
+    {
+      "item_id": "potion",
+      "count": 1
+    }
+  ],
+  "opened_chests": {
+    "assets/maps/ダンジョンA.tmj|736.0_3392.0": true
+  }
 }

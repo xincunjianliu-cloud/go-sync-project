@@ -1270,7 +1270,7 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"event_trigger"
+                         "value":"trigger"
                         }],
                  "rotation":0,
                  "type":"",
@@ -1360,7 +1360,7 @@
         {
          "columns":29,
          "firstgid":1,
-         "image":"..\/..\/..\/..\/Downloads\/Tile_set_Shool_Set(11).png",
+         "image":"..\/images\/field\/Tile_set_School_Set.png",
          "imageheight":960,
          "imagewidth":928,
          "margin":0,

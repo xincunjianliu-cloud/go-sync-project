@@ -14,15 +14,18 @@ const (
 	skipHintMargin = 24.0
 )
 
-func drawSkipHint(screen *ebiten.Image, game *Game, holdElapsed, holdMax float64) {
+func skipHintCenter(game *Game) (cx, cy float64) {
 	labelFace := game.FontFace(12)
-	labelText := "スキップ"
-	labelWidth := text.Advance(labelText, labelFace)
+	labelWidth := text.Advance("スキップ", labelFace)
 
-	// 右端をskipHintMarginに固定し、円→ラベルの順で左から並べる
 	rightX := float64(gameWidth) - skipHintMargin
-	cx := rightX - labelWidth - 8 - skipHintRadius
-	cy := float64(gameHeight) - skipHintMargin
+	cx = rightX - labelWidth - 8 - skipHintRadius
+	cy = float64(gameHeight) - skipHintMargin
+	return
+}
+
+func drawSkipHint(screen *ebiten.Image, game *Game, holdElapsed, holdMax float64) {
+	cx, cy := skipHintCenter(game)
 
 	drawRingOutline(screen, cx, cy, skipHintRadius, color.RGBA{255, 255, 255, 90})
 
@@ -67,8 +70,6 @@ func drawRingOutline(screen *ebiten.Image, cx, cy, radius float64, col color.Col
 	vector.StrokePath(screen, &ring, strokeOpts, drawOpts)
 }
 
-// drawProgressArc は中心角-90度（真上）から時計回りに、コンパスで円を描くように
-// 線だけで進捗を表示する（塗りつぶさない）。
 func drawProgressArc(screen *ebiten.Image, cx, cy, radius, progress float64) {
 	if progress > 1 {
 		progress = 1

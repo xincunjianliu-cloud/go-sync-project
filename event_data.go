@@ -3,8 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -16,13 +15,13 @@ type EventCommand struct {
 
 type BossDialogue struct {
 	Commands     []EventCommand
-	SpeakerSlots map[string]int // 0=左, 1=右
+	SpeakerSlots map[string]int
 }
 
 var bossBattleDialogues = map[int]BossDialogue{}
 var bossClearDialogues = map[int]BossDialogue{}
 
-// --- JSON読み込み用の中間構造体 ---
+var storyDialogues = map[string]BossDialogue{}
 
 type dialogueCommandJSON struct {
 	Speaker string `json:"speaker"`
@@ -39,8 +38,6 @@ type bossDialogueFileJSON struct {
 	Clear  *bossDialogueJSON `json:"clear"`
 }
 
-// speakerNameMap は JSON上の話者キー文字列 → ゲーム内の話者名定数 の対応表。
-// 新しい話者を追加したらここに登録する。
 var speakerNameMap = buildSpeakerNameMap()
 
 func buildSpeakerNameMap() map[string]string {
@@ -54,8 +51,6 @@ func buildSpeakerNameMap() map[string]string {
 	return m
 }
 
-// resolveSpeaker はJSON上の話者キーをゲーム内の話者名に変換する。
-// "" と "SYSTEM_COMMAND" はそのまま通す（システムメッセージ用）。
 func resolveSpeaker(key string) (string, error) {
 	if key == "" || key == "SYSTEM_COMMAND" {
 		return key, nil
@@ -66,7 +61,6 @@ func resolveSpeaker(key string) (string, error) {
 	return "", fmt.Errorf("未知の話者キー: %q", key)
 }
 
-// convertBossDialogue はJSON中間構造体をゲーム内の BossDialogue に変換する。
 func convertBossDialogue(src *bossDialogueJSON, fileName string) BossDialogue {
 	if src == nil {
 		return BossDialogue{}
@@ -95,34 +89,53 @@ func convertBossDialogue(src *bossDialogueJSON, fileName string) BossDialogue {
 	return BossDialogue{Commands: commands, SpeakerSlots: slots}
 }
 
-// LoadDialogues は assets/dialogues/ 以下の boss_N.json を全て読み込み、
-// bossBattleDialogues / bossClearDialogues を構築する。
-// ゲーム起動時に一度だけ呼ぶこと。
 func LoadDialogues(dir string) error {
 	for bossNum := 1; bossNum <= 4; bossNum++ {
-		path := filepath.Join(dir, fmt.Sprintf("boss_%d.json", bossNum))
+		filePath := path.Join(dir, fmt.Sprintf("boss_%d.json", bossNum))
 
-		data, err := os.ReadFile(path)
+		data, err := loadAssetBytes(filePath)
 		if err != nil {
-			fmt.Printf("警告: %s の読み込みに失敗しました（このボスのセリフは空になります）: %v\n", path, err)
+			fmt.Printf("警告: %s の読み込みに失敗しました（このボスのセリフは空になります）: %v\n", filePath, err)
 			continue
 		}
 
 		var fileJSON bossDialogueFileJSON
 		if err := json.Unmarshal(data, &fileJSON); err != nil {
-			fmt.Printf("警告: %s のJSON解析に失敗しました（このボスのセリフは空になります）: %v\n", path, err)
+			fmt.Printf("警告: %s のJSON解析に失敗しました（このボスのセリフは空になります）: %v\n", filePath, err)
 			continue
 		}
 
-		bossBattleDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Battle, path))
-		bossClearDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Clear, path))
+		bossBattleDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Battle, filePath))
+		bossClearDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Clear, filePath))
+	}
+
+	if err := loadStoryDialogues(dir); err != nil {
+		fmt.Printf("警告: %v\n", err)
+	}
+
+	return nil
+}
+
+func loadStoryDialogues(dir string) error {
+	filePath := path.Join(dir, "story.json")
+
+	data, err := loadAssetBytes(filePath)
+	if err != nil {
+		return nil
+	}
+
+	var fileJSON map[string]bossDialogueJSON
+	if err := json.Unmarshal(data, &fileJSON); err != nil {
+		return fmt.Errorf("%s のJSON解析に失敗しました: %w", filePath, err)
+	}
+
+	for id, entry := range fileJSON {
+		entry := entry
+		storyDialogues[id] = filterEmptyCommands(convertBossDialogue(&entry, fmt.Sprintf("%s[%s]", filePath, id)))
 	}
 	return nil
 }
 
-// GetEventCommands は eventID (例: "event_boss_2", "event_boss_2_clear") を解析し、
-// 対応する BossDialogue を返す。
-// ※ event_story_ 系はここでは扱わない（field_scene.go 側で個別処理）。
 func GetEventCommands(eventID string, game *Game) BossDialogue {
 	const prefix = "event_boss_"
 	if !strings.HasPrefix(eventID, prefix) {
@@ -151,7 +164,11 @@ func GetEventCommands(eventID string, game *Game) BossDialogue {
 	return bossBattleDialogues[bossNum]
 }
 
-// filterEmptyCommands は Text が空のコマンドを取り除く。
+func GetStoryDialogue(id string) (BossDialogue, bool) {
+	d, ok := storyDialogues[id]
+	return d, ok
+}
+
 func filterEmptyCommands(d BossDialogue) BossDialogue {
 	filtered := make([]EventCommand, 0, len(d.Commands))
 	for _, cmd := range d.Commands {
@@ -164,8 +181,6 @@ func filterEmptyCommands(d BossDialogue) BossDialogue {
 	return d
 }
 
-// validateDialogueSlots は、同じスロット(0 or 1)に
-// 2人以上の話者が割り当てられていないかチェックする。
 func validateDialogueSlots() {
 	check := func(label string, dialogues map[int]BossDialogue) {
 		for bossNum, d := range dialogues {

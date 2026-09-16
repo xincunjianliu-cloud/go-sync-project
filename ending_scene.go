@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/color"
-	"os"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -32,7 +31,7 @@ type CreditPage struct {
 }
 
 func loadCredits(path string) ([]CreditPage, error) {
-	data, err := os.ReadFile(path)
+	data, err := loadAssetBytes(path)
 	if err != nil {
 		return nil, err
 	}
@@ -51,10 +50,10 @@ const (
 	endingPhaseFadeIn = iota
 	endingPhaseHold
 	endingPhaseFadeOut
-	endingPhaseAskSave     // 「保存しますか？」はい/いいえ
-	endingPhaseSaveSlot    // スロット一覧から選択
-	endingPhaseSlotConfirm // 上書き確認
-	endingPhaseSaveDone    // 保存完了メッセージ
+	endingPhaseAskSave
+	endingPhaseSaveSlot
+	endingPhaseSlotConfirm
+	endingPhaseSaveDone
 )
 
 type EndingScene struct {
@@ -72,14 +71,20 @@ type EndingScene struct {
 
 	askSaveIndex int
 
-	slotIndex  int
-	slotData   [maxSaveSlots]*SaveData
-	slotThumbs [maxSaveSlots]*ebiten.Image
+	slotIndex         int
+	slotScrollTop     int
+	slotData          [maxSaveSlots]*SaveData
+	slotThumbs        [maxSaveSlots]*ebiten.Image
+	slotDrag          dragScrollState
+	slotScrollBarDrag dragScrollState
+	slotDragAccum     float64
 
 	confirmIndex  int
 	pendingSlot   int
 	saveResultMsg string
 	saveDoneIndex int
+
+	inputLockTicks int
 
 	nextScene Scene
 }
@@ -157,22 +162,28 @@ func (s *EndingScene) Update(dt float64) Scene {
 func (s *EndingScene) enterAskSave() {
 	s.phase = endingPhaseAskSave
 	s.askSaveIndex = 0
+	lockDialogInput(&s.inputLockTicks)
 }
 
 func (s *EndingScene) updateAskSave() {
+	if consumeDialogInputLock(&s.inputLockTicks) {
+		return
+	}
 	if isMenuUpPressed() || isMenuDownPressed() {
 		s.askSaveIndex = 1 - s.askSaveIndex
 	}
-	if !isConfirmKeyPressed() {
+	tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.askSaveIndex)
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
-	if s.askSaveIndex == 1 { // いいえ → タイトルへ
+	if s.askSaveIndex == 1 {
 		s.nextScene = NewTitleScene(s.game)
 		return
 	}
-	// はい → スロット選択へ
 	s.reloadSlotData()
 	s.slotIndex = 0
+	s.slotScrollTop = 0
 	s.phase = endingPhaseSaveSlot
 }
 
@@ -186,25 +197,61 @@ func (s *EndingScene) reloadSlotData() {
 func (s *EndingScene) updateSaveSlot() {
 	if isMenuUpPressed() {
 		s.slotIndex = (s.slotIndex - 1 + maxSaveSlots) % maxSaveSlots
+		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
 	}
 	if isMenuDownPressed() {
 		s.slotIndex = (s.slotIndex + 1) % maxSaveSlots
+		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
 	}
 	if isEscapePressed() {
-		// スロット選択をキャンセル → 保存するか聞く画面に戻る
 		s.phase = endingPhaseAskSave
 		s.askSaveIndex = 0
 		return
 	}
-	if !isConfirmKeyPressed() {
+
+	cardH := float64(s.game.SaveThumbFrameImg.Bounds().Dy())
+
+	barX, barY, barW, barH := slotScrollBarRect(slotCardStartX-80, slotCardStartY)
+	if scrollBarMoveAmt := s.slotScrollBarDrag.step(barX, barY, barW, barH); scrollBarMoveAmt != 0 {
+		if moveRange := slotScrollBarMoveRange(); moveRange > 0 {
+			s.slotScrollBarDrag.stepScrollTop(-scrollBarMoveAmt/moveRange*float64(maxSlotScrollTop)*cardH, cardH, &s.slotScrollTop, maxSlotScrollTop, &s.slotDragAccum)
+		}
+	}
+	scrollBarHeld := s.slotScrollBarDrag.active
+
+	if _, wheelY := ebiten.Wheel(); wheelY != 0 && !scrollBarHeld {
+		s.slotDrag.stepScrollTop(wheelY*wheelScrollPxPerNotch, cardH, &s.slotScrollTop, maxSlotScrollTop, &s.slotDragAccum)
+	}
+
+	dragArea := cardH * slotsPerPageView
+	dragRight := slotScrollBarX(slotCardStartX-80) - scrollBarTouchPad
+	moveAmt := s.slotDrag.step(0, slotCardStartY, dragRight, dragArea)
+
+	tapped := false
+	if s.slotDrag.justTapped {
+		if idx, ok := hitTestSlotList(s.game, s.slotDrag.tapX, s.slotDrag.tapY, s.slotScrollTop, slotCardStartX-80, slotCardStartY); ok {
+			s.slotIndex = idx
+			tapped = true
+		}
+	}
+
+	if !scrollBarHeld {
+		s.slotDrag.stepScrollTop(moveAmt, cardH, &s.slotScrollTop, maxSlotScrollTop, &s.slotDragAccum)
+	}
+
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 	s.pendingSlot = s.slotIndex + 1
 	s.confirmIndex = 0
 	s.phase = endingPhaseSlotConfirm
+	lockDialogInput(&s.inputLockTicks)
 }
 
 func (s *EndingScene) updateSlotConfirm() {
+	if consumeDialogInputLock(&s.inputLockTicks) {
+		return
+	}
 	if isMenuUpPressed() || isMenuDownPressed() {
 		s.confirmIndex = 1 - s.confirmIndex
 	}
@@ -212,10 +259,12 @@ func (s *EndingScene) updateSlotConfirm() {
 		s.phase = endingPhaseSaveSlot
 		return
 	}
-	if !isConfirmKeyPressed() {
+	tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.confirmIndex)
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
-	if s.confirmIndex == 1 { // いいえ → スロット一覧に戻る
+	if s.confirmIndex == 1 {
 		s.phase = endingPhaseSaveSlot
 		return
 	}
@@ -224,11 +273,6 @@ func (s *EndingScene) updateSlotConfirm() {
 	if s.field == nil {
 		s.saveResultMsg = "セーブに失敗しました（保存元のデータが見つかりません）"
 	} else {
-		// ★修正：SaveGameはglobalActiveFieldInstanceForSave経由で
-		// プレイヤー情報を取得するが、この代入が抜けていたため
-		// メニューから一度もセーブしていない状態でクリアデータを
-		// 保存しようとすると必ず「game instance not found」で
-		// 失敗していた。menu_scene.goと同様にここでも設定する。
 		globalActiveFieldInstanceForSave = s.field
 		err := SaveGame(slot, s.field.currentMap, s.field.px, s.field.py, s.game.PlayerHP)
 		s.game.saveThumbToFile(slot)
@@ -240,10 +284,15 @@ func (s *EndingScene) updateSlotConfirm() {
 	}
 	s.saveDoneIndex = 0
 	s.phase = endingPhaseSaveDone
+	lockDialogInput(&s.inputLockTicks)
 }
 
 func (s *EndingScene) updateSaveDone() {
-	if !isConfirmKeyPressed() {
+	if consumeDialogInputLock(&s.inputLockTicks) {
+		return
+	}
+	tapped := len(justPressedTouchPoints()) > 0
+	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 	s.nextScene = NewTitleScene(s.game)
@@ -260,14 +309,14 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		drawConfirmDialog(screen, s.game, "クリアデータを保存しますか？", s.askSaveIndex, confirmImageOffsetX)
 		return
 	case endingPhaseSaveSlot:
-		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, slotsPerPageView/2, slotCardStartX-80, slotCardStartY)
+		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 		return
 	case endingPhaseSlotConfirm:
-		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, slotsPerPageView/2, slotCardStartX-80, slotCardStartY)
+		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 		drawConfirmDialog(screen, s.game, "セーブしますか？", s.confirmIndex, confirmImageOffsetX)
 		return
 	case endingPhaseSaveDone:
-		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, slotsPerPageView/2, slotCardStartX-80, slotCardStartY)
+		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 		drawConfirmDialog(screen, s.game, s.saveResultMsg, 0, confirmImageOffsetX, false)
 		return
 	}

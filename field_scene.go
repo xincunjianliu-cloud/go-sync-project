@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -41,11 +40,10 @@ type TiledObject struct {
 	Width      float64         `json:"width"`
 	Height     float64         `json:"height"`
 	Name       string          `json:"name"`
-	Polygon    []TiledPoint    `json:"polygon"` // ★追加：斜めの壁など多角形コリジョン用の頂点リスト（オブジェクトのx,yを原点とした相対座標）
+	Polygon    []TiledPoint    `json:"polygon"`
 	Properties []TiledProperty `json:"properties"`
 }
 
-// TiledPoint はTiledの多角形オブジェクトが持つ1頂点の相対座標。
 type TiledPoint struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
@@ -57,16 +55,6 @@ type TiledProperty struct {
 	Value interface{} `json:"value"`
 }
 
-// ============================================================
-// ★追加：Tiledオブジェクトのプロパティ読み取り共通ヘルパー
-// これまで各所でバラバラに実装されていた
-// 「プロパティ名で回して fmt.Sprintf("%v", ...) する」処理を統一する。
-// プロパティ名はすべて小文字化して比較するので、
-// Tiled側の大文字小文字の打ち間違いに強くなる。
-// ============================================================
-
-// objProps はオブジェクトの全プロパティを {小文字化した名前: 文字列値} の
-// マップにして返す。
 func objProps(obj TiledObject) map[string]string {
 	m := make(map[string]string, len(obj.Properties))
 	for _, p := range obj.Properties {
@@ -75,7 +63,6 @@ func objProps(obj TiledObject) map[string]string {
 	return m
 }
 
-// objPropInt は指定プロパティ（数値）を int で返す。存在しない/数値でない場合は false。
 func objPropInt(obj TiledObject, name string) (int, bool) {
 	name = strings.ToLower(name)
 	for _, p := range obj.Properties {
@@ -88,7 +75,6 @@ func objPropInt(obj TiledObject, name string) (int, bool) {
 	return 0, false
 }
 
-// objPropBool は指定プロパティ（真偽値）を bool で返す。存在しない/真偽値でない場合は false。
 func objPropBool(obj TiledObject, name string) (bool, bool) {
 	name = strings.ToLower(name)
 	for _, p := range obj.Properties {
@@ -101,17 +87,47 @@ func objPropBool(obj TiledObject, name string) (bool, bool) {
 	return false, false
 }
 
-// objContains は指定のワールド座標がオブジェクトの矩形内にあるかを返す。
 func objContains(obj TiledObject, x, y float64) bool {
 	return x >= obj.X && x <= obj.X+obj.Width && y >= obj.Y && y <= obj.Y+obj.Height
 }
 
-// objContainsMargin は objContains と同様だが、矩形をmarginぶん四方に広げた範囲で判定する。
-// チェストのように本体に当たり判定があって乗れないオブジェクトを、
-// 周囲から調べられるようにするために使う。
 func objContainsMargin(obj TiledObject, x, y, margin float64) bool {
 	return x >= obj.X-margin && x <= obj.X+obj.Width+margin &&
 		y >= obj.Y-margin && y <= obj.Y+obj.Height+margin
+}
+
+func dialoguePagesFromText(text string) []EventCommand {
+	pages := strings.Split(text, "|")
+	cmds := make([]EventCommand, 0, len(pages))
+	for _, pageText := range pages {
+		cmds = append(cmds, EventCommand{Speaker: "", Text: pageText})
+	}
+	return cmds
+}
+
+func resolveEventDialogue(text string) ([]EventCommand, map[string]int) {
+	if id, ok := strings.CutPrefix(text, "event_story_"); ok {
+		if d, found := GetStoryDialogue(id); found {
+			return d.Commands, d.SpeakerSlots
+		}
+		fmt.Printf("警告: event_story_%s が assets/dialogues/story.json に見つかりません\n", id)
+		return []EventCommand{{Speaker: "", Text: "……"}}, nil
+	}
+	return dialoguePagesFromText(text), nil
+}
+
+func (s *FieldScene) applyCutsceneMessage() {
+	if s.cutsceneHasBossID {
+		bd := GetEventCommands(s.cutsceneMessage, s.game)
+		bossType := strings.TrimPrefix(s.cutsceneMessage, "event_")
+		s.msgTexts = append(bd.Commands, EventCommand{
+			Speaker: "SYSTEM_COMMAND",
+			Text:    "START_BATTLE_" + bossType,
+		})
+		s.msg.SpeakerToSlot = bd.SpeakerSlots
+		return
+	}
+	s.msgTexts, s.msg.SpeakerToSlot = resolveEventDialogue(s.cutsceneMessage)
 }
 
 type EnemyField struct {
@@ -130,8 +146,6 @@ type CollisionRect struct {
 	X, Y, Width, Height float64
 }
 
-// CollisionPolygon は斜めの壁など、矩形では表現できない形の当たり判定。
-// Points はワールド座標に変換済みの頂点リスト（obj.X, obj.Y を加算済み）。
 type CollisionPolygon struct {
 	Points []TiledPoint
 }
@@ -152,12 +166,14 @@ type FieldScene struct {
 	msgIndex           int
 	isMsgActive        bool
 	msgSkipHoldElapsed float64
-	autoMode           bool           // 🔥 追加：会話オート送りON/OFF
-	autoWaitElapsed    float64        // 🔥 追加：オート時の待機経過秒数
-	msgLog             []EventCommand // 🔥 追加：会話ログ（直近msgLogMaxEntries件）
-	isLogActive        bool           // 🔥 追加：ログ画面を開いているか
-	logScrollOffset    float64        // 🔥 追加：ログ画面のスクロール位置（下端=0、上に行くほど増える）
-	logCursorIndex     int            // 🔥 追加：ログ画面で選択中のログのインデックス（msgLogの添字、0=一番古い）
+	autoMode           bool
+	autoWaitElapsed    float64
+	msgLog             []EventCommand
+	isLogActive        bool
+	logScrollOffset    float64
+	logCursorIndex     int
+	logDrag            dragScrollState
+	logScrollBarDrag   dragScrollState
 	isMenuActive       bool
 	menuIndex          int
 	walkCooldown       float64
@@ -165,11 +181,21 @@ type FieldScene struct {
 	encounterWeight    float64
 	isCutscene         bool
 	cutsceneMessage    string
+	cutsceneHasBossID  bool
 	cutsceneRoute      []MoveStep
 	routeIndex         int
 	currentStepDist    float64
 	justDefeatedBoss   int
-	msg                MessageSystem // 🔥 追加：テキスト描画システム
+	msg                MessageSystem
+
+	pendingAutoHealMessage bool
+
+	touchStickActive   bool
+	touchStickDX       float64
+	touchStickDY       float64
+	touchStickTouchID  ebiten.TouchID
+	touchStickUseMouse bool
+	isDashingNow       bool
 
 	cseFadeAlpha         float64
 	cseFadeMode          int
@@ -177,12 +203,12 @@ type FieldScene struct {
 	pendingCutsceneMsg   string
 	pendingCutsceneRoute []MoveStep
 
-	CseFadeOutDelay  float64 // 移動開始から何秒後にフェードアウト（デフォルト0.3）
-	CseFadeInEarly   float64 // 移動終了の何秒前にフェードイン（デフォルト0.5）
+	CseFadeOutDelay  float64
+	CseFadeInEarly   float64
 	cseElapsed       float64
 	cseTotalDuration float64
-	CseDarkDuration  float64 // 暗い状態で止まる秒数
-	cseDarkElapsed   float64 // 暗い状態の経過時間
+	CseDarkDuration  float64
+	cseDarkElapsed   float64
 
 	isChoiceActive  bool
 	choiceQuestion  string
@@ -192,17 +218,25 @@ type FieldScene struct {
 	choiceAnchorX   float64
 	choiceAnchorY   float64
 
-	// ★追加：アイテム入手時、画面中央に表示する専用ウィンドウ
-	isItemGetActive bool
-	itemGetName     string
+	isItemGetActive     bool
+	itemGetName         string
+	itemGetSubLabel     string
+	itemGetPlainMessage bool
 
-	// ★追加：暗転フェード汎用コールバック
-	onDarkCallback         func() // 暗転MAX到達時に1回だけ呼ばれる
-	onFadeCompleteCallback func() // フェードイン完了時に1回だけ呼ばれる（未設定ならbeginMessage）
+	wallFadeActive bool
+	wallFadeKey    string
+	wallFadeAlpha  float64
+
+	isDarknessActive bool
+	darknessRadius   float64
+	darknessOverlay  *ebiten.Image
+
+	onDarkCallback         func()
+	onFadeCompleteCallback func()
 	nearExamineEvent       bool
-	nearDoorEvent          bool   // ★追加：ドア（ワープ）に近づいているか
-	pendingDoorMap         string // ★追加：確定キーで遷移する先のマップ
-	pendingDoorPoint       string // ★追加：確定キーで遷移する先のスポーン名
+	nearDoorEvent          bool
+	pendingDoorMap         string
+	pendingDoorPoint       string
 	pendingDoorX           float64
 	pendingDoorY           float64
 	pendingDoorDir         int
@@ -211,16 +245,32 @@ type FieldScene struct {
 	objectiveDoorX   float64
 	objectiveDoorY   float64
 	hasObjectiveDoor bool
-	// ★変更：isDashingはGame側(g.IsDashing)に移動したため削除。
-	// マップ移動でFieldSceneが再生成されてもダッシュ状態を維持するため。
+
+	blocks         []*FieldBlock
+	isPushingBlock bool
+	pushingBlockID string
+	nearBlockID    string
+
+	blockStepActive   bool
+	blockStepElapsed  float64
+	blockStepStartPX  float64
+	blockStepStartPY  float64
+	blockStepTargetPX float64
+	blockStepTargetPY float64
+	blockStepStartBX  float64
+	blockStepStartBY  float64
+	blockStepTargetBX float64
+	blockStepTargetBY float64
+
+	screenShakeX      float64
+	screenShakeY      float64
+	screenShakeTimer  float64
+	screenShakeMaxDur float64
+	screenShakePower  float64
 }
 
-// NewRoomScene は指定マップでフィールドシーンを生成する。
-// startDir: targetSpawnNameで方向が見つからなかった場合に使う初期向き
-//
-//	（ロード直後やバトルから戻るときなど、スポーンイベントを経由しない場合に使用）
 func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpawnName string, startDir int) (*FieldScene, error) {
-	mapData, err := os.ReadFile(mapPath)
+	mapData, err := loadAssetBytes(mapPath)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +281,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 
 	var roomEnemies []*EnemyField
 	spawnX, spawnY := startX, startY
-	spawnDir := startDir // デフォルト値。マップ側のspawnオブジェクトにdirプロパティがあれば上書きされる
+	spawnDir := startDir
 	spawnFound := false
 
 	for _, layer := range tmap.Layers {
@@ -275,9 +325,6 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		if layer.Name == "collision" && layer.Type == "objectgroup" {
 			for _, obj := range layer.Objects {
 				if len(obj.Polygon) > 0 {
-					// ★追加：斜めの壁など、Tiledの多角形描画ツールで作ったオブジェクト。
-					// polygonの座標はオブジェクト原点(obj.X, obj.Y)からの相対座標なので
-					// ここでワールド座標に変換してから保持する。
 					pts := make([]TiledPoint, len(obj.Polygon))
 					for i, p := range obj.Polygon {
 						pts[i] = TiledPoint{X: obj.X + p.X, Y: obj.Y + p.Y}
@@ -295,16 +342,14 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		}
 	}
 
-	// ★追加：チェスト（event_chest_）は見た目どおり通行不可にしたいので、
-	// オブジェクトの矩形（Width/Height）をそのまま壁判定にも使う。
-	// collisionレイヤーに別途壁オブジェクトを置く必要はない。
 	for _, layer := range tmap.Layers {
 		if !strings.HasPrefix(layer.Name, "events") {
 			continue
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || !strings.HasPrefix(p["text"], "event_chest_") {
+			isFixture := strings.HasPrefix(p["text"], "event_chest_") || p["text"] == "event_lever"
+			if p["type"] != "event" || !isFixture {
 				continue
 			}
 			collisionRects = append(collisionRects, CollisionRect{
@@ -313,6 +358,29 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 				Width:  obj.Width,
 				Height: obj.Height,
 			})
+		}
+	}
+
+	var blocks []*FieldBlock
+	for _, layer := range tmap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			p := objProps(obj)
+			if p["type"] != "event" || p["text"] != "event_block" {
+				continue
+			}
+			id := p["id"]
+			if id == "" {
+				fmt.Printf("警告: ブロックに\"id\"プロパティが設定されていません（%s %.1f_%.1f）\n", mapPath, obj.X, obj.Y)
+				continue
+			}
+			bx, by := obj.X, obj.Y
+			if pos, ok := game.BlockPositions[blockKey(mapPath, id)]; ok {
+				bx, by = pos[0], pos[1]
+			}
+			blocks = append(blocks, &FieldBlock{ID: id, X: bx, Y: by, Width: obj.Width, Height: obj.Height})
 		}
 	}
 
@@ -335,13 +403,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	if err != nil {
 		return nil, err
 	}
-	game.SpriteSheet = playerSheet // バトル等の互換用
-
-	// ★修正：game.TileImg（グローバル単一状態）への書き込みを廃止。
-	// 以前はここで game.TileImg = targetTileImg としていたため、
-	// フェード遷移中に古いシーンが新しいマップのタイル画像で
-	// 描画されてしまう可能性があった。描画は各シーンが持つ
-	// scene.mapTileImg を参照するようにする（field_draw.go 参照）。
+	game.SpriteSheet = playerSheet
 
 	scene := &FieldScene{
 		game:              game,
@@ -364,31 +426,42 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		CseDarkDuration:   1.0,
 		collisions:        collisionRects,
 		collisionPolygons: collisionPolygons,
+		touchStickTouchID: touchStickNoTouch,
+		blocks:            blocks,
 	}
 
-	// 💡 修正点: ここにウィンドウの不透明度を設定するコードを追加します
-	// 0.7の数値を 0.0(透明) 〜 1.0(不透明) の間で好みの透け具合に調整してください
 	scene.msg.WindowAlpha = 0.7
 
-	// window.png が Game にあれば MessageSystem に渡す
-	if game.WindowImg != nil {
-		scene.msg.WindowImg = game.WindowImg
-	}
+	scene.msg.WindowImg = game.WindowImg
 
 	game.Audio.PlayBGMFadeIn(bgmFieldSchool, 2.0)
+
+	if autoHealMaps[mapPath] {
+		scene.healParty()
+		if game.SeenAutoHealMapIntro == nil {
+			game.SeenAutoHealMapIntro = make(map[string]bool)
+		}
+		if !game.SeenAutoHealMapIntro[mapPath] {
+			game.SeenAutoHealMapIntro[mapPath] = true
+			scene.pendingAutoHealMessage = true
+		}
+	}
 
 	return scene, nil
 }
 
 var globalActiveFieldInstanceForSave *FieldScene
 
-// locationNameFromMap はマップパスから表示用の場所名を返す
-// 新しいマップを追加したらここに追記する
+var autoHealMaps = map[string]bool{
+	"assets/maps/ダンジョンA.tmj": true,
+}
+
+const autoHealIntroMessage = "ダンジョンに入ると自動的に回復します"
+
 func locationNameFromMap(mapPath string) string {
 	names := map[string]string{
 		"assets/maps/School_Map_1.tmj": "理科室",
 		"assets/maps/ダンジョンA.tmj":       "ダンジョンA",
-		// 例: "assets/maps/School_Map_3.tmj": "屋上",
 	}
 	if name, ok := names[mapPath]; ok {
 		return name
@@ -396,7 +469,6 @@ func locationNameFromMap(mapPath string) string {
 	return mapPath
 }
 
-// isBossDefeated はboss_idの撃破済みフラグを返す（範囲外は未撃破扱い）
 func isBossDefeated(g *Game, bossID int) bool {
 	if bossID < 1 || bossID > 4 {
 		return false
@@ -404,8 +476,6 @@ func isBossDefeated(g *Game, bossID int) bool {
 	return g.BossDefeatedFlags[bossID-1]
 }
 
-// bossIndexFromEnemyType は "boss_1" のような文字列から0始まりのboss配列インデックスを返す。
-// "boss_"で始まらない、または数値変換に失敗した場合は (-1, false) を返す。
 func bossIndexFromEnemyType(enemyType string) (int, bool) {
 	if !strings.HasPrefix(enemyType, "boss_") {
 		return -1, false
@@ -429,39 +499,45 @@ func SaveGame(slot int, mapPath string, x, y float64, hp [4]int) error {
 	g := globalActiveFieldInstanceForSave.game
 
 	data := SaveData{
-		SlotID:            slot,
-		LocationName:      locationNameFromMap(mapPath),
-		CurrentMap:        mapPath,
-		PlayerX:           x,
-		PlayerY:           y,
-		PlayerDir:         globalActiveFieldInstanceForSave.dir, // ← 追加：現在の向きを保存
-		PlayerHP:          hp,
-		PlayerMaxHP:       g.PlayerMaxHP,
-		PlayerMP:          g.PlayerMP,
-		PlayerMaxMP:       g.PlayerMaxMP,
-		PlayerAtk:         g.PlayerAtk,
-		PlayerMagicAtk:    g.PlayerMagicAtk,
-		PlayerDef:         g.PlayerDef,
-		PlayerMagicDef:    g.PlayerMagicDef,
-		PlayerSpd:         g.PlayerSpd,
-		PlayerLuck:        g.PlayerLuck,
-		PlayerSP:          g.PlayerSP,
-		PlayerSkillLv:     g.PlayerSkillLv,
-		BossDefeatedFlags: g.BossDefeatedFlags,
-		PlayerLv:          g.PlayerLv,
-		PlayerEXP:         g.PlayerEXP,
-		PlayerNextEXP:     g.PlayerNextEXP,
-		PlayTime:          g.TotalPlayTime,
-		SavedAt:           time.Now().Format("2006/01/02"),
-		Inventory:         g.Inventory,
-		OpenedChests:      g.OpenedChests,
+		SlotID:               slot,
+		LocationName:         locationNameFromMap(mapPath),
+		CurrentMap:           mapPath,
+		PlayerX:              x,
+		PlayerY:              y,
+		PlayerDir:            globalActiveFieldInstanceForSave.dir,
+		PlayerHP:             hp,
+		PlayerMaxHP:          g.PlayerMaxHP,
+		PlayerMP:             g.PlayerMP,
+		PlayerMaxMP:          g.PlayerMaxMP,
+		PlayerAtk:            g.PlayerAtk,
+		PlayerMagicAtk:       g.PlayerMagicAtk,
+		PlayerDef:            g.PlayerDef,
+		PlayerMagicDef:       g.PlayerMagicDef,
+		PlayerSpd:            g.PlayerSpd,
+		PlayerLuck:           g.PlayerLuck,
+		PlayerSP:             g.PlayerSP,
+		PlayerSkillLv:        g.PlayerSkillLv,
+		BossDefeatedFlags:    g.BossDefeatedFlags,
+		PlayerLv:             g.PlayerLv,
+		PlayerEXP:            g.PlayerEXP,
+		PlayerNextEXP:        g.PlayerNextEXP,
+		PlayTime:             g.TotalPlayTime,
+		SavedAt:              time.Now().Format("2006/01/02"),
+		Inventory:            g.Inventory,
+		OpenedChests:         g.OpenedChests,
+		UnlockedWalls:        g.UnlockedWalls,
+		Keys:                 g.Keys,
+		RaisedLevers:         g.RaisedLevers,
+		SeenAutoHealMapIntro: g.SeenAutoHealMapIntro,
+		BlockPositions:       g.BlockPositions,
+		UnlockedBlockDoors:   g.UnlockedBlockDoors,
 	}
 
 	file, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(saveFilePath(slot), file, 0666)
+	return writeRuntimeFile(saveFilePath(slot), file)
 }
 
 func (s *FieldScene) cameraPosition() (camX, camY float64) {
@@ -470,7 +546,6 @@ func (s *FieldScene) cameraPosition() (camX, camY float64) {
 	camX = float64(gameWidth)/2 - anchorX
 	camY = float64(gameHeight)/2 - anchorY
 
-	// マップ全体のピクセルサイズ
 	mapPxW := float64(s.tileMap.Width * s.tileMap.TileWidth)
 	mapPxH := float64(s.tileMap.Height * s.tileMap.TileHeight)
 
@@ -506,46 +581,6 @@ func (s *FieldScene) cameraPosition() (camX, camY float64) {
 	return camX, camY
 }
 
-// ============================================================
-// 休憩イベント（旧 field_rest.go）
-// ============================================================
-
-const fadeTimeRest = 0.5
-
-// startRestEvent は休憩の確認吹き出しを開く（msgシステム・BGMには一切触らない）
-func (s *FieldScene) startRestEvent(obj TiledObject) {
-	if s.isChoiceActive || s.cseFadeMode != 0 || s.isCutscene {
-		return
-	}
-	s.choiceAnchorX = obj.X + obj.Width/2
-	s.choiceAnchorY = obj.Y
-
-	s.choiceQuestion = "休みますか？"
-	s.choiceOptions = []string{"はい", "いいえ"}
-	s.choiceIndex = 0
-	s.isChoiceActive = true
-
-	s.onChoiceConfirm = func(selected int) {
-		if selected == 0 { // はい
-			s.startRestFade()
-		}
-		// いいえ：何もせず通常操作に戻るだけ
-	}
-}
-
-func (s *FieldScene) startRestFade() {
-	if s.cseFadeMode != 0 { // 既にフェード処理中なら何もしない
-		return
-	}
-	s.cseFadeAlpha = 0
-	s.cseFadeMode = 2
-	s.cseFadeSpeed = 1.0 / fadeTimeRest
-	s.cseFadeInSpeed = 1.0 / fadeTimeRest
-	s.cseDarkElapsed = 0
-	s.onDarkCallback = s.healParty
-	s.onFadeCompleteCallback = func() {}
-}
-
 func (s *FieldScene) healParty() {
 	for i := 0; i < 4; i++ {
 		s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
@@ -553,19 +588,10 @@ func (s *FieldScene) healParty() {
 	}
 }
 
-// ============================================================
-// チェスト（宝箱）イベント
-// ============================================================
-
-// chestKey は「マップパス＋座標」からチェスト1個分の一意なキーを作る。
-// 開封済みかどうかをGame.OpenedChestsにこのキーで記録する。
 func chestKey(mapPath string, obj TiledObject) string {
 	return fmt.Sprintf("%s|%.1f_%.1f", mapPath, obj.X, obj.Y)
 }
 
-// openChest はチェスト（type=event, text="event_chest_<アイテムID>"）を
-// 調べた時の処理。未開封ならアイテムを入手してフラグを立てる。
-// 開封済みなら何もしない（調べても無反応）。
 func (s *FieldScene) openChest(obj TiledObject, itemID string) {
 	if s.game.OpenedChests == nil {
 		s.game.OpenedChests = make(map[string]bool)
@@ -576,7 +602,6 @@ func (s *FieldScene) openChest(obj TiledObject, itemID string) {
 		return
 	}
 	s.game.OpenedChests[key] = true
-	// 決定押下と同フレームで「▼ 調べる」を消す（次のUpdateの再判定を待たない）
 	s.nearExamineEvent = false
 
 	def, ok := GetItemDef(itemID)
@@ -588,19 +613,141 @@ func (s *FieldScene) openChest(obj TiledObject, itemID string) {
 		return
 	}
 	s.game.AddItem(itemID, 1)
-	s.openItemGetPopup(def.Name)
+	s.openItemGetPopup(def.Name, "")
 }
 
-// openItemGetPopup はアイテム入手時に画面中央へ表示する専用ウィンドウを開く。
-// 通常の会話メッセージ（下部ウィンドウ）とは別枠の表示で、
-// 決定キーで閉じるまでプレイヤーの移動や他の操作を止める。
-func (s *FieldScene) openItemGetPopup(itemName string) {
+func (s *FieldScene) openItemGetPopup(itemName string, subLabel string) {
 	s.itemGetName = itemName
+	s.itemGetSubLabel = subLabel
+	s.itemGetPlainMessage = false
 	s.isItemGetActive = true
 }
 
-// updateObjectiveGuide は現在の目的地に応じて、
-// 別マップにある場合の誘導先ドア座標をセットする。同マップならミニマップ側で処理するのでここでは何もしない。
+func (s *FieldScene) openCenterMessagePopup(message string) {
+	s.itemGetName = message
+	s.itemGetSubLabel = ""
+	s.itemGetPlainMessage = true
+	s.isItemGetActive = true
+}
+
+func (s *FieldScene) openKeyChest(obj TiledObject, keyName string) {
+	if s.game.OpenedChests == nil {
+		s.game.OpenedChests = make(map[string]bool)
+	}
+
+	key := chestKey(s.currentMap, obj)
+	if s.game.OpenedChests[key] {
+		return
+	}
+	s.game.OpenedChests[key] = true
+	s.nearExamineEvent = false
+
+	if keyName == "" {
+		fmt.Printf("警告: 鍵チェストのtextに鍵の名前がありません（%s）\n", key)
+		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
+		s.msgIndex = 0
+		s.beginMessage()
+		return
+	}
+
+	if s.game.Keys == nil {
+		s.game.Keys = make(map[string]int)
+	}
+	s.game.Keys[keyName]++
+
+	subLabel := ""
+	if names, ok := loadWallKeyGroups()[keyName]; ok {
+		subLabel = fmt.Sprintf("残り%d個", remainingKeysInGroup(names, s.game.Keys))
+	}
+	s.openItemGetPopup(keyName, subLabel)
+}
+
+const wallFadeDuration = 0.5
+
+func (s *FieldScene) examineWall(obj TiledObject) {
+	if s.game.UnlockedWalls == nil {
+		s.game.UnlockedWalls = make(map[string]bool)
+	}
+
+	key := chestKey(s.currentMap, obj)
+	if s.game.UnlockedWalls[key] {
+		return
+	}
+
+	names := splitKeyNames(objProps(obj)["keys"])
+	missing := remainingKeysInGroup(names, s.game.Keys)
+
+	s.nearExamineEvent = false
+
+	if missing > 0 {
+		s.openCenterMessagePopup("ここから先に進むには鍵が必要なようだ")
+		return
+	}
+
+	s.wallFadeActive = true
+	s.wallFadeKey = key
+	s.wallFadeAlpha = 1.0
+}
+
+func (s *FieldScene) updateWallFade(dt float64) {
+	s.wallFadeAlpha -= dt / wallFadeDuration
+	if s.wallFadeAlpha <= 0 {
+		s.wallFadeAlpha = 0
+		s.wallFadeActive = false
+		s.game.UnlockedWalls[s.wallFadeKey] = true
+		s.openCenterMessagePopup("閉ざされた壁が解放された！")
+	}
+}
+
+func (s *FieldScene) wallIsOpen(obj TiledObject) bool {
+	if leverID := objProps(obj)["lever"]; leverID != "" {
+		return s.game.RaisedLevers[leverID]
+	}
+	return s.game.UnlockedWalls[chestKey(s.currentMap, obj)]
+}
+
+func (s *FieldScene) pullLever(obj TiledObject) {
+	if s.game.RaisedLevers == nil {
+		s.game.RaisedLevers = make(map[string]bool)
+	}
+
+	id := objProps(obj)["id"]
+	if id == "" {
+		fmt.Printf("警告: レバーに\"id\"プロパティが設定されていません（%s）\n", chestKey(s.currentMap, obj))
+	}
+
+	s.nearExamineEvent = false
+	s.game.RaisedLevers[id] = !s.game.RaisedLevers[id]
+}
+
+const defaultDarknessRadius = 110.0
+
+func (s *FieldScene) updateDarkness() {
+	s.isDarknessActive = false
+
+	for _, layer := range s.tileMap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			p := objProps(obj)
+			if p["type"] != "darkness" {
+				continue
+			}
+			if leverID := p["lever"]; leverID != "" && s.game.RaisedLevers[leverID] {
+				continue
+			}
+			if !objContains(obj, s.px, s.py) {
+				continue
+			}
+
+			s.isDarknessActive = true
+			s.darknessRadius = defaultDarknessRadius
+			return
+		}
+	}
+}
+
 func (s *FieldScene) updateObjectiveGuide() {
 	s.hasObjectiveDoor = false
 

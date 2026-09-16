@@ -1,9 +1,19 @@
 package main
 
-// menu_scene_item.go: メニュー画面（フィールド）でのアイテム選択・使用対象選択の更新処理
+func (m *MenuScene) hitTestItemListRows(rowCount int) (int, bool) {
+	rects := make([]tapRect, rowCount)
+	for i := 0; i < rowCount; i++ {
+		y := skillRowStartY + float64(i)*itemRowGapY
+		rects[i] = tapRect{
+			x: skillNameX - 4,
+			y: y - itemRowGapY/2,
+			w: itemCountX - skillNameX + 20,
+			h: itemRowGapY,
+		}
+	}
+	return hitTestTapRects(rects)
+}
 
-// usableFieldItems はメニュー画面から使用できる（UsableInField）、
-// かつ所持数1以上のアイテムスロット一覧を返す。
 func (m *MenuScene) usableFieldItems() []InventorySlot {
 	var list []InventorySlot
 	for _, slot := range m.game.Inventory {
@@ -19,6 +29,15 @@ func (m *MenuScene) usableFieldItems() []InventorySlot {
 	return list
 }
 
+func (m *MenuScene) clampItemListIndex(n int) {
+	if m.itemListIndex >= n {
+		m.itemListIndex = n - 1
+	}
+	if m.itemListIndex < 0 {
+		m.itemListIndex = 0
+	}
+}
+
 func (m *MenuScene) updateItemList() {
 	if isEscapePressed() {
 		m.menuState = menuStateMain
@@ -27,28 +46,54 @@ func (m *MenuScene) updateItemList() {
 
 	items := m.usableFieldItems()
 	if len(items) == 0 {
+		if isConfirmKeyPressed() {
+			m.showNotice("メニューから使えるアイテムを持っていません")
+		}
+		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.menuState = menuStateMain
+		}
 		return
 	}
-	if m.itemListIndex >= len(items) {
-		m.itemListIndex = len(items) - 1
-	}
-	if m.itemListIndex < 0 {
-		m.itemListIndex = 0
-	}
+	m.clampItemListIndex(len(items))
 
-	if isMenuDownPressed() {
+	if isMenuDownRepeat() {
 		m.itemListIndex = (m.itemListIndex + 1) % len(items)
 	}
-	if isMenuUpPressed() {
+	if isMenuUpRepeat() {
 		m.itemListIndex = (m.itemListIndex - 1 + len(items)) % len(items)
 	}
-	if !isConfirmKeyPressed() {
+	tapped := false
+	if idx, ok := m.hitTestItemListRows(len(items)); ok {
+		m.itemListIndex = idx
+		tapped = true
+	}
+	if !isConfirmKeyPressed() && !tapped {
+		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.menuState = menuStateMain
+		}
 		return
 	}
 
-	m.pendingItemID = items[m.itemListIndex].ItemID
-	m.itemTargetIndex = 0
+	m.beginItemTarget(items[m.itemListIndex].ItemID)
+}
+
+func (m *MenuScene) beginItemTarget(itemID string) {
+	m.pendingItemID = itemID
+	m.clearNotice()
+	if def, ok := GetItemDef(itemID); ok {
+		allowSingle, allowAll := itemTargetModes(def)
+		switch {
+		case !allowSingle:
+			m.itemTargetIndex = partySize
+		case !allowAll && m.itemTargetIndex == partySize:
+			m.itemTargetIndex = 0
+		}
+	}
 	m.menuState = menuStateItemTarget
+}
+
+func itemTargetModes(def ItemDef) (allowSingle, allowAll bool) {
+	return def.Target != TargetAll, def.Target == TargetAll || def.Target == TargetBoth
 }
 
 func (m *MenuScene) updateItemTarget() {
@@ -59,35 +104,48 @@ func (m *MenuScene) updateItemTarget() {
 	}
 
 	def, ok := GetItemDef(m.pendingItemID)
-	if !ok {
+	if !ok || m.game.ItemCount(m.pendingItemID) <= 0 {
 		m.pendingItemID = ""
 		m.menuState = menuStateItemList
 		return
 	}
-	allowAll := def.Target == TargetAll || def.Target == TargetBoth
+	allowSingle, allowAll := itemTargetModes(def)
+	def.CureDebuff = false
 
-	if isMenuUpPressed() {
-		if m.itemTargetIndex < partySize {
-			m.itemTargetIndex = (m.itemTargetIndex - 1 + partySize) % partySize
+	items := m.usableFieldItems()
+	if idx, ok := m.hitTestItemListRows(len(items)); ok {
+		if items[idx].ItemID != m.pendingItemID {
+			m.itemListIndex = idx
+			m.beginItemTarget(items[idx].ItemID)
 		}
-	}
-	if isMenuDownPressed() {
-		if m.itemTargetIndex < partySize {
-			m.itemTargetIndex = (m.itemTargetIndex + 1) % partySize
-		}
-	}
-	if allowAll {
-		if isMenuRightPressed() {
-			m.itemTargetIndex = partySize
-		}
-		if isMenuLeftPressed() {
-			if m.itemTargetIndex == partySize {
-				m.itemTargetIndex = 0
-			}
-		}
+		return
 	}
 
-	if !isConfirmKeyPressed() {
+	if allowSingle {
+		cycleLen := partySize
+		if allowAll {
+			cycleLen = partySize + 1
+		}
+		if isMenuUpRepeat() {
+			m.itemTargetIndex = (m.itemTargetIndex - 1 + cycleLen) % cycleLen
+		}
+		if isMenuDownRepeat() {
+			m.itemTargetIndex = (m.itemTargetIndex + 1) % cycleLen
+		}
+	}
+
+	tappedIdx, tappedOk := m.hitTestPartyRowsWithAll(allowAll)
+	hitPartyArea := tappedOk
+	if tappedOk && tappedIdx < partySize && !allowSingle {
+		tappedOk = false
+	}
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &m.itemTargetIndex)
+
+	if !isConfirmKeyPressed() && !tapped {
+		if !hitPartyArea && len(justPressedTouchPoints()) > 0 {
+			m.pendingItemID = ""
+			m.menuState = menuStateItemList
+		}
 		return
 	}
 
@@ -98,34 +156,36 @@ func (m *MenuScene) updateItemTarget() {
 				used = true
 			}
 		}
-	} else {
-		target := m.itemTargetIndex
-		if !def.Revive && m.game.PlayerHP[target] <= 0 {
+		if !used {
+			m.showNotice("使っても効果がありません")
 			return
 		}
-		if _, _, ok := applyItemEffect(m.game, def, target); ok {
-			used = true
+	} else {
+		target := m.itemTargetIndex
+		if _, _, ok := applyItemEffect(m.game, def, target); !ok {
+			m.showNotice(itemNoEffectReason(m.game, def, target))
+			return
 		}
-	}
-
-	if !used {
-		return
 	}
 
 	m.game.ConsumeItem(m.pendingItemID, 1)
+	m.clearNotice()
 
-	// ← 変更：使用直後に自動で戻さず、対象選択画面のまま連続で使えるようにする。
-	// そのアイテムを使い切った時だけ一覧画面へ戻す。
 	if m.game.ItemCount(m.pendingItemID) <= 0 {
 		m.pendingItemID = ""
-
-		items := m.usableFieldItems()
-		if m.itemListIndex >= len(items) {
-			m.itemListIndex = len(items) - 1
-		}
-		if m.itemListIndex < 0 {
-			m.itemListIndex = 0
-		}
+		m.clampItemListIndex(len(m.usableFieldItems()))
 		m.menuState = menuStateItemList
 	}
+}
+
+func itemNoEffectReason(g *Game, def ItemDef, target int) string {
+	name := PlayerNames[target]
+	dead := g.PlayerHP[target] <= 0
+	switch {
+	case dead && !def.Revive:
+		return name + "は戦闘不能のため効果がありません"
+	case !dead && def.Revive:
+		return name + "は戦闘不能ではありません"
+	}
+	return name + "に使っても効果がありません"
 }

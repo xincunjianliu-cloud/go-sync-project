@@ -1,6 +1,5 @@
 package main
 
-// battle_calc.go: ゲージ・ダメージ/回復量・ステータス補正など戦闘計算まわり
 import (
 	"image/color"
 	"math"
@@ -82,11 +81,6 @@ func (s *BattleScene) effectiveMPCost(base int) int {
 	return base
 }
 
-// ── 運（Luck）による会心・回避判定 ─────────────────────────
-// 味方は運ステータスを持つが、敵は運を持たない
-//（＝敵の攻撃は会心しない。味方の回避判定は味方自身の運のみで決まる）。
-
-// rollIsCrit は luck から算出した会心率で判定する。
 func (s *BattleScene) rollIsCrit(luck int) bool {
 	chance := critChancePercent(luck)
 	if chance <= 0 {
@@ -95,7 +89,6 @@ func (s *BattleScene) rollIsCrit(luck int) bool {
 	return rand.Intn(100) < chance
 }
 
-// rollIsEvade は luck から算出した回避率で判定する。
 func (s *BattleScene) rollIsEvade(luck int) bool {
 	chance := evadeChancePercent(luck)
 	if chance <= 0 {
@@ -104,9 +97,6 @@ func (s *BattleScene) rollIsEvade(luck int) bool {
 	return rand.Intn(100) < chance
 }
 
-// ── 新スプライトシート対応：フレーム計算 ──────────────────────
-
-// spriteFrame はループ系pose用のフレーム番号を返す。
 func spriteFrame(pose int, timer float64) int {
 	n, ok := poseFrameCount[pose]
 	if !ok || n <= 0 {
@@ -123,7 +113,6 @@ func spriteFrame(pose int, timer float64) int {
 	return int(t/dur) % n
 }
 
-// frameFromProgress は攻撃演出など「進行度(0.0〜1.0)」で1回再生する系のフレームを返す。
 func frameFromProgress(progress float64, pose int) int {
 	n := poseFrameCount[pose]
 	if n <= 0 {
@@ -138,7 +127,6 @@ func frameFromProgress(progress float64, pose int) int {
 	return int(progress * float64(n))
 }
 
-// glowFrameForLevel はコマンド選択中の発光レベル(0-3)から実フレーム番号を返す。
 func glowFrameForLevel(level int, timer float64) int {
 	if level < 0 {
 		level = 0
@@ -170,42 +158,61 @@ func fitTextForWidth(face text.Face, txt string, maxWidth float64) string {
 	return ""
 }
 
-var timelineImgLayout = struct {
-	LineY           float64
-	GoalMarginRight float64
-	VertLineX       float64
+var goalAnchorLayout = struct {
+	X float64
+	Y float64
 }{
-	LineY:           50.0,
-	GoalMarginRight: 100.0,
-	VertLineX:       53.0,
+	X: 860.0,
+	Y: 57.0,
+}
+
+var goalRelativeImgLayout = struct {
+	TimelineHorizY float64
+	TimelineVertX  float64
+}{
+	TimelineHorizY: 0.0,
+	TimelineVertX:  -3.0,
+}
+
+var attackIconLayout = struct {
+	XOffsetFromGoal float64
+	YFromBottom     float64
+}{
+	XOffsetFromGoal: 0.0,
+	YFromBottom:     148.0,
 }
 
 func (s *BattleScene) timelineDrawOrigin() (float64, float64) {
-	if s.game.TimelineBarImg == nil {
-		return 0, 0
-	}
 	imgW := float64(s.game.TimelineBarImg.Bounds().Dx())
+	imgH := float64(s.game.TimelineBarImg.Bounds().Dy())
 	x := float64(gameWidth)/2 - imgW/2
-	y := trackCenterY() - timelineImgLayout.LineY
-	return x, y
+	cy := goalAnchorLayout.Y + goalRelativeImgLayout.TimelineHorizY
+	return x, cy - imgH/2
 }
 
 func trackCenterY() float64 {
-	return trackY + trackH/2
+	return goalAnchorLayout.Y
 }
 
 func (s *BattleScene) goalScreenX() float64 {
-	imgX, _ := s.timelineDrawOrigin()
-	if s.game.TimelineBarImg == nil {
-		return trackX + trackW
-	}
-	barW := float64(s.game.TimelineBarImg.Bounds().Dx())
-	return imgX + barW - timelineImgLayout.GoalMarginRight
+	return goalAnchorLayout.X
 }
 
-// ── スキルダメージ・ステータス計算 ──────────────────────────
+func (s *BattleScene) timelineVertDrawOrigin() (float64, float64) {
+	imgW := float64(s.game.TimelineBarVertImg.Bounds().Dx())
+	imgH := float64(s.game.TimelineBarVertImg.Bounds().Dy())
+	cx := goalAnchorLayout.X + goalRelativeImgLayout.TimelineVertX
+	y := float64(gameHeight)/2 - imgH/2
+	return cx - imgW/2, y
+}
 
-func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll bool) int {
+func attackIconCenter() (float64, float64) {
+	x := goalAnchorLayout.X + attackIconLayout.XOffsetFromGoal
+	y := float64(gameHeight) - attackIconLayout.YFromBottom
+	return x, y
+}
+
+func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll bool, targetSlot int) int {
 	if lv < 1 {
 		lv = 1
 	}
@@ -226,10 +233,10 @@ func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll boo
 	var atkStat, defStat float64
 	if data.Element == ElemPhysicalNone {
 		atkStat = float64(s.effectiveAtk(actor))
-		defStat = float64(s.effectiveEnemyDef(false))
+		defStat = float64(s.effectiveEnemyDef(targetSlot, false))
 	} else {
 		atkStat = float64(s.effectiveMagicAtk(actor))
-		defStat = float64(s.effectiveEnemyDef(true))
+		defStat = float64(s.effectiveEnemyDef(targetSlot, true))
 	}
 	if defStat < 1 {
 		defStat = 1
@@ -238,7 +245,11 @@ func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll boo
 	if actor >= 0 && actor < partySize {
 		luck = s.game.PlayerLuck[actor]
 	}
-	return s.rollDamage(atkStat, float64(power), defStat, elementalDamageMultiplier(data.Element, s.enemyElementResist), luck)
+	resist := [elementalTypeCount]int{}
+	if targetSlot >= 0 && targetSlot < len(s.enemies) {
+		resist = s.enemies[targetSlot].ElementResist
+	}
+	return s.rollDamage(atkStat, float64(power), defStat, elementalDamageMultiplier(data.Element, resist), luck)
 }
 
 func (s *BattleScene) rollDamage(atk float64, power float64, def float64, elementMultiplier float64, luck int) int {
@@ -248,8 +259,10 @@ func (s *BattleScene) rollDamage(atk float64, power float64, def float64, elemen
 	damage := atk * power / def
 	damage *= float64(90+rand.Intn(21)) / 100.0
 	damage *= elementMultiplier
+	s.lastRollWasCrit = false
 	if s.rollIsCrit(luck) {
 		damage *= critDamageMultiply
+		s.lastRollWasCrit = true
 	}
 	result := int(math.Round(damage))
 	if result < 1 {
@@ -269,6 +282,25 @@ func elementalDamageMultiplier(element Element, resistances [elementalTypeCount]
 		return 0
 	}
 	return multiplier
+}
+
+func (s *BattleScene) rollEnemySkillDamage(power int, element Element, target int) int {
+	if power <= 0 {
+		return 0
+	}
+	acting := &s.enemies[s.actingEnemySlot]
+	var atkStat, defStat float64
+	if element == ElemPhysicalNone {
+		atkStat = float64(acting.PhysAtk)
+		defStat = float64(s.effectivePlayerDef(target, false))
+	} else {
+		atkStat = float64(acting.MagicAtk)
+		defStat = float64(s.effectivePlayerDef(target, true))
+	}
+	if defStat < 1 {
+		defStat = 1
+	}
+	return s.rollDamage(atkStat, float64(power), defStat, 1.0, 0)
 }
 
 func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool) int {
@@ -295,32 +327,35 @@ func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool)
 func (s *BattleScene) effectiveAtk(actor int) int {
 	base := s.game.PlayerAtk[actor]
 	down := SumDebuffPercent(s.PlayerDebuffs[actor], DebuffAtkDown)
-	return int(float64(base) * (1.0 - float64(down)/100.0))
+	up := SumBuffPercent(s.PlayerBuffs[actor], BuffAtkUp)
+	return int(float64(base) * (1.0 + float64(up)/100.0 - float64(down)/100.0))
 }
 
 func (s *BattleScene) effectiveMagicAtk(actor int) int {
 	base := s.game.PlayerMagicAtk[actor]
 	down := SumDebuffPercent(s.PlayerDebuffs[actor], DebuffAtkDown)
-	return int(float64(base) * (1.0 - float64(down)/100.0))
+	up := SumBuffPercent(s.PlayerBuffs[actor], BuffAtkUp)
+	return int(float64(base) * (1.0 + float64(up)/100.0 - float64(down)/100.0))
 }
 
-func (s *BattleScene) effectiveEnemyDef(magic bool) int {
+func (s *BattleScene) effectiveEnemyDef(slot int, magic bool) int {
+	if slot < 0 || slot >= len(s.enemies) {
+		return 0
+	}
+	e := &s.enemies[slot]
 	var base int
 	var t DebuffType
 	if magic {
-		base = s.enemyMagicDef
+		base = e.MagicDef
 		t = DebuffMagicDefDown
 	} else {
-		base = s.enemyDef
+		base = e.Def
 		t = DebuffDefDown
 	}
-	down := SumDebuffPercent(s.EnemyDebuffs, t)
+	down := SumDebuffPercent(e.Debuffs, t)
 	return int(float64(base) * (1.0 - float64(down)/100.0))
 }
 
-// effectivePlayerDef は、敵からの攻撃に対する味方側の防御力を返す。
-// isMagic が false の場合は物理防御力、true の場合は魔法防御力を使う
-// （＝「物理攻撃に対しては物理防御が適応される」仕様）。
 func (s *BattleScene) effectivePlayerDef(target int, magic bool) int {
 	if target < 0 || target >= partySize {
 		return 0
@@ -331,14 +366,18 @@ func (s *BattleScene) effectivePlayerDef(target int, magic bool) int {
 	return s.game.PlayerDef[target]
 }
 
-func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, targetIsEnemy bool, targetIdx int) {
+func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, targetIsEnemy bool, targetIdx int, isAll bool) {
 	for _, e := range effects {
 		switch e.Type {
 		case EffectAtbDownSmall:
 			if targetIsEnemy {
-				s.atbGauge[enemyID] -= 15
-				if s.atbGauge[enemyID] < 0 {
-					s.atbGauge[enemyID] = 0
+				if targetIdx < 0 || targetIdx >= len(s.enemies) {
+					continue
+				}
+				actor := s.enemyActorIndex(targetIdx)
+				s.atbGauge[actor] -= 15
+				if s.atbGauge[actor] < 0 {
+					s.atbGauge[actor] = 0
 				}
 			} else {
 				s.atbGauge[targetIdx] -= 15
@@ -348,9 +387,13 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 			}
 		case EffectAtbDownLarge:
 			if targetIsEnemy {
-				s.atbGauge[enemyID] -= 35
-				if s.atbGauge[enemyID] < 0 {
-					s.atbGauge[enemyID] = 0
+				if targetIdx < 0 || targetIdx >= len(s.enemies) {
+					continue
+				}
+				actor := s.enemyActorIndex(targetIdx)
+				s.atbGauge[actor] -= 35
+				if s.atbGauge[actor] < 0 {
+					s.atbGauge[actor] = 0
 				}
 			} else {
 				s.atbGauge[targetIdx] -= 35
@@ -362,14 +405,28 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 			d1 := Debuff{Type: DebuffDefDown, Percent: e.Percent, Turns: e.Turns}
 			d2 := Debuff{Type: DebuffMagicDefDown, Percent: e.Percent, Turns: e.Turns}
 			if targetIsEnemy {
-				s.EnemyDebuffs = append(s.EnemyDebuffs, d1, d2)
+				if targetIdx < 0 || targetIdx >= len(s.enemies) {
+					continue
+				}
+				s.enemies[targetIdx].Debuffs = append(s.enemies[targetIdx].Debuffs, d1, d2)
 			} else {
 				s.PlayerDebuffs[targetIdx] = append(s.PlayerDebuffs[targetIdx], d1, d2)
+			}
+		case EffectBuffAtkUp:
+			percent := e.Percent
+			if isAll {
+				percent = e.PercentAll
+			}
+			if !targetIsEnemy && targetIdx >= 0 && targetIdx < partySize {
+				s.PlayerBuffs[targetIdx] = append(s.PlayerBuffs[targetIdx], Buff{Type: BuffAtkUp, Percent: percent, Turns: e.Turns})
 			}
 		default:
 			d := Debuff{Type: mapEffectToDebuff(e.Type), Percent: e.Percent, Turns: e.Turns}
 			if targetIsEnemy {
-				s.EnemyDebuffs = append(s.EnemyDebuffs, d)
+				if targetIdx < 0 || targetIdx >= len(s.enemies) {
+					continue
+				}
+				s.enemies[targetIdx].Debuffs = append(s.enemies[targetIdx].Debuffs, d)
 			} else {
 				s.PlayerDebuffs[targetIdx] = append(s.PlayerDebuffs[targetIdx], d)
 			}
@@ -379,14 +436,22 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 
 func (s *BattleScene) tickDebuffs(actorIdx int, isEnemy bool) {
 	if isEnemy {
-		s.EnemyDebuffs = TickDebuffList(s.EnemyDebuffs)
+		if actorIdx < 0 || actorIdx >= len(s.enemies) {
+			return
+		}
+		s.enemies[actorIdx].Debuffs = TickDebuffList(s.enemies[actorIdx].Debuffs)
 	} else {
 		s.PlayerDebuffs[actorIdx] = TickDebuffList(s.PlayerDebuffs[actorIdx])
 	}
 }
 
-// anyActorHolding は、いずれかのキャラがまだ前進位置(readySlideX)から
-// 元の位置へ戻りきっていない（＝行動アニメーション～戻り待機の途中）かを返す。
+func (s *BattleScene) tickBuffs(actorIdx int) {
+	if actorIdx < 0 || actorIdx >= partySize {
+		return
+	}
+	s.PlayerBuffs[actorIdx] = TickBuffList(s.PlayerBuffs[actorIdx])
+}
+
 func (s *BattleScene) anyActorHolding() bool {
 	for i := 0; i < partySize; i++ {
 		if s.readySlideX[i] < -0.5 {
@@ -396,8 +461,6 @@ func (s *BattleScene) anyActorHolding() bool {
 	return false
 }
 
-// gaugeSegmentColor は指定した段(stage)の色を返す。
-// MAX状態(5段階目)のときは全段グラデーションアニメになる。
 func (s *BattleScene) gaugeSegmentColor(stage int) color.RGBA {
 	if stage < 0 {
 		stage = 0
@@ -411,10 +474,9 @@ func (s *BattleScene) gaugeSegmentColor(stage int) color.RGBA {
 	return gaugeStageColors[stage]
 }
 
-// gaugeRainbowColor は全段階色を巡回する簡易グラデーションを返す。
 func (s *BattleScene) gaugeRainbowColor() color.RGBA {
 	n := len(gaugeStageColors)
-	const secPerColor = 0.6 // 1色あたりの切り替え秒数（調整用）
+	const secPerColor = 0.6
 	t := s.gaugeColorAnimTimer / secPerColor
 	idx := int(t) % n
 	next := (idx + 1) % n
@@ -432,8 +494,6 @@ func lerpByte(a, b uint8, t float64) uint8 {
 	return uint8(float64(a) + (float64(b)-float64(a))*t)
 }
 
-// fillGaugeTriSegment は三角形ゲージの高さ方向[hStart, hEnd]区間だけを
-// 指定色で塗る（hは底辺からの高さ、単位px）。
 func (s *BattleScene) fillGaugeTriSegment(screen *ebiten.Image, ix, iy, iw, ih int, hStart, hEnd float64, col color.RGBA) {
 	if hEnd <= hStart {
 		return

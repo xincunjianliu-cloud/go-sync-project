@@ -1,14 +1,9 @@
 package main
 
-// battle_draw_items.go: バトル中のアイテム選択・使用対象選択の描画
-// スキルサブメニュー(drawSkillSubMenu)と同じ画像・レイアウトを流用する。
-
 import (
 	"fmt"
-	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -25,33 +20,11 @@ func (s *BattleScene) currentItemDescription() string {
 }
 
 func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
-	cmdCenterX := 860.0
-	cmdCenterY := 440.0
+	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
 
-	windowW := 140.0
-	windowH := 72.0
-	if s.game.SkillPanelImg != nil {
-		windowW = float64(s.game.SkillPanelImg.Bounds().Dx())
-		windowH = float64(s.game.SkillPanelImg.Bounds().Dy())
-	}
-
-	windowX := cmdCenterX - windowW/2
-	windowY := cmdCenterY - windowH/2
-
-	if s.game.SkillPanelImg != nil {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(windowX, windowY)
-		screen.DrawImage(s.game.SkillPanelImg, op)
-	} else {
-		ebitenutil.DrawRect(screen, windowX, windowY, windowW, windowH, color.RGBA{10, 10, 20, 240})
-	}
-
-	const (
-		labelOffsetX = 15.0
-		labelOffsetY = 20.0
-		rowHeight    = 35.0
-		countOffsetX = 20.0
-	)
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(windowX, windowY)
+	screen.DrawImage(s.game.SkillPanelImg, op)
 
 	items := s.battleUsableItems()
 	if len(items) == 0 {
@@ -70,8 +43,8 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 		}
 
 		itemFace := s.game.FontFace(15)
-		baseX := windowX + labelOffsetX
-		baseY := windowY + labelOffsetY + float64(i)*rowHeight
+		baseX := windowX + battleSubLabelOffsetX
+		baseY := windowY + battleSubLabelOffsetY + float64(i)*battleSubRowHeight
 		if selected {
 			arrowOp := &text.DrawOptions{}
 			arrowOp.GeoM.Translate(baseX, baseY)
@@ -84,7 +57,7 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 		text.Draw(screen, def.Name, itemFace, op)
 
 		countOp := &text.DrawOptions{}
-		countOp.GeoM.Translate(windowX+windowW-countOffsetX, windowY+labelOffsetY+float64(i)*rowHeight)
+		countOp.GeoM.Translate(windowX+windowW-battleSubRightOffsetX, baseY)
 		countOp.PrimaryAlign = text.AlignEnd
 		countOp.ColorScale.ScaleWithColor(labelCol)
 		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), s.game.FontFace(15), countOp)
@@ -93,6 +66,12 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 
 func (s *BattleScene) drawItemTargetUI(screen *ebiten.Image) {
 	isAll := s.itemTargetIndex == partySize
+
+	def, ok := GetItemDef(s.pendingItemID)
+	allowAll := ok && (def.Target == TargetAll || def.Target == TargetBoth)
+	if allowAll {
+		s.drawAllTargetRow(screen, isAll)
+	}
 
 	for i := 0; i < partySize; i++ {
 		centerX := s.partyScreenX[i]
@@ -115,13 +94,5 @@ func (s *BattleScene) itemTargetDescriptionAndHint() (string, string) {
 	if !ok {
 		return "", ""
 	}
-	hint := ""
-	if def.Target == TargetAll || def.Target == TargetBoth {
-		if s.itemTargetIndex == partySize {
-			hint = "←:個人選択に戻す"
-		} else {
-			hint = "→:全体に切替"
-		}
-	}
-	return def.Description, hint
+	return def.Description, ""
 }

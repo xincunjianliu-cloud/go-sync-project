@@ -1,6 +1,5 @@
 package main
 
-// menu_draw_misc.go: ミニマップ・音量パネル・ヒント/説明文の描画
 import (
 	"fmt"
 	"image/color"
@@ -23,11 +22,9 @@ const (
 	menuDescOffsetY float64 = 30
 )
 
-// スキルパネル用ヒントの表示開始位置（左上基準の絶対座標）
 const (
-	skillSubHintX   = 600.0 // ← 調整用：ヒントの開始X座標
-	skillSubHintY   = 400.0 // ← 調整用：ヒントの開始Y座標
-	skillSubMPDescX = 600.0
+	skillSubHintX = 600.0
+	skillSubHintY = 400.0
 )
 
 func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
@@ -96,28 +93,20 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 	plx := offsetX + field.px*scale
 	ply := offsetY + field.py*scale
 
-	if m.game.MinimapPlayerIconImg != nil {
-		icon := m.game.MinimapPlayerIconImg
-		iw := float64(icon.Bounds().Dx())
-		ih := float64(icon.Bounds().Dy())
+	icon := m.game.MinimapPlayerIconImg
+	iw := float64(icon.Bounds().Dx())
+	ih := float64(icon.Bounds().Dy())
 
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(-iw/2, -ih/2)
-		op.GeoM.Rotate(dirToAngle(field.dir))
-		op.GeoM.Translate(plx, ply)
-		screen.DrawImage(icon, op)
-	} else {
-		dotSize := 5.0
-		ebitenutil.DrawRect(screen, plx-dotSize/2, ply-dotSize/2, dotSize, dotSize, color.RGBA{255, 80, 80, 255})
-	}
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(-iw/2, -ih/2)
+	op.GeoM.Rotate(dirToAngle(field.dir))
+	op.GeoM.Translate(plx, ply)
+	screen.DrawImage(icon, op)
 
 	if loc, ok := m.game.CurrentObjectiveLocation(); ok {
 		if loc.MapPath == field.currentMap {
-			// 目的地が同じマップにある場合：実座標にそのままアイコンを表示
 			drawMinimapObjectiveIcon(screen, m.game, offsetX+loc.X*scale, offsetY+loc.Y*scale)
 		} else if field.hasObjectiveDoor {
-			// 目的地が別マップにある場合：そちらへ向かう誘導ドアの位置に
-			// 同じアイコンを表示する（フィールド上に直接印を付けるのはやめて、ここに統一）
 			drawMinimapObjectiveIcon(screen, m.game, offsetX+field.objectiveDoorX*scale, offsetY+field.objectiveDoorY*scale)
 		}
 	}
@@ -132,7 +121,6 @@ const (
 
 	volumeLabelBarGap   float64 = 110
 	volumeBarPercentGap float64 = 30
-	volumeArrowGap      float64 = 10
 
 	volumeResetGapY float64 = 44
 )
@@ -143,12 +131,13 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 		volume = m.game.Audio.volume
 	}
 
-	adjustingVolume := m.menuState == menuStateOptionAdjust
-	adjustingSpeed := m.menuState == menuStateMessageSpeedAdjust
-	onVolumeRow := adjustingVolume || (m.menuState == menuStateOption && m.optionIndex == 0)
-	// ↓ 【変更】メッセージ速度のカーソル判定を optionIndex == 2 に変更
-	onSpeedRow := adjustingSpeed || (m.menuState == menuStateOption && m.optionIndex == 2)
-	onResetRow := m.menuState == menuStateOption && m.optionIndex == 3
+	onOptionRow := func(idx int) bool { return m.menuState == menuStateOption && m.optionIndex == idx }
+	onVolumeRow := onOptionRow(0)
+	adjustingVolume := onVolumeRow
+	onSpeedRow := onOptionRow(2)
+	adjustingSpeed := onSpeedRow
+	onResetRow := m.optionIndex == 4 && (m.menuState == menuStateOption ||
+		m.menuState == menuStateOptionResetConfirm || m.menuState == menuStateOptionResetDone)
 	labelX := volumeGroupX
 	barX := labelX + volumeLabelBarGap
 	lineW := volumeBarW + volumeLabelBarGap
@@ -180,11 +169,11 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	ebitenutil.DrawRect(screen, barX+volumeBarW-1, barY, 1, volumeBarH, barFrameCol)
 
 	labelCol := uiColorText
-	if onVolumeRow && m.menuState == menuStateOption {
+	if onVolumeRow {
 		labelCol = uiColorSelect
 	}
 	bgmFace := m.game.FontFace(22)
-	if onVolumeRow && m.menuState == menuStateOption {
+	if onVolumeRow {
 		arrowOp := &text.DrawOptions{}
 		arrowOp.GeoM.Translate(labelX, barY+volumeBarH/2)
 		arrowOp.SecondaryAlign = text.AlignCenter
@@ -196,21 +185,6 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	labelOp.SecondaryAlign = text.AlignCenter
 	labelOp.ColorScale.ScaleWithColor(labelCol)
 	text.Draw(screen, "BGM", bgmFace, labelOp)
-
-	if adjustingVolume {
-		leftOp := &text.DrawOptions{}
-		leftOp.GeoM.Translate(barX-volumeArrowGap, barY+volumeBarH/2)
-		leftOp.SecondaryAlign = text.AlignCenter
-		leftOp.PrimaryAlign = text.AlignEnd
-		leftOp.ColorScale.ScaleWithColor(uiColorSelect)
-		text.Draw(screen, "◀", m.game.FontFace(20), leftOp)
-
-		rightOp := &text.DrawOptions{}
-		rightOp.GeoM.Translate(barX+volumeBarW+volumeArrowGap, barY+volumeBarH/2)
-		rightOp.SecondaryAlign = text.AlignCenter
-		rightOp.ColorScale.ScaleWithColor(uiColorSelect)
-		text.Draw(screen, "▶", m.game.FontFace(20), rightOp)
-	}
 
 	percentOp := &text.DrawOptions{}
 	percentOp.GeoM.Translate(barX+volumeBarW+volumeBarPercentGap, barY+volumeBarH/2)
@@ -227,12 +201,10 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	lineY2 := dispHeaderY + 24
 	ebitenutil.DrawRect(screen, labelX, lineY2, lineW, 1, lineCol)
 
-	// ── 【変更】表示モード行を先に描画する（上に配置） ──
 	displayRowY := lineY2 + 40
 	displayLabelCol := uiColorText
-	// ↓ 【変更】表示モードのカーソル判定を optionIndex == 1 に変更
-	onDisplayRow := m.menuState == menuStateDisplayModeAdjust || (m.menuState == menuStateOption && m.optionIndex == 1)
-	adjustingDisplay := m.menuState == menuStateDisplayModeAdjust
+	onDisplayRow := onOptionRow(1)
+	adjustingDisplay := onDisplayRow
 	if onDisplayRow {
 		displayLabelCol = uiColorSelect
 	}
@@ -248,7 +220,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	displayLabelOp.GeoM.Translate(labelX+text.Advance("▶ ", displayLabelFace), displayRowY)
 	displayLabelOp.SecondaryAlign = text.AlignCenter
 	displayLabelOp.ColorScale.ScaleWithColor(displayLabelCol)
-	text.Draw(screen, "表示モード", displayLabelFace, displayLabelOp)
+	text.Draw(screen, "画面モード", displayLabelFace, displayLabelOp)
 
 	displayValueX := barX + 180
 	displayArrowCol := uiColorText
@@ -266,7 +238,6 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	}
 	text.Draw(screen, displayModeLabel, m.game.FontFace(16), displayValueOp)
 
-	// フルスクリーン/ウィンドウの二択トグルなので、矢印は常に両方表示する
 	leftOp := &text.DrawOptions{}
 	leftOp.GeoM.Translate(displayValueX-70, displayRowY)
 	leftOp.SecondaryAlign = text.AlignCenter
@@ -281,10 +252,9 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	rightOp.ColorScale.ScaleWithColor(displayArrowCol)
 	text.Draw(screen, "▶", m.game.FontFace(18), rightOp)
 
-	// ── 【変更】メッセージ速度行を次に描画する（下に配置） ──
 	speedRowY := displayRowY + 40
 	speedLabelCol := uiColorText
-	onSpeedLabelRow := onSpeedRow && m.menuState == menuStateOption
+	onSpeedLabelRow := onSpeedRow
 	if onSpeedLabelRow {
 		speedLabelCol = uiColorSelect
 	}
@@ -337,22 +307,74 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 		text.Draw(screen, "▶", m.game.FontFace(18), rightOp)
 	}
 
-	// ── メッセージ速度のプレビュー描画 ──
-	descRowY := speedRowY + 30 // 位置を調整（+40のオフセットは削除）
+	descRowY := speedRowY + 30
 
-	previewRunes := []rune(messageSpeedPreviewText)
-	revealCount := m.previewRevealCount()
-	visiblePreview := string(previewRunes[:revealCount])
+	if onSpeedRow {
+		previewRunes := []rune(messageSpeedPreviewText)
+		revealCount := m.previewRevealCount()
+		visiblePreview := string(previewRunes[:revealCount])
 
-	descOp := &text.DrawOptions{}
-	descOp.GeoM.Translate(labelX, descRowY)
-	descOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, visiblePreview, m.game.FontFace(13), descOp)
+		descOp := &text.DrawOptions{}
+		descOp.GeoM.Translate(labelX, descRowY)
+		descOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, visiblePreview, m.game.FontFace(18), descOp)
+	}
 
 	lineY3 := descRowY + 20
 	ebitenutil.DrawRect(screen, labelX, lineY3, lineW, 1, lineCol)
 
-	resetY := lineY3 + volumeResetGapY
+	cursorRowY := lineY3 + 30
+	onCursorRow := onOptionRow(3)
+	adjustingCursor := onCursorRow
+	cursorLabelCol := uiColorText
+	if onCursorRow {
+		cursorLabelCol = uiColorSelect
+	}
+	cursorLabelFace := m.game.FontFace(20)
+	if onCursorRow {
+		arrowOp := &text.DrawOptions{}
+		arrowOp.GeoM.Translate(labelX, cursorRowY)
+		arrowOp.SecondaryAlign = text.AlignCenter
+		arrowOp.ColorScale.ScaleWithColor(cursorLabelCol)
+		text.Draw(screen, "▶", cursorLabelFace, arrowOp)
+	}
+	cursorLabelOp := &text.DrawOptions{}
+	cursorLabelOp.GeoM.Translate(labelX+text.Advance("▶ ", cursorLabelFace), cursorRowY)
+	cursorLabelOp.SecondaryAlign = text.AlignCenter
+	cursorLabelOp.ColorScale.ScaleWithColor(cursorLabelCol)
+	text.Draw(screen, "カーソル記憶", cursorLabelFace, cursorLabelOp)
+
+	cursorValueX := barX + 180
+	cursorArrowCol := uiColorText
+	if adjustingCursor {
+		cursorArrowCol = uiColorSelect
+	}
+	cursorValueOp := &text.DrawOptions{}
+	cursorValueOp.GeoM.Translate(cursorValueX, cursorRowY)
+	cursorValueOp.SecondaryAlign = text.AlignCenter
+	cursorValueOp.PrimaryAlign = text.AlignCenter
+	cursorValueOp.ColorScale.ScaleWithColor(uiColorText)
+	cursorValueLabel := "OFF"
+	if m.game.RememberCursor {
+		cursorValueLabel = "ON"
+	}
+	text.Draw(screen, cursorValueLabel, m.game.FontFace(16), cursorValueOp)
+
+	cursorLeftOp := &text.DrawOptions{}
+	cursorLeftOp.GeoM.Translate(cursorValueX-70, cursorRowY)
+	cursorLeftOp.SecondaryAlign = text.AlignCenter
+	cursorLeftOp.PrimaryAlign = text.AlignCenter
+	cursorLeftOp.ColorScale.ScaleWithColor(cursorArrowCol)
+	text.Draw(screen, "◀", m.game.FontFace(18), cursorLeftOp)
+
+	cursorRightOp := &text.DrawOptions{}
+	cursorRightOp.GeoM.Translate(cursorValueX+70, cursorRowY)
+	cursorRightOp.SecondaryAlign = text.AlignCenter
+	cursorRightOp.PrimaryAlign = text.AlignCenter
+	cursorRightOp.ColorScale.ScaleWithColor(cursorArrowCol)
+	text.Draw(screen, "▶", m.game.FontFace(18), cursorRightOp)
+
+	resetY := cursorRowY + volumeResetGapY
 	resetCol := uiColorText
 	if onResetRow {
 		resetCol = uiColorSelect
@@ -388,6 +410,25 @@ func (m *MenuScene) drawBottomRightHint(screen *ebiten.Image, hint string) {
 func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 	var desc string
 
+	if m.drawNotice(screen) {
+		return
+	}
+
+	if m.showReturnTitleConfirm {
+		desc = menuCommandDescriptions["タイトルに戻る"]
+		if desc == "" {
+			return
+		}
+		x := float64(gameWidth) - menuDescOffsetX
+		y := float64(gameHeight) - menuDescOffsetY
+		descOp := &text.DrawOptions{}
+		descOp.GeoM.Translate(x, y)
+		descOp.PrimaryAlign = text.AlignEnd
+		descOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, desc, m.game.FontFace(14), descOp)
+		return
+	}
+
 	switch m.menuState {
 	case menuStateMain:
 		if m.menuIndex < 0 || m.menuIndex >= len(m.commands) {
@@ -405,10 +446,7 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 	case menuStateLoadSlot, menuStateLoadConfirm:
 		desc = menuCommandDescriptions["ロード"]
 
-	case menuStateReturnTitleConfirm: // ← 追加
-		desc = menuCommandDescriptions["タイトルに戻る"]
-
-	case menuStateOption, menuStateOptionAdjust, menuStateMessageSpeedAdjust:
+	case menuStateOption, menuStateOptionResetConfirm, menuStateOptionResetDone:
 		d, ok := menuOptionDescriptions[m.optionIndex]
 		if !ok {
 			return
@@ -416,7 +454,7 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 		desc = d
 
 	case menuStateSkillCharSel:
-		desc = "スキルを使うキャラクターを選択してください"
+		desc = "スキルを確認・強化するキャラクターを選択してください"
 	case menuStateStatus:
 		desc = "←/→: キャラ切替　ESC: 戻る"
 
@@ -434,7 +472,6 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 		mpCost := -1
 
 		if !m.skillLevelSelecting {
-			// ── 行選択中（スキル名にカーソル）：シンプルな概要のみ ──
 			descText = skillShortDescription(sk.Name)
 			curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 			if curLv < 1 {
@@ -442,7 +479,6 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 			}
 			mpCost = sk.Levels[curLv-1].MPCost
 		} else {
-			// ── Lv選択中（数字にカーソル） ──
 			lv := m.skillLevelCursor
 			if lv < 1 {
 				lv = 1
@@ -459,44 +495,28 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 			descText = sk.Levels[lv-1].Description
 			mpCost = sk.Levels[lv-1].MPCost
 			if lv > curLv {
-				// 未強化のレベル：長押しで強化できることを案内する
 				descText = descText + "　長押しで強化"
 			}
 		}
 
-		img := m.game.MenuSkillPanelImg
-		winH := 200.0
-		if img != nil {
-			winH = float64(img.Bounds().Dy())
-		}
-		baseY := skillSubPanelY + winH - skillSubBottomOffsetY
-
-		if descText != "" {
-			descOp := &text.DrawOptions{}
-			descOp.GeoM.Translate(skillSubPanelX+skillSubDescOffsetX, baseY)
-			descOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, descText, m.game.FontFace(skillSubBottomFontSize), descOp)
-		}
 		if mpCost >= 0 {
-			mpOp := &text.DrawOptions{}
-			mpOp.GeoM.Translate(skillSubMPDescX, baseY)
-			mpOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, fmt.Sprintf("MP:%d", mpCost), m.game.FontFace(skillSubBottomFontSize), mpOp)
+			desc = fmt.Sprintf("%s　MP:%d", descText, mpCost)
+		} else {
+			desc = descText
 		}
-		return
 	case menuStateHealTarget:
-		hint := "→:全体回復に切替"
-		if m.healTargetIndex == partySize {
-			hint = "←:個人選択に戻す"
+		desc = "回復する相手を選んでください"
+		skills := m.game.CharacterSkills(m.skillCharIndex)
+		if si, lv := m.pendingSkill-1, m.pendingSkillLevel; si >= 0 && si < len(skills) && lv >= 1 && lv <= len(skills[si].Levels) {
+			desc = fmt.Sprintf("%s　消費MP:%d（残りMP:%d）", desc, skills[si].Levels[lv-1].MPCost, m.game.PlayerMP[m.skillCharIndex])
 		}
-		d, ok := menuSkillDescriptions[skillIdxHeal]
-		if !ok {
-			return
-		}
-		desc = d + "　" + hint
 
 	case menuStateItemList:
 		items := m.usableFieldItems()
+		if len(items) == 0 {
+			desc = "メニューから使えるアイテムを持っていません"
+			break
+		}
 		if m.itemListIndex < 0 || m.itemListIndex >= len(items) {
 			return
 		}
@@ -512,13 +532,6 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 			return
 		}
 		desc = def.Description
-		if def.Target == TargetAll || def.Target == TargetBoth {
-			hint := "→:全体に切替"
-			if m.itemTargetIndex == partySize {
-				hint = "←:個人選択に戻す"
-			}
-			desc = desc + "　" + hint
-		}
 
 	default:
 		return
@@ -539,40 +552,24 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 	text.Draw(screen, desc, m.game.FontFace(14), descOp)
 }
 
-func drawObjectiveStar(screen *ebiten.Image, cx, cy float64) {
-	size := 6.0
-	col := color.RGBA{255, 220, 60, 255}
-	ebitenutil.DrawRect(screen, cx-size/2, cy-1, size, 2, col)
-	ebitenutil.DrawRect(screen, cx-1, cy-size/2, 2, size, col)
-	ebitenutil.DrawRect(screen, cx-size/2-1, cy-2, size+2, 1, color.RGBA{255, 255, 255, 180})
-	ebitenutil.DrawRect(screen, cx-size/2-1, cy+1, size+2, 1, color.RGBA{255, 255, 255, 180})
-}
-
-// drawMinimapObjectiveIcon はミニマップ上の指定スクリーン座標(ox, oy)に
-// 目的地アイコン（画像が無ければ星形フォールバック）を描画する。
-// 「現在マップ内の目的地の実座標」「別マップへの誘導ドア座標」の両方で共通利用する。
 func drawMinimapObjectiveIcon(screen *ebiten.Image, g *Game, ox, oy float64) {
-	if g.MinimapObjectiveIconImg != nil {
-		icon := g.MinimapObjectiveIconImg
-		iw := float64(icon.Bounds().Dx())
-		ih := float64(icon.Bounds().Dy())
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(ox-iw/2, oy-ih/2)
-		screen.DrawImage(icon, op)
-	} else {
-		drawObjectiveStar(screen, ox, oy)
-	}
+	icon := g.MinimapObjectiveIconImg
+	iw := float64(icon.Bounds().Dx())
+	ih := float64(icon.Bounds().Dy())
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(ox-iw/2, oy-ih/2)
+	screen.DrawImage(icon, op)
 }
 
 func dirToAngle(dir int) float64 {
 	switch dir {
-	case 0: // 下
+	case 0:
 		return math.Pi
-	case 1: // 左
+	case 1:
 		return -math.Pi / 2
-	case 2: // 右
+	case 2:
 		return math.Pi / 2
-	case 3: // 上
+	case 3:
 		return 0
 	}
 	return 0
