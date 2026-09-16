@@ -193,6 +193,8 @@ type FieldScene struct {
 	touchStickActive   bool
 	touchStickDX       float64
 	touchStickDY       float64
+	touchStickOriginX  float64
+	touchStickOriginY  float64
 	touchStickTouchID  ebiten.TouchID
 	touchStickUseMouse bool
 	isDashingNow       bool
@@ -427,6 +429,8 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		collisions:        collisionRects,
 		collisionPolygons: collisionPolygons,
 		touchStickTouchID: touchStickNoTouch,
+		touchStickOriginX: touchPadCenterX,
+		touchStickOriginY: touchPadCenterY,
 		blocks:            blocks,
 	}
 

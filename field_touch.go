@@ -12,17 +12,31 @@ import (
 )
 
 const (
+	// touchPadCenterX/Y is the resting position shown before the player
+	// touches down. The stick itself floats to wherever the player
+	// actually places their thumb within touchStickZone*, so they don't
+	// need to look down and hit an exact spot.
 	touchPadCenterX = 110.0
 	touchPadCenterY = float64(gameHeight) - 110.0
-	stickBaseR      = 62.0
-	stickKnobR      = 26.0
-	stickCaptureR   = stickBaseR * 1.8
-	stickDeadzone   = 10.0
-	stickArrowSize  = 16.0
+	stickBaseR      = 70.0
+	stickKnobR      = 32.0
+	stickDeadzone   = 8.0
+	stickArrowSize  = 18.0
 
-	touchActionX = float64(gameWidth) - 90.0
-	touchActionY = float64(gameHeight) - 90.0
-	touchActionR = 44.0
+	// stickWalkFullAtRatio: pushing the stick past this fraction of its
+	// radius already yields full walk speed, so small nudges give fine,
+	// analog-feeling control while the rest of the throw is "free".
+	stickWalkFullAtRatio = 0.5
+
+	// Touches starting anywhere in this zone (roughly the left/lower
+	// portion of the screen, clear of the action and menu buttons) spawn
+	// the stick right under the thumb.
+	touchStickZoneX = float64(gameWidth) * 0.62
+	touchStickZoneY = 0.0
+
+	touchActionX = float64(gameWidth) - 96.0
+	touchActionY = float64(gameHeight) - 96.0
+	touchActionR = 50.0
 
 	touchMenuCenterX     = float64(gameWidth) - 60.0
 	touchMenuCenterY     = 40.0
@@ -96,15 +110,32 @@ func touchIDStillHeld(id ebiten.TouchID) bool {
 	return false
 }
 
-func pointInStickCapture(x, y float64) bool {
-	dx := x - touchPadCenterX
-	dy := y - touchPadCenterY
-	return dx*dx+dy*dy <= stickCaptureR*stickCaptureR
+func pointInStickZone(x, y float64) bool {
+	return x >= 0 && x < touchStickZoneX && y >= touchStickZoneY && y < float64(gameHeight)
+}
+
+// stickOriginForTouch clamps the touch-down point so the whole stick base
+// stays on screen, letting the joystick float to wherever the thumb lands.
+func stickOriginForTouch(x, y float64) (float64, float64) {
+	margin := stickBaseR + 6.0
+	if x < margin {
+		x = margin
+	}
+	if x > touchStickZoneX {
+		x = touchStickZoneX
+	}
+	if y < margin {
+		y = margin
+	}
+	if y > float64(gameHeight)-margin {
+		y = float64(gameHeight) - margin
+	}
+	return x, y
 }
 
 func (s *FieldScene) setStickFromPoint(x, y float64) {
-	dx := x - touchPadCenterX
-	dy := y - touchPadCenterY
+	dx := x - s.touchStickOriginX
+	dy := y - s.touchStickOriginY
 	if dist := math.Hypot(dx, dy); dist > stickBaseR {
 		scale := stickBaseR / dist
 		dx *= scale
@@ -121,6 +152,8 @@ func (s *FieldScene) releaseStick() {
 	s.touchStickActive = false
 	s.touchStickDX = 0
 	s.touchStickDY = 0
+	s.touchStickOriginX = touchPadCenterX
+	s.touchStickOriginY = touchPadCenterY
 }
 
 func (s *FieldScene) updateTouchStick() {
@@ -147,16 +180,18 @@ func (s *FieldScene) updateTouchStick() {
 
 	for _, id := range inpututil.AppendJustPressedTouchIDs(nil) {
 		x, y := ebiten.TouchPosition(id)
-		if pointInStickCapture(float64(x), float64(y)) {
+		if pointInStickZone(float64(x), float64(y)) {
 			s.touchStickTouchID = id
+			s.touchStickOriginX, s.touchStickOriginY = stickOriginForTouch(float64(x), float64(y))
 			s.setStickFromPoint(float64(x), float64(y))
 			return
 		}
 	}
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
-		if pointInStickCapture(float64(x), float64(y)) {
+		if pointInStickZone(float64(x), float64(y)) {
 			s.touchStickUseMouse = true
+			s.touchStickOriginX, s.touchStickOriginY = stickOriginForTouch(float64(x), float64(y))
 			s.setStickFromPoint(float64(x), float64(y))
 		}
 	}
@@ -181,13 +216,32 @@ func (s *FieldScene) touchMoveDir() (dx, dy int) {
 	return dx, dy
 }
 
-const dashThreshold = stickBaseR - 6
+const dashThreshold = stickBaseR - 10
 
 func (s *FieldScene) touchStickDash() bool {
 	if !s.touchStickActive {
 		return false
 	}
 	return math.Hypot(s.touchStickDX, s.touchStickDY) >= dashThreshold
+}
+
+// touchStickSpeedScale gives analog control near the center of the stick:
+// a light push moves slowly and precisely, while anything past
+// stickWalkFullAtRatio of the radius already moves at full walk speed.
+func (s *FieldScene) touchStickSpeedScale() float64 {
+	if !s.touchStickActive {
+		return 0
+	}
+	dist := math.Hypot(s.touchStickDX, s.touchStickDY)
+	if dist <= stickDeadzone {
+		return 0
+	}
+	fullAt := stickBaseR * stickWalkFullAtRatio
+	if dist >= fullAt {
+		return 1
+	}
+	t := (dist - stickDeadzone) / (fullAt - stickDeadzone)
+	return t * t * (3 - 2*t)
 }
 
 func fieldTouchActionPressed() bool {
@@ -244,6 +298,52 @@ func drawStickArrow(screen *ebiten.Image, cx, cy, ux, uy float64, clr color.Colo
 	vector.FillPath(screen, &path, &vector.FillOptions{}, &vector.DrawPathOptions{AntiAlias: true, ColorScale: cs})
 }
 
+// drawRestingStickHint shows a light, unobtrusive marker at the default
+// stick position so the player still has a visual anchor, even though a
+// touch anywhere in the movement zone will spawn the stick right there.
+func drawRestingStickHint(screen *ebiten.Image) {
+	drawRingOutline(screen, touchPadCenterX, touchPadCenterY, stickBaseR*0.7, color.NRGBA{255, 255, 255, 70})
+	vector.FillCircle(screen, float32(touchPadCenterX), float32(touchPadCenterY), float32(stickKnobR*0.5), color.NRGBA{255, 255, 255, 60}, true)
+}
+
+func (s *FieldScene) drawActiveStick(screen *ebiten.Image) {
+	cx, cy := s.touchStickOriginX, s.touchStickOriginY
+	dashing := s.touchStickDash()
+
+	baseColor := color.NRGBA{0, 0, 0, 150}
+	arrowColor := color.NRGBA{255, 255, 255, 210}
+	knobColor := color.NRGBA{255, 255, 255, 255}
+	if dashing {
+		knobColor = color.NRGBA{255, 214, 110, 255}
+	}
+
+	vector.FillCircle(screen, float32(cx), float32(cy), float32(stickBaseR), baseColor, true)
+	drawRingOutline(screen, cx, cy, stickBaseR, color.NRGBA{255, 255, 255, 90})
+
+	drawStickArrow(screen, cx, cy, 0, -1, arrowColor)
+	drawStickArrow(screen, cx, cy, 0, 1, arrowColor)
+	drawStickArrow(screen, cx, cy, -1, 0, arrowColor)
+	drawStickArrow(screen, cx, cy, 1, 0, arrowColor)
+
+	knobX := cx + s.touchStickDX
+	knobY := cy + s.touchStickDY
+	if dashing {
+		vector.FillCircle(screen, float32(knobX), float32(knobY), float32(stickKnobR+4), color.NRGBA{255, 214, 110, 70}, true)
+	}
+	vector.FillCircle(screen, float32(knobX), float32(knobY), float32(stickKnobR), knobColor, true)
+}
+
+func drawActionButton(screen *ebiten.Image, pressed bool) {
+	fillColor := color.NRGBA{255, 255, 255, 60}
+	ringAlpha := uint8(160)
+	if pressed {
+		fillColor = color.NRGBA{255, 255, 255, 140}
+		ringAlpha = 230
+	}
+	vector.FillCircle(screen, float32(touchActionX), float32(touchActionY), float32(touchActionR), fillColor, true)
+	drawRingOutline(screen, touchActionX, touchActionY, touchActionR, color.NRGBA{255, 255, 255, ringAlpha})
+}
+
 func drawHamburgerMenuButton(screen *ebiten.Image, game *Game) {
 	x, y, w, h := touchMenuCenterX-touchMenuSize/2, touchMenuCenterY-touchMenuSize/2, touchMenuSize, touchMenuSize
 	ebitenutil.DrawRect(screen, x, y, w, h, color.NRGBA{0, 0, 0, 170})
@@ -268,32 +368,20 @@ func drawHamburgerMenuButton(screen *ebiten.Image, game *Game) {
 
 func (s *FieldScene) drawTouchControls(screen *ebiten.Image, showPad bool, showActionButton bool) {
 	if showPad {
-		baseColor := color.NRGBA{0, 0, 0, 170}
-		arrowColor := color.NRGBA{255, 255, 255, 210}
-		knobColor := color.NRGBA{255, 255, 255, 235}
 		if s.touchStickActive {
-			knobColor = color.NRGBA{255, 255, 255, 255}
+			s.drawActiveStick(screen)
+		} else {
+			drawRestingStickHint(screen)
 		}
-
-		vector.FillCircle(screen, float32(touchPadCenterX), float32(touchPadCenterY), float32(stickBaseR), baseColor, true)
-
-		drawStickArrow(screen, touchPadCenterX, touchPadCenterY, 0, -1, arrowColor)
-		drawStickArrow(screen, touchPadCenterX, touchPadCenterY, 0, 1, arrowColor)
-		drawStickArrow(screen, touchPadCenterX, touchPadCenterY, -1, 0, arrowColor)
-		drawStickArrow(screen, touchPadCenterX, touchPadCenterY, 1, 0, arrowColor)
-
-		knobX := touchPadCenterX + s.touchStickDX
-		knobY := touchPadCenterY + s.touchStickDY
-		vector.FillCircle(screen, float32(knobX), float32(knobY), float32(stickKnobR), knobColor, true)
 	}
 
 	if showActionButton {
-		actionColor := color.NRGBA{255, 255, 255, 60}
+		pressed := false
 		for _, p := range activeTouchPoints() {
 			if p.inCircle(touchActionX, touchActionY, touchActionR) {
-				actionColor = color.NRGBA{255, 255, 255, 130}
+				pressed = true
 			}
 		}
-		ebitenutil.DrawRect(screen, touchActionX-touchActionR, touchActionY-touchActionR, touchActionR*2, touchActionR*2, actionColor)
+		drawActionButton(screen, pressed)
 	}
 }

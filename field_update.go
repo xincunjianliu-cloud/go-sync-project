@@ -423,22 +423,38 @@ func (s *FieldScene) Update(dt float64) Scene {
 		perFrame *= s.playerCfg.DashSpeedMultiplier
 	}
 	touchDx, touchDy := s.touchMoveDir()
+	touchScale := s.touchStickSpeedScale()
 
+	// Keyboard input always moves at full speed; the touch stick scales
+	// smoothly from a light tap up to full speed as it's pushed further,
+	// giving analog-feeling precision instead of an all-or-nothing snap.
 	moveX, moveY := 0.0, 0.0
-	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) || touchDy < 0 {
+	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
 		moveY = -perFrame
 		s.dir = 3
+	} else if touchDy < 0 {
+		moveY = -perFrame * touchScale
+		s.dir = 3
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) || touchDy > 0 {
+	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) {
 		moveY = perFrame
 		s.dir = 0
+	} else if touchDy > 0 {
+		moveY = perFrame * touchScale
+		s.dir = 0
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) || touchDx < 0 {
+	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		moveX = -perFrame
 		s.dir = 1
+	} else if touchDx < 0 {
+		moveX = -perFrame * touchScale
+		s.dir = 1
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) || touchDx > 0 {
+	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) {
 		moveX = perFrame
+		s.dir = 2
+	} else if touchDx > 0 {
+		moveX = perFrame * touchScale
 		s.dir = 2
 	}
 
