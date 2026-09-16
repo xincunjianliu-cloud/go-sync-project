@@ -12,7 +12,7 @@
 .DS_Store
 .vscode/
 
-# スマホ/ブラウザ確認用のWASMビルド出力（build_wasm.shで生成、都度作り直す）
+# WASMビルド出力（GitHub Actionsが生成、都度作り直す）
 /web/game.wasm
 /web/wasm_exec.js
 
