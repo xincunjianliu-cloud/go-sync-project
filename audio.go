@@ -38,12 +38,15 @@ type AudioManager struct {
 	fadeInActive      bool
 	fadeInTarget      float64
 	fadeInSpeed       float64
+
+	pcmCache map[string][]byte
 }
 
 func NewAudioManager() *AudioManager {
 	return &AudioManager{
-		context: audio.NewContext(sampleRate),
-		volume:  defaultBGMVolume,
+		context:  audio.NewContext(sampleRate),
+		volume:   defaultBGMVolume,
+		pcmCache: make(map[string][]byte),
 	}
 }
 
@@ -52,7 +55,12 @@ func NewAudioManager() *AudioManager {
 // スマホの非力なCPUだとデコードが再生に間に合わずバッファが枯渇し、
 // ブツブツ音の原因になる。事前に全部デコードしておけば再生中は
 // メモリからコピーするだけになり、デコード負荷による音切れがなくなる。
-func decodePCM(path string) (*bytes.Reader, int64, error) {
+// デコード結果は曲ごとにキャッシュし、2回目以降の再生(戦闘開始・終了の
+// 繰り返しなど)で重いデコードが毎回走らないようにする。
+func (a *AudioManager) decodePCM(path string) (*bytes.Reader, int64, error) {
+	if pcm, ok := a.pcmCache[path]; ok {
+		return bytes.NewReader(pcm), int64(len(pcm)), nil
+	}
 	f, err := loadAssetReader(path)
 	if err != nil {
 		return nil, 0, err
@@ -65,11 +73,12 @@ func decodePCM(path string) (*bytes.Reader, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	a.pcmCache[path] = pcm
 	return bytes.NewReader(pcm), int64(len(pcm)), nil
 }
 
 func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
-	r, _, err := decodePCM(path)
+	r, _, err := a.decodePCM(path)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +92,7 @@ func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
 }
 
 func (a *AudioManager) loadLoopPlayer(path string) (*audio.Player, error) {
-	r, length, err := decodePCM(path)
+	r, length, err := a.decodePCM(path)
 	if err != nil {
 		return nil, err
 	}
