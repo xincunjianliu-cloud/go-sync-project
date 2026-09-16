@@ -92,6 +92,18 @@ func justPressedTouchAndMousePoints() (touches []touchPoint, mouse []touchPoint)
 	return touches, mouse
 }
 
+func activeTouchAndMousePoints() (touches []touchPoint, mouse []touchPoint) {
+	for _, id := range ebiten.AppendTouchIDs(nil) {
+		x, y := ebiten.TouchPosition(id)
+		touches = append(touches, touchPoint{float64(x), float64(y)})
+	}
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		mouse = append(mouse, touchPoint{float64(x), float64(y)})
+	}
+	return touches, mouse
+}
+
 func (p touchPoint) inRect(x, y, w, h float64) bool {
 	return p.x >= x && p.x < x+w && p.y >= y && p.y < y+h
 }

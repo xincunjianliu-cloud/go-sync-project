@@ -13,6 +13,11 @@ const (
 	battleIconR = 12.0
 
 	rewindBtnGapX = 20.0
+
+	// battleIconTapMargin widens the tap target for touch input only (not
+	// mouse), since the 12px icon radius alone is too small to hit
+	// reliably with a thumb.
+	battleIconTapMargin = 16.0
 )
 
 func rewindButtonCenter(game *Game) (cx, cy float64) {
@@ -86,7 +91,13 @@ func drawItemIcon(screen *ebiten.Image, cx, cy, r float64, selected bool) {
 
 func isRewindButtonJustPressed(game *Game) bool {
 	cx, cy := rewindButtonCenter(game)
-	for _, p := range justPressedTouchPoints() {
+	touches, mouse := justPressedTouchAndMousePoints()
+	for _, p := range touches {
+		if p.inCircle(cx, cy, battleIconR+battleIconTapMargin) {
+			return true
+		}
+	}
+	for _, p := range mouse {
 		if p.inCircle(cx, cy, battleIconR) {
 			return true
 		}
@@ -96,7 +107,13 @@ func isRewindButtonJustPressed(game *Game) bool {
 
 func isItemButtonJustPressed() bool {
 	cx, cy := itemButtonCenter()
-	for _, p := range justPressedTouchPoints() {
+	touches, mouse := justPressedTouchAndMousePoints()
+	for _, p := range touches {
+		if p.inCircle(cx, cy, battleIconR+battleIconTapMargin) {
+			return true
+		}
+	}
+	for _, p := range mouse {
 		if p.inCircle(cx, cy, battleIconR) {
 			return true
 		}

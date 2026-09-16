@@ -148,11 +148,20 @@ func (s *FieldScene) Update(dt float64) Scene {
 	}
 
 	if s.isItemGetActive {
-		if isConfirmKeyPressed() || isEscapePressed() || len(justPressedTouchPoints()) > 0 {
+		dismissed := false
+		if s.itemGetAutoCloseOnly {
+			s.itemGetAutoCloseTimer -= dt
+			dismissed = s.itemGetAutoCloseTimer <= 0
+		} else {
+			dismissed = isConfirmKeyPressed() || isEscapePressed() || len(justPressedTouchPoints()) > 0
+		}
+		if dismissed {
 			s.isItemGetActive = false
 			s.itemGetName = ""
 			s.itemGetSubLabel = ""
 			s.itemGetPlainMessage = false
+			s.itemGetAutoCloseOnly = false
+			s.itemGetAutoCloseTimer = 0
 		}
 		return s
 	}
@@ -169,7 +178,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 	if s.pendingAutoHealMessage {
 		s.pendingAutoHealMessage = false
-		s.openCenterMessagePopup(autoHealIntroMessage)
+		s.openCenterMessagePopupTimed(autoHealIntroMessage, autoHealIntroMessageDuration)
 		return s
 	}
 
@@ -289,7 +298,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if s.isMsgActive {
 		s.msg.Speed = s.game.MessageSpeedTicks()
 
-		if isSkipKeyDown() || isSkipIconHeld() {
+		if isSkipKeyDown() || isSkipIconHeld(s.game) {
 			s.msgSkipHoldElapsed += dt
 			if s.msgSkipHoldElapsed >= endingSkipHoldSeconds {
 				s.msgSkipHoldElapsed = 0
@@ -299,12 +308,12 @@ func (s *FieldScene) Update(dt float64) Scene {
 			s.msgSkipHoldElapsed = 0
 		}
 
-		if isAutoTogglePressed() || isAutoIconJustPressed() {
+		if isAutoTogglePressed() || isAutoIconJustPressed(s.game) {
 			s.autoMode = !s.autoMode
 			s.autoWaitElapsed = 0
 		}
 
-		if isLogTogglePressed() || isLogIconJustPressed() {
+		if isLogTogglePressed() || isLogIconJustPressed(s.game) {
 			s.openMessageLog()
 			return s
 		}

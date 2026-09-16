@@ -220,10 +220,12 @@ type FieldScene struct {
 	choiceAnchorX   float64
 	choiceAnchorY   float64
 
-	isItemGetActive     bool
-	itemGetName         string
-	itemGetSubLabel     string
-	itemGetPlainMessage bool
+	isItemGetActive       bool
+	itemGetName           string
+	itemGetSubLabel       string
+	itemGetPlainMessage   bool
+	itemGetAutoCloseOnly  bool
+	itemGetAutoCloseTimer float64
 
 	wallFadeActive bool
 	wallFadeKey    string
@@ -461,6 +463,7 @@ var autoHealMaps = map[string]bool{
 }
 
 const autoHealIntroMessage = "ダンジョンに入ると自動的に回復します"
+const autoHealIntroMessageDuration = 2.5
 
 func locationNameFromMap(mapPath string) string {
 	names := map[string]string{
@@ -631,7 +634,19 @@ func (s *FieldScene) openCenterMessagePopup(message string) {
 	s.itemGetName = message
 	s.itemGetSubLabel = ""
 	s.itemGetPlainMessage = true
+	s.itemGetAutoCloseOnly = false
+	s.itemGetAutoCloseTimer = 0
 	s.isItemGetActive = true
+}
+
+// openCenterMessagePopupTimed is like openCenterMessagePopup but ignores all
+// player input (decide key, escape, tap) and instead closes itself once
+// duration seconds have passed, so the player can't accidentally blow past
+// the message out of habit (e.g. mashing the action key while walking).
+func (s *FieldScene) openCenterMessagePopupTimed(message string, duration float64) {
+	s.openCenterMessagePopup(message)
+	s.itemGetAutoCloseOnly = true
+	s.itemGetAutoCloseTimer = duration
 }
 
 func (s *FieldScene) openKeyChest(obj TiledObject, keyName string) {

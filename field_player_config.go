@@ -80,7 +80,7 @@ func DefaultFieldPlayerConfig() FieldPlayerConfig {
 		Camera:              FieldCameraConfig{OffsetX: 0, OffsetY: -14},
 		AnimFramesPerStep:   10,
 		MoveSpeed:           300,
-		DashSpeedMultiplier: 1.8,
+		DashSpeedMultiplier: 1.4,
 	}
 }
 
@@ -113,7 +113,7 @@ func LoadFieldPlayerConfig(path string) (FieldPlayerConfig, *ebiten.Image, error
 	}
 
 	if cfg.DashSpeedMultiplier <= 0 {
-		cfg.DashSpeedMultiplier = 1.8
+		cfg.DashSpeedMultiplier = 1.4
 	}
 
 	img, err := loadAssetImage(cfg.Sprite)

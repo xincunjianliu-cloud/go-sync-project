@@ -27,5 +27,5 @@
   },
   "animFramesPerStep": 10,
   "moveSpeed": 300,
-  "dashSpeedMultiplier": 1.8
+  "dashSpeedMultiplier": 1.4
 }

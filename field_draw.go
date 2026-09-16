@@ -132,7 +132,9 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 
 	if s.isItemGetActive {
 		s.drawItemGetPopup(screen)
-		drawBackButton(screen, s.game)
+		if !s.itemGetAutoCloseOnly {
+			drawBackButton(screen, s.game)
+		}
 	}
 
 	if s.isLogActive {

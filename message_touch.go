@@ -19,6 +19,11 @@ const (
 
 	ctrlLabelFontSize = 11.0
 	ctrlKeyFontSize   = 14.0
+
+	// ctrlIconTapMargin widens the tap target for touch input only (not
+	// mouse), since the 12px icon radius alone is too small to hit
+	// reliably with a thumb.
+	ctrlIconTapMargin = 16.0
 )
 
 func ctrlRowY() float64 {
@@ -31,8 +36,8 @@ func ctrlIconXAt(index int) float64 {
 }
 
 func msgControlPanelRect() (x, y, w, h float64) {
-	x = ctrlIconXAt(0) - ctrlIconR - 6
-	y = ctrlRowY() - ctrlIconR - 6
+	x = ctrlIconXAt(0) - ctrlIconR - ctrlIconTapMargin
+	y = ctrlRowY() - ctrlIconR - ctrlIconTapMargin
 	bottom := ctrlRowY() + ctrlIconR + ctrlKeyHintGapY + 16
 	w = float64(gameWidth) - x
 	h = bottom - y
@@ -100,30 +105,66 @@ func drawLogIcon(screen *ebiten.Image, cx, cy, r float64) {
 	}
 }
 
-func isAutoIconJustPressed() bool {
+// ctrlIconHitRect returns the tap target covering both the icon circle and
+// its label text, so touching the label counts the same as touching the
+// icon. margin further pads the touch-only tap area.
+func ctrlIconHitRect(game *Game, cx, cy float64, label string, margin float64) (x, y, w, h float64) {
+	labelW := text.Advance(label, game.FontFace(ctrlLabelFontSize))
+	x = cx - ctrlIconR - margin
+	y = cy - ctrlIconR - margin
+	w = ctrlIconR + ctrlIconLabelGap + labelW + ctrlIconR + margin*2
+	h = ctrlIconR*2 + margin*2
+	return
+}
+
+func isAutoIconJustPressed(game *Game) bool {
 	cx, cy := ctrlIconXAt(0), ctrlRowY()
-	for _, p := range justPressedTouchPoints() {
-		if p.inCircle(cx, cy, ctrlIconR) {
+	touches, mouse := justPressedTouchAndMousePoints()
+	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, "オート", ctrlIconTapMargin)
+	for _, p := range touches {
+		if p.inRect(tx, ty, tw, th) {
+			return true
+		}
+	}
+	mx, my, mw, mh := ctrlIconHitRect(game, cx, cy, "オート", 0)
+	for _, p := range mouse {
+		if p.inRect(mx, my, mw, mh) {
 			return true
 		}
 	}
 	return false
 }
 
-func isLogIconJustPressed() bool {
+func isLogIconJustPressed(game *Game) bool {
 	cx, cy := ctrlIconXAt(1), ctrlRowY()
-	for _, p := range justPressedTouchPoints() {
-		if p.inCircle(cx, cy, ctrlIconR) {
+	touches, mouse := justPressedTouchAndMousePoints()
+	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, "ログ", ctrlIconTapMargin)
+	for _, p := range touches {
+		if p.inRect(tx, ty, tw, th) {
+			return true
+		}
+	}
+	mx, my, mw, mh := ctrlIconHitRect(game, cx, cy, "ログ", 0)
+	for _, p := range mouse {
+		if p.inRect(mx, my, mw, mh) {
 			return true
 		}
 	}
 	return false
 }
 
-func isSkipIconHeld() bool {
+func isSkipIconHeld(game *Game) bool {
 	cx, cy := ctrlIconXAt(2), ctrlRowY()
-	for _, p := range activeTouchPoints() {
-		if p.inCircle(cx, cy, ctrlIconR) {
+	touches, mouse := activeTouchAndMousePoints()
+	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, "スキップ", ctrlIconTapMargin)
+	for _, p := range touches {
+		if p.inRect(tx, ty, tw, th) {
+			return true
+		}
+	}
+	mx, my, mw, mh := ctrlIconHitRect(game, cx, cy, "スキップ", 0)
+	for _, p := range mouse {
+		if p.inRect(mx, my, mw, mh) {
 			return true
 		}
 	}
