@@ -1,4 +1,10 @@
 { "compressionlevel":-1,
+ "properties":[
+        {
+         "name":"bgm",
+         "type":"string",
+         "value":"field2"
+        }],
  "height":120,
  "infinite":false,
  "layers":[
@@ -985,12 +991,17 @@
                          "name":"id",
                          "type":"string",
                          "value":"lever_dark1"
-                        }, 
+                        },
+                        {
+                         "name":"oneway",
+                         "type":"string",
+                         "value":"true"
+                        },
                         {
                          "name":"text",
                          "type":"string",
                          "value":"event_lever"
-                        }, 
+                        },
                         {
                          "name":"type",
                          "type":"string",

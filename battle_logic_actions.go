@@ -386,7 +386,7 @@ func (s *BattleScene) checkBattleEnd() bool {
 				}
 			}
 			s.isWon = true
-			s.game.Audio.PlayBGMWithIntro(bgmBattleEndIntro, bgmBattleEndLoop)
+			s.game.Audio.PlayBGMWithIntro(bgmVictoryIntro, bgmVictoryLoop)
 			s.battlePhase = phaseBattleEnd
 		}
 		return true

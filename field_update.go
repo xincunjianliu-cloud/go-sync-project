@@ -170,6 +170,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 		cd := bossClearDialogues[s.justDefeatedBoss]
 		s.msgTexts = cd.Commands
 		s.msg.SpeakerToSlot = cd.SpeakerSlots
+		s.msgBGM = cd.BGM
 		s.msgIndex = 0
 		s.beginMessage()
 		s.justDefeatedBoss = 0
@@ -408,9 +409,10 @@ func (s *FieldScene) Update(dt float64) Scene {
 						s.pullLever(obj)
 						return s
 					} else if evText != "" {
-						s.msgTexts, s.msg.SpeakerToSlot = resolveEventDialogue(evText)
+						s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(evText)
 					} else {
 						s.msgTexts = []EventCommand{{Speaker: "", Text: "調べるとなにかあるかもしれない"}}
+						s.msgBGM = ""
 					}
 
 					s.msgIndex = 0
@@ -518,6 +520,9 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 	if !s.isPushingBlock {
 		for _, b := range s.blocks {
+			if s.blockIsLocked(b) {
+				continue
+			}
 			if blockNear(b, playerFootX, playerFootY) {
 				s.nearBlockID = b.ID
 				s.nearExamineEvent = true
@@ -962,21 +967,31 @@ func (s *FieldScene) triggerDoorWarp() Scene {
 	return s
 }
 
+// beginMessage は会話を開始する。会話データにbgmキーが指定されている場合のみ
+// BGMを切り替える。指定がなければ、歩行中に流れていたBGMをそのまま継続する
+// (会話のたびに毎回曲が途切れるのを避けるため)。
 func (s *FieldScene) beginMessage() {
 	s.msg.Reset()
 	s.isMsgActive = true
 	s.msg.Start()
-	s.game.Audio.PlayBGM(bgmMessage)
+	if s.msgBGM != "" {
+		if path, ok := resolveBGMKey(s.msgBGM); ok {
+			s.game.Audio.PlayBGM(path)
+		} else {
+			fmt.Printf("警告: 会話のbgmキー %q が見つかりません\n", s.msgBGM)
+		}
+	}
 }
 
 func (s *FieldScene) endMessage() {
 	s.isMsgActive = false
 	s.msgTexts = nil
 	s.msgIndex = 0
+	s.msgBGM = ""
 	s.autoMode = false
 	s.autoWaitElapsed = 0
 	s.nearExamineEvent = false
-	s.game.Audio.PlayBGM(bgmFieldSchool)
+	s.game.Audio.PlayBGM(s.mapBGM)
 }
 
 const (

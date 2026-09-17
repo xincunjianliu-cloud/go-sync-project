@@ -69,6 +69,18 @@ func prefetchAssetBytes(paths []string) {
 }
 
 func loadAssetImage(path string) (*ebiten.Image, error) {
+	img, err := decodeAssetImage(path)
+	if err != nil {
+		return nil, err
+	}
+	return ebiten.NewImageFromImage(img), nil
+}
+
+// decodeAssetImage はloadAssetImageと違い、image.Decodeまでで止めて
+// ebiten.Imageは生成しない。ebiten.NewImageFromImage等のグラフィックス系
+// APIはメインゴルーチン以外からの呼び出しが保証されていないため、
+// バックグラウンドgoroutineでの先読みにはこちらを使う。
+func decodeAssetImage(path string) (image.Image, error) {
 	data, err := loadAssetBytesCached(path)
 	if err != nil {
 		return nil, err
@@ -77,7 +89,7 @@ func loadAssetImage(path string) (*ebiten.Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("画像デコード失敗 %s: %w", path, err)
 	}
-	return ebiten.NewImageFromImage(img), nil
+	return img, nil
 }
 
 func loadAssetReader(path string) (*bytes.Reader, error) {

@@ -14,6 +14,10 @@ const (
 	atbMax     = 100.0
 )
 
+// lastBossEventType はラスボス(4体目のボス)のイベント種別。ボス4体のうち
+// この1体だけ通常のボス戦BGMではなくラスボス専用BGMを流す。
+const lastBossEventType = "boss_4"
+
 const battleLogDuration = 0.7
 const gameOverMessageDuration = 1.5
 
@@ -666,7 +670,9 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 		s.atbGauge[s.enemyActorIndex(i)] = float64(rand.Intn(20))
 	}
 
-	if isBoss {
+	if evType == lastBossEventType {
+		game.Audio.PlayBGM(bgmBattleLastBoss)
+	} else if isBoss {
 		game.Audio.PlayBGM(bgmBattleBoss)
 	} else {
 		game.Audio.PlayBGM(bgmBattleNormal)

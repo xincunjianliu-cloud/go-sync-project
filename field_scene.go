@@ -20,11 +20,26 @@ const (
 )
 
 type TiledMap struct {
-	Width      int          `json:"width"`
-	Height     int          `json:"height"`
-	TileWidth  int          `json:"tilewidth"`
-	TileHeight int          `json:"tileheight"`
-	Layers     []TiledLayer `json:"layers"`
+	Width      int             `json:"width"`
+	Height     int             `json:"height"`
+	TileWidth  int             `json:"tilewidth"`
+	TileHeight int             `json:"tileheight"`
+	Layers     []TiledLayer    `json:"layers"`
+	Properties []TiledProperty `json:"properties"`
+}
+
+// mapBGMKey はマップ全体のカスタムプロパティ"bgm"の値を返す。
+// (Tiledのマッププロパティで、このマップを歩いているときに流す曲を
+// bgmByKeyのキー名で指定する。例: "field2")
+func (m TiledMap) mapBGMKey() (string, bool) {
+	for _, p := range m.Properties {
+		if strings.EqualFold(p.Name, "bgm") {
+			if s, ok := p.Value.(string); ok && s != "" {
+				return s, true
+			}
+		}
+	}
+	return "", false
 }
 
 type TiledLayer struct {
@@ -105,15 +120,15 @@ func dialoguePagesFromText(text string) []EventCommand {
 	return cmds
 }
 
-func resolveEventDialogue(text string) ([]EventCommand, map[string]int) {
+func resolveEventDialogue(text string) ([]EventCommand, map[string]int, string) {
 	if id, ok := strings.CutPrefix(text, "event_story_"); ok {
 		if d, found := GetStoryDialogue(id); found {
-			return d.Commands, d.SpeakerSlots
+			return d.Commands, d.SpeakerSlots, d.BGM
 		}
 		fmt.Printf("警告: event_story_%s が assets/dialogues/story.json に見つかりません\n", id)
-		return []EventCommand{{Speaker: "", Text: "……"}}, nil
+		return []EventCommand{{Speaker: "", Text: "……"}}, nil, ""
 	}
-	return dialoguePagesFromText(text), nil
+	return dialoguePagesFromText(text), nil, ""
 }
 
 func (s *FieldScene) applyCutsceneMessage() {
@@ -125,9 +140,10 @@ func (s *FieldScene) applyCutsceneMessage() {
 			Text:    "START_BATTLE_" + bossType,
 		})
 		s.msg.SpeakerToSlot = bd.SpeakerSlots
+		s.msgBGM = bd.BGM
 		return
 	}
-	s.msgTexts, s.msg.SpeakerToSlot = resolveEventDialogue(s.cutsceneMessage)
+	s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(s.cutsceneMessage)
 }
 
 type EnemyField struct {
@@ -162,6 +178,8 @@ type FieldScene struct {
 	animCount          int
 	enemies            []*EnemyField
 	currentMap         string
+	mapBGM             string
+	msgBGM             string
 	msgTexts           []EventCommand
 	msgIndex           int
 	isMsgActive        bool
@@ -440,7 +458,16 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 
 	scene.msg.WindowImg = game.WindowImg
 
-	game.Audio.PlayBGMFadeIn(bgmFieldSchool, 2.0)
+	mapBGM := bgmField1
+	if key, ok := tmap.mapBGMKey(); ok {
+		if path, found := resolveBGMKey(key); found {
+			mapBGM = path
+		} else {
+			fmt.Printf("警告: マップ%sのbgmプロパティ %q は未知のキーです\n", mapPath, key)
+		}
+	}
+	scene.mapBGM = mapBGM
+	game.Audio.PlayBGMFadeIn(mapBGM, 2.0)
 
 	if autoHealMaps[mapPath] {
 		scene.healParty()
@@ -615,6 +642,7 @@ func (s *FieldScene) openChest(obj TiledObject, itemID string) {
 	if !ok {
 		fmt.Printf("警告: チェストのアイテムID %q が見つかりません\n", itemID)
 		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
+		s.msgBGM = ""
 		s.msgIndex = 0
 		s.beginMessage()
 		return
@@ -664,6 +692,7 @@ func (s *FieldScene) openKeyChest(obj TiledObject, keyName string) {
 	if keyName == "" {
 		fmt.Printf("警告: 鍵チェストのtextに鍵の名前がありません（%s）\n", key)
 		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
+		s.msgBGM = ""
 		s.msgIndex = 0
 		s.beginMessage()
 		return
@@ -736,6 +765,9 @@ func (s *FieldScene) pullLever(obj TiledObject) {
 	}
 
 	s.nearExamineEvent = false
+	if objProps(obj)["oneway"] == "true" && s.game.RaisedLevers[id] {
+		return
+	}
 	s.game.RaisedLevers[id] = !s.game.RaisedLevers[id]
 }
 

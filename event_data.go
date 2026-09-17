@@ -16,6 +16,7 @@ type EventCommand struct {
 type BossDialogue struct {
 	Commands     []EventCommand
 	SpeakerSlots map[string]int
+	BGM          string
 }
 
 var bossBattleDialogues = map[int]BossDialogue{}
@@ -31,6 +32,9 @@ type dialogueCommandJSON struct {
 type bossDialogueJSON struct {
 	Commands     []dialogueCommandJSON `json:"commands"`
 	SpeakerSlots map[string]int        `json:"speakerSlots"`
+	// BGM はこの会話中に流すBGMをbgmByKeyのキー名で指定する(任意)。
+	// 省略時はそれまで流れていたBGMをそのまま継続する。
+	BGM string `json:"bgm"`
 }
 
 type bossDialogueFileJSON struct {
@@ -86,7 +90,7 @@ func convertBossDialogue(src *bossDialogueJSON, fileName string) BossDialogue {
 		slots[speaker] = slot
 	}
 
-	return BossDialogue{Commands: commands, SpeakerSlots: slots}
+	return BossDialogue{Commands: commands, SpeakerSlots: slots, BGM: src.BGM}
 }
 
 func LoadDialogues(dir string) error {

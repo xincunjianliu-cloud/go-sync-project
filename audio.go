@@ -18,13 +18,47 @@ const sampleRate = 44100
 const bgmBufferSize = 500 * time.Millisecond
 
 const (
-	bgmFieldSchool    = "assets/bgm/FIELD_School.mp3"
-	bgmBattleNormal   = "assets/bgm/NORMAL_BATTLE1.mp3"
-	bgmBattleBoss     = "assets/bgm/BATTLE_BOSS1.mp3"
-	bgmBattleEndIntro = "assets/bgm/BATTLE_End_into.mp3"
-	bgmBattleEndLoop  = "assets/bgm/BATTLE_End_roop.mp3"
-	bgmMessage        = "assets/bgm/Message.mp3"
+	bgmTitle          = "assets/bgm/title.mp3"
+	bgmField1         = "assets/bgm/field1.mp3"
+	bgmField2         = "assets/bgm/field2.mp3"
+	bgmField3         = "assets/bgm/field3.mp3"
+	bgmField4         = "assets/bgm/field4.mp3"
+	bgmBattleNormal   = "assets/bgm/battle_normal.mp3"
+	bgmBattleBoss     = "assets/bgm/battle_boss.mp3"
+	bgmBattleLastBoss = "assets/bgm/battle_lastboss.mp3"
+	bgmVictoryIntro   = "assets/bgm/victory_intro.mp3"
+	bgmVictoryLoop    = "assets/bgm/victory_loop.mp3"
+	bgmEnding         = "assets/bgm/ending.mp3"
+	bgmTalkPeaceful   = "assets/bgm/talk_peaceful.mp3"
+	bgmTalkTense      = "assets/bgm/talk_tense.mp3"
+	bgmTalkScary      = "assets/bgm/talk_scary.mp3"
+	bgmTalkSad        = "assets/bgm/talk_sad.mp3"
 )
+
+// bgmByKey はマップ側(.tmjのbgmプロパティ)や会話JSON側(bgmキー)から
+// 曲を指定する際に使う、キー文字列→実ファイルパスの対応表。
+// 実データの差し替え時はこのファイルパスだけ書き換えればよく、
+// マップ・会話データ側は曲名キーを変更する必要がない。
+var bgmByKey = map[string]string{
+	"title":           bgmTitle,
+	"field1":          bgmField1,
+	"field2":          bgmField2,
+	"field3":          bgmField3,
+	"field4":          bgmField4,
+	"battle_normal":   bgmBattleNormal,
+	"battle_boss":     bgmBattleBoss,
+	"battle_lastboss": bgmBattleLastBoss,
+	"ending":          bgmEnding,
+	"talk_peaceful":   bgmTalkPeaceful,
+	"talk_tense":      bgmTalkTense,
+	"talk_scary":      bgmTalkScary,
+	"talk_sad":        bgmTalkSad,
+}
+
+func resolveBGMKey(key string) (string, bool) {
+	path, ok := bgmByKey[key]
+	return path, ok
+}
 
 type AudioManager struct {
 	context *audio.Context

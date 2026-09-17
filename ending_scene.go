@@ -95,6 +95,7 @@ func NewEndingScene(game *Game, field *FieldScene) *EndingScene {
 		fmt.Printf("警告: クレジットデータの読み込みに失敗しました（デフォルト表示に切替）: %v\n", err)
 		pages = []CreditPage{{Lines: []string{"THE END"}}}
 	}
+	game.Audio.PlayBGMFadeIn(bgmEnding, 2.0)
 	return &EndingScene{game: game, field: field, pages: pages, phase: endingPhaseFadeIn}
 }
 

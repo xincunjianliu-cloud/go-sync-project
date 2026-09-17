@@ -237,3 +237,28 @@ func TestPullLeverTogglesUpAndDown(t *testing.T) {
 		t.Fatal("expected lever_a to be raised again after a third pull")
 	}
 }
+
+func TestPullLeverOneWayCannotBeLowered(t *testing.T) {
+	leverObj := TiledObject{
+		X: 200, Y: 200, Width: 32, Height: 32,
+		Properties: []TiledProperty{
+			{Name: "type", Type: "string", Value: "event"},
+			{Name: "text", Type: "string", Value: "event_lever"},
+			{Name: "id", Type: "string", Value: "lever_dark1"},
+			{Name: "oneway", Type: "string", Value: "true"},
+		},
+	}
+
+	g := &Game{RaisedLevers: make(map[string]bool)}
+	s := &FieldScene{game: g, currentMap: "test_map"}
+
+	s.pullLever(leverObj)
+	if !s.game.RaisedLevers["lever_dark1"] {
+		t.Fatal("expected lever_dark1 to be raised after the first pull")
+	}
+
+	s.pullLever(leverObj)
+	if !s.game.RaisedLevers["lever_dark1"] {
+		t.Fatal("expected a one-way lever to stay raised after a second pull")
+	}
+}

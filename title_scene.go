@@ -38,6 +38,8 @@ func NewTitleScene(game *Game) *TitleScene {
 		initialIndex = 1
 	}
 
+	game.Audio.PlayBGMFadeIn(bgmTitle, 2.0)
+
 	return &TitleScene{
 		game:        game,
 		menuIndex:   initialIndex,
@@ -87,6 +89,9 @@ func (s *TitleScene) Update(dt float64) Scene {
 
 	if isConfirmKeyPressed() || tapped {
 		if s.menuIndex == 0 {
+			if !s.game.heavyAssetsReady || s.game.heavyAssetsErr != nil {
+				return s
+			}
 			s.game.ResetForNewGame()
 			field, err := NewRoomScene(s.game, "assets/maps/School_Map_1.tmj", 0, 0, "start_point", 0)
 			if err != nil {
@@ -96,6 +101,9 @@ func (s *TitleScene) Update(dt float64) Scene {
 			return s
 
 		} else if s.menuIndex == 1 && s.hasSaveFile {
+			if !s.game.heavyAssetsReady || s.game.heavyAssetsErr != nil {
+				return s
+			}
 			return NewLoadSlotScene(s.game, s)
 		} else if s.menuIndex == 2 {
 			s.confirmExit = true
@@ -154,6 +162,20 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 	creditOp.PrimaryAlign = text.AlignCenter
 	creditOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, "(C) 2026 Project sitikai", s.game.FontFace(15), creditOp)
+
+	if s.game.heavyAssetsErr != nil {
+		errOp := &text.DrawOptions{}
+		errOp.GeoM.Translate(float64(gameWidth)/2, 390)
+		errOp.PrimaryAlign = text.AlignCenter
+		errOp.ColorScale.ScaleWithColor(color.RGBA{255, 120, 120, 255})
+		text.Draw(screen, "データの読み込みに失敗しました", s.game.FontFace(12), errOp)
+	} else if !s.game.heavyAssetsReady {
+		hintOp := &text.DrawOptions{}
+		hintOp.GeoM.Translate(float64(gameWidth)/2, 390)
+		hintOp.PrimaryAlign = text.AlignCenter
+		hintOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, "データを読み込み中...", s.game.FontFace(12), hintOp)
+	}
 
 	if s.confirmExit {
 		drawConfirmDialog(screen, s.game, "ゲームを終了しますか？", s.exitConfirmIdx, confirmImageOffsetX)

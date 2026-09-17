@@ -1,4 +1,10 @@
 { "compressionlevel":-1,
+ "properties":[
+        {
+         "name":"bgm",
+         "type":"string",
+         "value":"field1"
+        }],
  "height":100,
  "infinite":false,
  "layers":[

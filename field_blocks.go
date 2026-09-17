@@ -183,6 +183,49 @@ func (s *FieldScene) blockDoorIsOpen(obj TiledObject) bool {
 	return s.game.UnlockedBlockDoors[chestKey(s.currentMap, obj)]
 }
 
+func (s *FieldScene) spotBelongsToOpenDoor(spotID string) bool {
+	for _, layer := range s.tileMap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			p := objProps(obj)
+			if p["type"] != "event" || p["text"] != "event_blockdoor" || !s.blockDoorIsOpen(obj) {
+				continue
+			}
+			for _, id := range splitKeyNames(p["spots"]) {
+				if id == spotID {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// blockIsLocked reports whether a block has already unlocked its door by
+// sitting on its spot, and should no longer be pushable.
+func (s *FieldScene) blockIsLocked(b *FieldBlock) bool {
+	for _, layer := range s.tileMap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			p := objProps(obj)
+			if p["type"] != "event" || p["text"] != "event_blockspot" {
+				continue
+			}
+			if !blockOnSpot(b, obj) {
+				continue
+			}
+			if spotID := p["id"]; spotID != "" && s.spotBelongsToOpenDoor(spotID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *FieldScene) updateBlockDoors() {
 	for _, layer := range s.tileMap.Layers {
 		if !strings.HasPrefix(layer.Name, "events") {
