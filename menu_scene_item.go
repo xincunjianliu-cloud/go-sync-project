@@ -40,6 +40,7 @@ func (m *MenuScene) clampItemListIndex(n int) {
 
 func (m *MenuScene) updateItemList() {
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.menuState = menuStateMain
 		return
 	}
@@ -47,9 +48,11 @@ func (m *MenuScene) updateItemList() {
 	items := m.usableFieldItems()
 	if len(items) == 0 {
 		if isConfirmKeyPressed() {
+			m.game.Audio.PlaySEByKey("error")
 			m.showNotice("メニューから使えるアイテムを持っていません")
 		}
 		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.menuState = menuStateMain
 		}
 		return
@@ -58,9 +61,11 @@ func (m *MenuScene) updateItemList() {
 
 	if isMenuDownRepeat() {
 		m.itemListIndex = (m.itemListIndex + 1) % len(items)
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuUpRepeat() {
 		m.itemListIndex = (m.itemListIndex - 1 + len(items)) % len(items)
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	tapped := false
 	if idx, ok := m.hitTestItemListRows(len(items)); ok {
@@ -69,11 +74,13 @@ func (m *MenuScene) updateItemList() {
 	}
 	if !isConfirmKeyPressed() && !tapped {
 		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.menuState = menuStateMain
 		}
 		return
 	}
 
+	m.game.Audio.PlaySEByKey("decide")
 	m.beginItemTarget(items[m.itemListIndex].ItemID)
 }
 
@@ -98,6 +105,7 @@ func itemTargetModes(def ItemDef) (allowSingle, allowAll bool) {
 
 func (m *MenuScene) updateItemTarget() {
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.pendingItemID = ""
 		m.menuState = menuStateItemList
 		return
@@ -115,6 +123,7 @@ func (m *MenuScene) updateItemTarget() {
 	items := m.usableFieldItems()
 	if idx, ok := m.hitTestItemListRows(len(items)); ok {
 		if items[idx].ItemID != m.pendingItemID {
+			m.game.Audio.PlaySEByKey("decide")
 			m.itemListIndex = idx
 			m.beginItemTarget(items[idx].ItemID)
 		}
@@ -128,9 +137,11 @@ func (m *MenuScene) updateItemTarget() {
 		}
 		if isMenuUpRepeat() {
 			m.itemTargetIndex = (m.itemTargetIndex - 1 + cycleLen) % cycleLen
+			m.game.Audio.PlaySEByKey("cursor")
 		}
 		if isMenuDownRepeat() {
 			m.itemTargetIndex = (m.itemTargetIndex + 1) % cycleLen
+			m.game.Audio.PlaySEByKey("cursor")
 		}
 	}
 
@@ -139,7 +150,7 @@ func (m *MenuScene) updateItemTarget() {
 	if tappedOk && tappedIdx < partySize && !allowSingle {
 		tappedOk = false
 	}
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &m.itemTargetIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &m.itemTargetIndex, m.game.Audio)
 
 	if !isConfirmKeyPressed() && !tapped {
 		if !hitPartyArea && len(justPressedTouchPoints()) > 0 {
@@ -157,17 +168,20 @@ func (m *MenuScene) updateItemTarget() {
 			}
 		}
 		if !used {
+			m.game.Audio.PlaySEByKey("error")
 			m.showNotice("使っても効果がありません")
 			return
 		}
 	} else {
 		target := m.itemTargetIndex
 		if _, _, ok := applyItemEffect(m.game, def, target); !ok {
+			m.game.Audio.PlaySEByKey("error")
 			m.showNotice(itemNoEffectReason(m.game, def, target))
 			return
 		}
 	}
 
+	m.game.Audio.PlaySEByKey("decide")
 	m.game.ConsumeItem(m.pendingItemID, 1)
 	m.clearNotice()
 

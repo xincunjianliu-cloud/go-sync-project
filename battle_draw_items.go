@@ -57,10 +57,10 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 		text.Draw(screen, def.Name, itemFace, op)
 
 		countOp := &text.DrawOptions{}
-		countOp.GeoM.Translate(windowX+windowW-battleSubRightOffsetX, baseY)
+		countOp.GeoM.Translate(windowX+windowW-battleSubRightOffsetX, baseY+s.game.latinBaselineAdjust(15, text.AlignStart))
 		countOp.PrimaryAlign = text.AlignEnd
 		countOp.ColorScale.ScaleWithColor(labelCol)
-		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), s.game.FontFace(15), countOp)
+		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), s.game.LatinFontFace(15), countOp)
 	}
 }
 

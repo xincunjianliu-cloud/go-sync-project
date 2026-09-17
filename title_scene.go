@@ -38,13 +38,18 @@ func NewTitleScene(game *Game) *TitleScene {
 		initialIndex = 1
 	}
 
-	game.Audio.PlayBGMFadeIn(bgmTitle, 2.0)
-
 	return &TitleScene{
 		game:        game,
 		menuIndex:   initialIndex,
 		hasSaveFile: hasSave,
 	}
+}
+
+// desiredBGM はゲームオーバーからタイトルに戻る場合など、画面フェードを
+// 伴う遷移でタイトルBGMをフェードインさせる。起動直後の初回表示は
+// game.go側で直接PlayBGMFadeInしているため、ここは通らない。
+func (s *TitleScene) desiredBGM(transitionDuration float64) (string, float64, bool) {
+	return bgmTitle, transitionDuration, false
 }
 
 func (s *TitleScene) Update(dt float64) Scene {
@@ -58,17 +63,20 @@ func (s *TitleScene) Update(dt float64) Scene {
 		}
 		if isMenuUpPressed() || isMenuDownPressed() {
 			s.exitConfirmIdx = 1 - s.exitConfirmIdx
+			s.game.Audio.PlaySEByKey("cursor")
 		}
 		if isEscapePressed() {
+			s.game.Audio.PlaySEByKey("cancel")
 			s.confirmExit = false
 			return s
 		}
 		tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
-		confirmTapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.exitConfirmIdx)
+		confirmTapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.exitConfirmIdx, s.game.Audio)
 		if isConfirmKeyPressed() || confirmTapped {
 			if s.exitConfirmIdx == 0 {
 				os.Exit(0)
 			}
+			s.game.Audio.PlaySEByKey("cancel")
 			s.confirmExit = false
 		}
 		return s
@@ -76,9 +84,11 @@ func (s *TitleScene) Update(dt float64) Scene {
 
 	if isMenuDownPressed() {
 		s.menuIndex = (s.menuIndex + 1) % 3
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuUpPressed() {
 		s.menuIndex = (s.menuIndex - 1 + 3) % 3
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 
 	tapped := false
@@ -90,8 +100,10 @@ func (s *TitleScene) Update(dt float64) Scene {
 	if isConfirmKeyPressed() || tapped {
 		if s.menuIndex == 0 {
 			if !s.game.heavyAssetsReady || s.game.heavyAssetsErr != nil {
+				s.game.Audio.PlaySEByKey("error")
 				return s
 			}
+			s.game.Audio.PlaySEByKey("decide")
 			s.game.ResetForNewGame()
 			field, err := NewRoomScene(s.game, "assets/maps/School_Map_1.tmj", 0, 0, "start_point", 0)
 			if err != nil {
@@ -102,10 +114,13 @@ func (s *TitleScene) Update(dt float64) Scene {
 
 		} else if s.menuIndex == 1 && s.hasSaveFile {
 			if !s.game.heavyAssetsReady || s.game.heavyAssetsErr != nil {
+				s.game.Audio.PlaySEByKey("error")
 				return s
 			}
+			s.game.Audio.PlaySEByKey("decide")
 			return NewLoadSlotScene(s.game, s)
 		} else if s.menuIndex == 2 {
+			s.game.Audio.PlaySEByKey("decide")
 			s.confirmExit = true
 			s.exitConfirmIdx = 1
 			lockDialogInput(&s.inputLockTicks)
@@ -161,7 +176,7 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 	creditOp.GeoM.Translate(float64(gameWidth)/2, 350)
 	creditOp.PrimaryAlign = text.AlignCenter
 	creditOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, "(C) 2026 Project sitikai", s.game.FontFace(15), creditOp)
+	text.Draw(screen, "(C) 2026 Project sitikai", s.game.LatinFontFace(15), creditOp)
 
 	if s.game.heavyAssetsErr != nil {
 		errOp := &text.DrawOptions{}
@@ -305,15 +320,18 @@ func NewLoadSlotScene(game *Game, backScene Scene) *LoadSlotScene {
 
 func (s *LoadSlotScene) Update(dt float64) Scene {
 	if isEscapePressed() {
+		s.game.Audio.PlaySEByKey("cancel")
 		return s.backScene
 	}
 	if isMenuUpPressed() {
 		s.slotIndex = (s.slotIndex - 1 + maxSaveSlots) % maxSaveSlots
 		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownPressed() {
 		s.slotIndex = (s.slotIndex + 1) % maxSaveSlots
 		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	cardH := float64(s.game.SaveThumbFrameImg.Bounds().Dy())
 
@@ -348,8 +366,10 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 	if isConfirmKeyPressed() || tapped {
 		d := s.slotData[s.slotIndex]
 		if d == nil {
+			s.game.Audio.PlaySEByKey("error")
 			return s
 		}
+		s.game.Audio.PlaySEByKey("decide")
 		s.game.TotalPlayTime = d.PlayTime
 		s.game.PlayerHP = d.PlayerHP
 		s.game.PlayerMaxHP = d.PlayerMaxHP
@@ -388,6 +408,7 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 	cardRect := tapRect{x: slotCardStartX - 80, y: slotCardStartY, w: cardW, h: dragArea}
 	barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
 	if unrelatedTapOutsideRects(cardRect, barRect) {
+		s.game.Audio.PlaySEByKey("cancel")
 		return s.backScene
 	}
 	return s

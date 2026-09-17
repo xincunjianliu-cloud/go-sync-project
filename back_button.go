@@ -56,6 +56,6 @@ func drawBackButton(screen *ebiten.Image, game *Game) {
 		op.PrimaryAlign = text.AlignCenter
 		op.SecondaryAlign = text.AlignEnd
 		op.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "Esc", game.FontFace(ctrlKeyFontSize), op)
+		text.Draw(screen, "Esc", game.LatinFontFace(ctrlLabelFontSize), op)
 	}
 }

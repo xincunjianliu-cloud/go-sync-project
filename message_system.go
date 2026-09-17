@@ -162,19 +162,20 @@ func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*eb
 	}
 }
 
-func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *text.GoTextFace) {
+// Draw renders the message box for cmd. size is the nominal font size;
+// Japanese and Latin/digit runs within the speaker name and each line are
+// sized via Game.DrawMixedText so a line like "HPが50回復した" reads at a
+// consistent visual size instead of the digits looking smaller.
+func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, size float64) {
 	winOp := &ebiten.DrawImageOptions{}
 	winOp.GeoM.Translate(0, 0)
 	winOp.Filter = ebiten.FilterNearest
 	screen.DrawImage(m.WindowImg, winOp)
 
 	if cmd.Speaker != "" && cmd.Speaker != "SYSTEM_COMMAND" {
-		nameOp := &text.DrawOptions{}
 		nameX := float64(gameWidth) * msgNameXRatio
 		nameY := float64(gameHeight) * msgNameYRatio
-		nameOp.GeoM.Translate(nameX, nameY)
-		nameOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, ""+cmd.Speaker+"", fontFace, nameOp)
+		g.DrawMixedText(screen, cmd.Speaker, size, nameX, nameY, text.AlignStart, text.AlignStart, uiColorText)
 	}
 
 	runes := []rune(cmd.Text)
@@ -186,9 +187,8 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 
 	lines := strings.Split(visibleText, "\n")
 
-	textOp := &text.DrawOptions{}
-	textOp.LineSpacing = fontFace.Metrics().HAscent + fontFace.Metrics().HDescent + msgLineSpacingExtra
-	textOp.ColorScale.ScaleWithColor(uiColorText)
+	fontFace := g.FontFace(size)
+	lineSpacing := fontFace.Metrics().HAscent + fontFace.Metrics().HDescent + msgLineSpacingExtra
 
 	startY := float64(gameHeight) * msgTextStartYRatio
 	startX := float64(gameWidth) * msgTextStartXRatio
@@ -197,9 +197,7 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, fontFace *t
 		if i >= 3 {
 			break
 		}
-		textOp.GeoM.Reset()
-		textOp.GeoM.Translate(startX, startY+float64(i)*textOp.LineSpacing)
-		text.Draw(screen, line, fontFace, textOp)
+		g.DrawMixedText(screen, line, size, startX, startY+float64(i)*lineSpacing, text.AlignStart, text.AlignStart, uiColorText)
 	}
 
 	if count >= len(runes) && len(runes) > 0 {

@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 const (
@@ -114,115 +115,152 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 
 const (
 	volumeGroupX float64 = 320
-	volumePanelY float64 = 70
+	volumePanelY float64 = 60
 
 	volumeBarW float64 = 300
 	volumeBarH float64 = 30
 
+	volumeRowGapY float64 = volumeBarH + 12
+
 	volumeLabelBarGap   float64 = 110
 	volumeBarPercentGap float64 = 30
 
-	volumeResetGapY float64 = 44
+	// volumeResetGapY はシステム設定の最後の行からリセットボタンまでの間隔。
+	// 画面右下に出る説明ヒント(menuDescOffsetY=30)と重ならない範囲に収めてある。
+	volumeResetGapY float64 = 40
+
+	volumeTrackH   float64 = 6
+	volumeKnobR    float64 = 6
+	volumeKnobRSel float64 = 8
+
+	// volumePercentColW は"100%"表示分の余白。区切り線やパネル枠の幅計算で
+	// パーセント表示まで含めた実際のコンテンツ幅に合わせるために使う。
+	volumePercentColW float64 = 70
+
+	// volumeContentW は音量行の左端(ラベル)から右端(パーセント表示)までの
+	// 実コンテンツ幅。区切り線・パネル当たり判定の両方をこれに合わせることで、
+	// 見た目の枠とタップ領域がずれないようにする。
+	volumeContentW float64 = volumeLabelBarGap + volumeBarW + volumeBarPercentGap + volumePercentColW
+
+	// optionHeaderFontSize は「音量設定」「表示設定」見出しの文字サイズ。
+	optionHeaderFontSize float64 = 18
+
+	// optionItemFontSize は見出し以外（各行のラベル・値・矢印・パーセント表示・
+	// プレビュー文・リセットボタン）すべてに共通で使う文字サイズ。
+	optionItemFontSize float64 = 18
 )
 
+// drawVolumeRow はBGM/効果音/全体音量の各行を同じ見た目で描画する共通処理。
+// バー本体は細いトラック線にし、現在値はつまみの丸で示す。
+// バー・つまみの色は選択中かどうかに関わらず常に白系(uiColorText)のまま。
+func (m *MenuScene) drawVolumeRow(screen *ebiten.Image, barY float64, label string, volume float64, selected bool) {
+	labelX := volumeGroupX
+	barX := labelX + volumeLabelBarGap
+	midY := barY + volumeBarH/2
+
+	knobCol := uiColorText
+
+	trackY := midY - volumeTrackH/2
+	vector.DrawFilledRect(screen, float32(barX), float32(trackY), float32(volumeBarW), float32(volumeTrackH), color.RGBA{30, 30, 40, 255}, true)
+	fillW := volumeBarW * volume
+	if fillW > 0 {
+		vector.DrawFilledRect(screen, float32(barX), float32(trackY), float32(fillW), float32(volumeTrackH), knobCol, true)
+	}
+
+	knobR := volumeKnobR
+	if selected {
+		knobR = volumeKnobRSel
+	}
+	knobX := barX + fillW
+	vector.DrawFilledCircle(screen, float32(knobX), float32(midY), float32(knobR), knobCol, true)
+
+	labelCol := uiColorText
+	if selected {
+		labelCol = uiColorSelect
+	}
+	// ラベル列(labelX〜barX)の中央に文字を揃える。矢印はラベルの左に
+	// 添える形にして、選択の有無で文字位置がずれないようにする。
+	labelCenterX := labelX + volumeLabelBarGap/2
+	labelW, _ := m.game.MeasureMixedText(label, optionItemFontSize)
+	if selected {
+		arrowOp := &text.DrawOptions{}
+		arrowOp.GeoM.Translate(labelCenterX-labelW/2-6, midY)
+		arrowOp.PrimaryAlign = text.AlignEnd
+		arrowOp.SecondaryAlign = text.AlignCenter
+		arrowOp.ColorScale.ScaleWithColor(labelCol)
+		text.Draw(screen, "▶", m.game.FontFace(optionItemFontSize), arrowOp)
+	}
+	m.game.DrawMixedText(screen, label, optionItemFontSize, labelCenterX, midY, text.AlignCenter, text.AlignCenter, labelCol)
+
+	percentOp := &text.DrawOptions{}
+	percentOp.GeoM.Translate(barX+volumeBarW+volumeBarPercentGap, midY)
+	percentOp.SecondaryAlign = text.AlignCenter
+	percentOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, fmt.Sprintf("%d%%", int(volume*100+0.5)), m.game.LatinFontFace(optionItemFontSize), percentOp)
+}
+
 func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
-	var volume float64
+	var bgmVol, seVol, masterVol float64
 	if m.game.Audio != nil {
-		volume = m.game.Audio.volume
+		bgmVol = m.game.Audio.volume
+		seVol = m.game.Audio.seVolume
+		masterVol = m.game.Audio.masterVolume
 	}
 
 	onOptionRow := func(idx int) bool { return m.menuState == menuStateOption && m.optionIndex == idx }
-	onVolumeRow := onOptionRow(0)
-	adjustingVolume := onVolumeRow
-	onSpeedRow := onOptionRow(2)
+	onSpeedRow := onOptionRow(optionIdxMessageSpeed)
 	adjustingSpeed := onSpeedRow
-	onResetRow := m.optionIndex == 4 && (m.menuState == menuStateOption ||
+	onResetRow := m.optionIndex == optionIdxReset && (m.menuState == menuStateOption ||
 		m.menuState == menuStateOptionResetConfirm || m.menuState == menuStateOptionResetDone)
 	labelX := volumeGroupX
-	barX := labelX + volumeLabelBarGap
-	lineW := volumeBarW + volumeLabelBarGap
+	lineW := volumeContentW
 	lineCol := uiColorText
 
 	headerY := volumePanelY - 34
 	headerOp := &text.DrawOptions{}
 	headerOp.GeoM.Translate(labelX, headerY)
 	headerOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, "音量設定", m.game.FontFace(18), headerOp)
+	text.Draw(screen, "音量設定", m.game.FontFace(optionHeaderFontSize), headerOp)
 
 	lineY1 := headerY + 24
 	ebitenutil.DrawRect(screen, labelX, lineY1, lineW, 1, lineCol)
 
-	barY := volumePanelY
+	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY := optionRowPositions()
 
-	barFillCol := uiColorText
-	barFrameCol := uiColorText
-	if adjustingVolume {
-		barFillCol = uiColorSelect
-		barFrameCol = uiColorSelect
-	}
+	m.drawVolumeRow(screen, masterBarY, "全体", masterVol, onOptionRow(optionIdxMaster))
+	m.drawVolumeRow(screen, bgmBarY, "BGM", bgmVol, onOptionRow(optionIdxBGM))
+	m.drawVolumeRow(screen, seBarY, "効果音", seVol, onOptionRow(optionIdxSE))
 
-	ebitenutil.DrawRect(screen, barX, barY, volumeBarW, volumeBarH, color.RGBA{30, 30, 40, 255})
-	ebitenutil.DrawRect(screen, barX, barY, volumeBarW*volume, volumeBarH, barFillCol)
-	ebitenutil.DrawRect(screen, barX, barY, volumeBarW, 1, barFrameCol)
-	ebitenutil.DrawRect(screen, barX, barY+volumeBarH-1, volumeBarW, 1, barFrameCol)
-	ebitenutil.DrawRect(screen, barX, barY, 1, volumeBarH, barFrameCol)
-	ebitenutil.DrawRect(screen, barX+volumeBarW-1, barY, 1, volumeBarH, barFrameCol)
-
-	labelCol := uiColorText
-	if onVolumeRow {
-		labelCol = uiColorSelect
-	}
-	bgmFace := m.game.FontFace(22)
-	if onVolumeRow {
-		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(labelX, barY+volumeBarH/2)
-		arrowOp.SecondaryAlign = text.AlignCenter
-		arrowOp.ColorScale.ScaleWithColor(labelCol)
-		text.Draw(screen, "▶", bgmFace, arrowOp)
-	}
-	labelOp := &text.DrawOptions{}
-	labelOp.GeoM.Translate(labelX+text.Advance("▶ ", bgmFace), barY+volumeBarH/2)
-	labelOp.SecondaryAlign = text.AlignCenter
-	labelOp.ColorScale.ScaleWithColor(labelCol)
-	text.Draw(screen, "BGM", bgmFace, labelOp)
-
-	percentOp := &text.DrawOptions{}
-	percentOp.GeoM.Translate(barX+volumeBarW+volumeBarPercentGap, barY+volumeBarH/2)
-	percentOp.SecondaryAlign = text.AlignCenter
-	percentOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, fmt.Sprintf("%d%%", int(volume*100+0.5)), m.game.FontFace(22), percentOp)
-
-	dispHeaderY := barY + volumeBarH + 30
+	dispHeaderY := seBarY + volumeBarH + 30
 	dispHeaderOp := &text.DrawOptions{}
 	dispHeaderOp.GeoM.Translate(labelX, dispHeaderY)
 	dispHeaderOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, "表示設定", m.game.FontFace(18), dispHeaderOp)
+	text.Draw(screen, "表示設定", m.game.FontFace(optionHeaderFontSize), dispHeaderOp)
 
 	lineY2 := dispHeaderY + 24
 	ebitenutil.DrawRect(screen, labelX, lineY2, lineW, 1, lineCol)
 
-	displayRowY := lineY2 + 40
 	displayLabelCol := uiColorText
-	onDisplayRow := onOptionRow(1)
+	onDisplayRow := onOptionRow(optionIdxDisplayMode)
 	adjustingDisplay := onDisplayRow
 	if onDisplayRow {
 		displayLabelCol = uiColorSelect
 	}
-	displayLabelFace := m.game.FontFace(20)
+	displayLabelFace := m.game.FontFace(optionItemFontSize)
 	if onDisplayRow {
 		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(labelX, displayRowY)
+		arrowOp.GeoM.Translate(optionCtrlLabelX, displayRowY)
 		arrowOp.SecondaryAlign = text.AlignCenter
 		arrowOp.ColorScale.ScaleWithColor(displayLabelCol)
 		text.Draw(screen, "▶", displayLabelFace, arrowOp)
 	}
 	displayLabelOp := &text.DrawOptions{}
-	displayLabelOp.GeoM.Translate(labelX+text.Advance("▶ ", displayLabelFace), displayRowY)
+	displayLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", displayLabelFace), displayRowY)
 	displayLabelOp.SecondaryAlign = text.AlignCenter
 	displayLabelOp.ColorScale.ScaleWithColor(displayLabelCol)
 	text.Draw(screen, "画面モード", displayLabelFace, displayLabelOp)
 
-	displayValueX := barX + 180
+	displayValueX := optionValueX
 	displayArrowCol := uiColorText
 	if adjustingDisplay {
 		displayArrowCol = uiColorSelect
@@ -236,38 +274,37 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	if m.game.Fullscreen {
 		displayModeLabel = "フルスクリーン"
 	}
-	text.Draw(screen, displayModeLabel, m.game.FontFace(16), displayValueOp)
+	text.Draw(screen, displayModeLabel, m.game.FontFace(optionItemFontSize), displayValueOp)
 
 	leftOp := &text.DrawOptions{}
-	leftOp.GeoM.Translate(displayValueX-70, displayRowY)
+	leftOp.GeoM.Translate(displayValueX-optionDisplayArrowGap, displayRowY)
 	leftOp.SecondaryAlign = text.AlignCenter
 	leftOp.PrimaryAlign = text.AlignCenter
 	leftOp.ColorScale.ScaleWithColor(displayArrowCol)
-	text.Draw(screen, "◀", m.game.FontFace(18), leftOp)
+	text.Draw(screen, "◀", m.game.FontFace(optionItemFontSize), leftOp)
 
 	rightOp := &text.DrawOptions{}
-	rightOp.GeoM.Translate(displayValueX+70, displayRowY)
+	rightOp.GeoM.Translate(displayValueX+optionDisplayArrowGap, displayRowY)
 	rightOp.SecondaryAlign = text.AlignCenter
 	rightOp.PrimaryAlign = text.AlignCenter
 	rightOp.ColorScale.ScaleWithColor(displayArrowCol)
-	text.Draw(screen, "▶", m.game.FontFace(18), rightOp)
+	text.Draw(screen, "▶", m.game.FontFace(optionItemFontSize), rightOp)
 
-	speedRowY := displayRowY + 40
 	speedLabelCol := uiColorText
 	onSpeedLabelRow := onSpeedRow
 	if onSpeedLabelRow {
 		speedLabelCol = uiColorSelect
 	}
-	speedLabelFace := m.game.FontFace(20)
+	speedLabelFace := m.game.FontFace(optionItemFontSize)
 	if onSpeedLabelRow {
 		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(labelX, speedRowY)
+		arrowOp.GeoM.Translate(optionCtrlLabelX, speedRowY)
 		arrowOp.SecondaryAlign = text.AlignCenter
 		arrowOp.ColorScale.ScaleWithColor(speedLabelCol)
 		text.Draw(screen, "▶", speedLabelFace, arrowOp)
 	}
 	speedLabelOp := &text.DrawOptions{}
-	speedLabelOp.GeoM.Translate(labelX+text.Advance("▶ ", speedLabelFace), speedRowY)
+	speedLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", speedLabelFace), speedRowY)
 	speedLabelOp.SecondaryAlign = text.AlignCenter
 	speedLabelOp.ColorScale.ScaleWithColor(speedLabelCol)
 	text.Draw(screen, "メッセージ速度", speedLabelFace, speedLabelOp)
@@ -275,7 +312,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	speedOptions := []string{"遅い", "普通", "速い"}
 	currentSpeedLabel := speedOptions[m.game.MessageSpeed]
 
-	speedValueX := barX + 180
+	speedValueX := optionValueX
 
 	arrowCol := uiColorText
 	if adjustingSpeed {
@@ -287,64 +324,72 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	valueOp.SecondaryAlign = text.AlignCenter
 	valueOp.PrimaryAlign = text.AlignCenter
 	valueOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, currentSpeedLabel, m.game.FontFace(18), valueOp)
+	text.Draw(screen, currentSpeedLabel, m.game.FontFace(optionItemFontSize), valueOp)
 
 	if m.game.MessageSpeed > 0 {
 		leftOp := &text.DrawOptions{}
-		leftOp.GeoM.Translate(speedValueX-60, speedRowY)
+		leftOp.GeoM.Translate(speedValueX-optionSpeedArrowGap, speedRowY)
 		leftOp.SecondaryAlign = text.AlignCenter
 		leftOp.PrimaryAlign = text.AlignCenter
 		leftOp.ColorScale.ScaleWithColor(arrowCol)
-		text.Draw(screen, "◀", m.game.FontFace(18), leftOp)
+		text.Draw(screen, "◀", m.game.FontFace(optionItemFontSize), leftOp)
 	}
 
 	if m.game.MessageSpeed < 2 {
 		rightOp := &text.DrawOptions{}
-		rightOp.GeoM.Translate(speedValueX+60, speedRowY)
+		rightOp.GeoM.Translate(speedValueX+optionSpeedArrowGap, speedRowY)
 		rightOp.SecondaryAlign = text.AlignCenter
 		rightOp.PrimaryAlign = text.AlignCenter
 		rightOp.ColorScale.ScaleWithColor(arrowCol)
-		text.Draw(screen, "▶", m.game.FontFace(18), rightOp)
+		text.Draw(screen, "▶", m.game.FontFace(optionItemFontSize), rightOp)
 	}
 
-	descRowY := speedRowY + 30
-
 	if onSpeedRow {
+		previewFace := m.game.FontFace(optionItemFontSize)
 		previewRunes := []rune(messageSpeedPreviewText)
 		revealCount := m.previewRevealCount()
 		visiblePreview := string(previewRunes[:revealCount])
 
+		// 全文の幅で左端を決め、そこから通常のメッセージ表示と同じように
+		// 左→右へ1文字ずつ流れる形にする（中央揃えは全文表示時の位置のみ）。
+		fullWidth := text.Advance(messageSpeedPreviewText, previewFace)
+		previewLeftX := optionBoxCenterX - fullWidth/2
+
 		descOp := &text.DrawOptions{}
-		descOp.GeoM.Translate(labelX, descRowY)
+		descOp.GeoM.Translate(previewLeftX, descRowY)
 		descOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, visiblePreview, m.game.FontFace(18), descOp)
+		text.Draw(screen, visiblePreview, previewFace, descOp)
 	}
 
-	lineY3 := descRowY + 20
-	ebitenutil.DrawRect(screen, labelX, lineY3, lineW, 1, lineCol)
+	sysHeaderOp := &text.DrawOptions{}
+	sysHeaderOp.GeoM.Translate(labelX, sysHeaderY)
+	sysHeaderOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, "システム設定", m.game.FontFace(optionHeaderFontSize), sysHeaderOp)
 
-	cursorRowY := lineY3 + 30
-	onCursorRow := onOptionRow(3)
+	lineY4 := sysHeaderY + 24
+	ebitenutil.DrawRect(screen, labelX, lineY4, lineW, 1, lineCol)
+
+	onCursorRow := onOptionRow(optionIdxCursorMemory)
 	adjustingCursor := onCursorRow
 	cursorLabelCol := uiColorText
 	if onCursorRow {
 		cursorLabelCol = uiColorSelect
 	}
-	cursorLabelFace := m.game.FontFace(20)
+	cursorLabelFace := m.game.FontFace(optionItemFontSize)
 	if onCursorRow {
 		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(labelX, cursorRowY)
+		arrowOp.GeoM.Translate(optionCtrlLabelX, cursorRowY)
 		arrowOp.SecondaryAlign = text.AlignCenter
 		arrowOp.ColorScale.ScaleWithColor(cursorLabelCol)
 		text.Draw(screen, "▶", cursorLabelFace, arrowOp)
 	}
 	cursorLabelOp := &text.DrawOptions{}
-	cursorLabelOp.GeoM.Translate(labelX+text.Advance("▶ ", cursorLabelFace), cursorRowY)
+	cursorLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", cursorLabelFace), cursorRowY)
 	cursorLabelOp.SecondaryAlign = text.AlignCenter
 	cursorLabelOp.ColorScale.ScaleWithColor(cursorLabelCol)
 	text.Draw(screen, "カーソル記憶", cursorLabelFace, cursorLabelOp)
 
-	cursorValueX := barX + 180
+	cursorValueX := optionValueX
 	cursorArrowCol := uiColorText
 	if adjustingCursor {
 		cursorArrowCol = uiColorSelect
@@ -358,30 +403,29 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	if m.game.RememberCursor {
 		cursorValueLabel = "ON"
 	}
-	text.Draw(screen, cursorValueLabel, m.game.FontFace(16), cursorValueOp)
+	text.Draw(screen, cursorValueLabel, m.game.LatinFontFace(optionItemFontSize), cursorValueOp)
 
 	cursorLeftOp := &text.DrawOptions{}
-	cursorLeftOp.GeoM.Translate(cursorValueX-70, cursorRowY)
+	cursorLeftOp.GeoM.Translate(cursorValueX-optionCursorArrowGap, cursorRowY)
 	cursorLeftOp.SecondaryAlign = text.AlignCenter
 	cursorLeftOp.PrimaryAlign = text.AlignCenter
 	cursorLeftOp.ColorScale.ScaleWithColor(cursorArrowCol)
-	text.Draw(screen, "◀", m.game.FontFace(18), cursorLeftOp)
+	text.Draw(screen, "◀", m.game.FontFace(optionItemFontSize), cursorLeftOp)
 
 	cursorRightOp := &text.DrawOptions{}
-	cursorRightOp.GeoM.Translate(cursorValueX+70, cursorRowY)
+	cursorRightOp.GeoM.Translate(cursorValueX+optionCursorArrowGap, cursorRowY)
 	cursorRightOp.SecondaryAlign = text.AlignCenter
 	cursorRightOp.PrimaryAlign = text.AlignCenter
 	cursorRightOp.ColorScale.ScaleWithColor(cursorArrowCol)
-	text.Draw(screen, "▶", m.game.FontFace(18), cursorRightOp)
+	text.Draw(screen, "▶", m.game.FontFace(optionItemFontSize), cursorRightOp)
 
-	resetY := cursorRowY + volumeResetGapY
 	resetCol := uiColorText
 	if onResetRow {
 		resetCol = uiColorSelect
 	}
-	resetFace := m.game.FontFace(18)
+	resetFace := m.game.FontFace(optionItemFontSize)
 	const resetLabel = "すべてを初期設定に戻す"
-	resetCenterX := barX + volumeBarW/2
+	resetCenterX := optionBoxCenterX
 	if onResetRow {
 		labelW := text.Advance(resetLabel, resetFace)
 		arrowOp := &text.DrawOptions{}
@@ -421,11 +465,7 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 		}
 		x := float64(gameWidth) - menuDescOffsetX
 		y := float64(gameHeight) - menuDescOffsetY
-		descOp := &text.DrawOptions{}
-		descOp.GeoM.Translate(x, y)
-		descOp.PrimaryAlign = text.AlignEnd
-		descOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, desc, m.game.FontFace(14), descOp)
+		m.game.DrawMixedText(screen, desc, 14, x, y, text.AlignEnd, text.AlignStart, uiColorText)
 		return
 	}
 
@@ -543,13 +583,7 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 
 	x := float64(gameWidth) - menuDescOffsetX
 	y := float64(gameHeight) - menuDescOffsetY
-	align := text.AlignEnd
-
-	descOp := &text.DrawOptions{}
-	descOp.GeoM.Translate(x, y)
-	descOp.PrimaryAlign = align
-	descOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, desc, m.game.FontFace(14), descOp)
+	m.game.DrawMixedText(screen, desc, 14, x, y, text.AlignEnd, text.AlignStart, uiColorText)
 }
 
 func drawMinimapObjectiveIcon(screen *ebiten.Image, g *Game, ox, oy float64) {

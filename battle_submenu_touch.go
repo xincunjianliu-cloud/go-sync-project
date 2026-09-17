@@ -76,13 +76,13 @@ func (s *BattleScene) hitTestBattleSubRows(rowCount int) (int, bool) {
 	return hitTestTapRects(rects)
 }
 
-func (s *BattleScene) skillLevelArrowRects(row, lv int, face *text.GoTextFace) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
+func (s *BattleScene) skillLevelArrowRects(row, lv int, lvFace, arrowFace *text.GoTextFace) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
 	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
 	textY = windowY + battleSubLabelOffsetY + float64(row)*battleSubRowHeight
 
-	lvW := text.Advance(skillLvText(lv), face)
-	leftArrowW := text.Advance(skillLvLeftArrow, face)
-	rightArrowW := text.Advance(skillLvRightArrow, face)
+	lvW := text.Advance(skillLvText(lv), lvFace)
+	leftArrowW := text.Advance(skillLvLeftArrow, arrowFace)
+	rightArrowW := text.Advance(skillLvRightArrow, arrowFace)
 
 	blockRightX := windowX + windowW - battleSubLvBlockRightX
 	rightX = blockRightX - rightArrowW
@@ -100,7 +100,8 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 	if len(pts) == 0 {
 		return false
 	}
-	face := s.game.FontFace(15)
+	lvFace := s.game.LatinFontFace(15)
+	arrowFace := s.game.FontFace(15)
 	for i, sk := range skills {
 		curLv := s.game.PlayerSkillLv[p][i]
 		if curLv < 1 {
@@ -119,12 +120,13 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 		if lv > curLv {
 			lv = curLv
 		}
-		leftRect, rightRect, _, _, _, _ := s.skillLevelArrowRects(i, lv, face)
+		leftRect, rightRect, _, _, _, _ := s.skillLevelArrowRects(i, lv, lvFace, arrowFace)
 		for _, pt := range pts {
 			if leftRect.contains(pt) {
 				if lv > 1 {
 					s.skillLevelCursors[p][i] = lv - 1
 					s.lastSkillLevel[p][i] = lv - 1
+					s.game.Audio.PlaySEByKey("cursor")
 				}
 				return true
 			}
@@ -132,6 +134,7 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 				if lv < curLv {
 					s.skillLevelCursors[p][i] = lv + 1
 					s.lastSkillLevel[p][i] = lv + 1
+					s.game.Audio.PlaySEByKey("cursor")
 				}
 				return true
 			}

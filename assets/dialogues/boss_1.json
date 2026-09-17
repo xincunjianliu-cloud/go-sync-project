@@ -1,5 +1,6 @@
 {
   "battle": {
+    "bgm": "talk_tense",
     "commands": [
       { "speaker": "player1", "text": "あれが噂のボスか...油断するなよ！" },
       { "speaker": "boss1", "text": "貴様...ここまで来るとはな" },
@@ -20,6 +21,7 @@
     }
   },
   "clear": {
+    "bgm": "talk_peaceful",
     "commands": [
       { "speaker": "boss1", "text": "馬鹿な...この俺が..." },
       { "speaker": "player1", "text": "これで一つ、片付いたな" },

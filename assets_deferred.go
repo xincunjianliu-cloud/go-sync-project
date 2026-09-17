@@ -43,7 +43,6 @@ func (g *Game) loadHeavyAssetsAsync() {
 		g.heavyDecoded <- decodedHeavyAsset{err: err, label: "セリフデータの読み込み"}
 		return
 	}
-	validateDialogueSlots()
 
 	assignments := deferredAssetAssignments()
 	paths := make([]string, len(assignments))

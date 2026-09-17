@@ -134,7 +134,7 @@ func (s *BattleScene) drawBattleShortcutButtons(screen *ebiten.Image) {
 			op.GeoM.Translate(cx, cy+battleIconR+4)
 			op.PrimaryAlign = text.AlignCenter
 			op.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, key, s.game.FontFace(ctrlKeyFontSize), op)
+			text.Draw(screen, key, s.game.LatinFontFace(ctrlLabelFontSize), op)
 		}
 		drawKeyLabel(rx, ry, "F")
 		drawKeyLabel(ix, iy, "I")

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"time"
 
@@ -60,6 +59,85 @@ func resolveBGMKey(key string) (string, bool) {
 	return path, ok
 }
 
+const (
+	seDecide        = "assets/se/se_decide.mp3"
+	seCancel        = "assets/se/se_cancel.mp3"
+	seCursor        = "assets/se/se_cursor.mp3"
+	seMenuToggle    = "assets/se/se_menu_toggle.mp3"
+	seError         = "assets/se/se_error.mp3"
+	seTextAdvance   = "assets/se/se_text_advance.mp3"
+	seFootstep      = "assets/se/se_footstep.mp3"
+	seDashFootstep  = "assets/se/se_dash_footstep.mp3"
+	seDoor          = "assets/se/se_door.mp3"
+	seSlidingDoor   = "assets/se/se_sliding_door.mp3"
+	seLocker        = "assets/se/se_locker.mp3"
+	seTreasureOpen  = "assets/se/se_treasure_open.mp3"
+	seItemGet       = "assets/se/se_item_get.mp3"
+	seSwitch        = "assets/se/se_switch.mp3"
+	seLever         = "assets/se/se_lever.mp3"
+	seWaterFlow     = "assets/se/se_water_flow.mp3"
+	seWaterFull     = "assets/se/se_water_full.mp3"
+	seWaterDrain    = "assets/se/se_water_drain.mp3"
+	seEncounter     = "assets/se/se_encounter.mp3"
+	seBattleStart   = "assets/se/se_battle_start.mp3"
+	seAttackNormal  = "assets/se/se_attack_normal.mp3"
+	seSkillAttack   = "assets/se/se_skill_attack.mp3"
+	seSkillHeal     = "assets/se/se_skill_heal.mp3"
+	seCritical      = "assets/se/se_critical.mp3"
+	seHeal          = "assets/se/se_heal.mp3"
+	seBuff          = "assets/se/se_buff.mp3"
+	seDebuff        = "assets/se/se_debuff.mp3"
+	seDamage        = "assets/se/se_damage.mp3"
+	seEvade         = "assets/se/se_evade.mp3"
+	seGuard         = "assets/se/se_guard.mp3"
+	seEnemyDefeated = "assets/se/se_enemy_defeated.mp3"
+	seLevelUp       = "assets/se/se_level_up.mp3"
+)
+
+// seByKey はSE名(キー)→実ファイルパスの対応表。bgmByKeyと同じ理由で、
+// 実データの差し替え時はこのファイルだけ書き換えればよいようにしてある。
+// 現時点では assets/se/ 以下のファイルはすべて中身が空のプレースホルダーで、
+// 実際の効果音ファイルに置き換えるまでは再生時に無音のままスキップされる。
+var seByKey = map[string]string{
+	"decide":         seDecide,
+	"cancel":         seCancel,
+	"cursor":         seCursor,
+	"menu_toggle":    seMenuToggle,
+	"error":          seError,
+	"text_advance":   seTextAdvance,
+	"footstep":       seFootstep,
+	"dash_footstep":  seDashFootstep,
+	"door":           seDoor,
+	"sliding_door":   seSlidingDoor,
+	"locker":         seLocker,
+	"treasure_open":  seTreasureOpen,
+	"item_get":       seItemGet,
+	"switch":         seSwitch,
+	"lever":          seLever,
+	"water_flow":     seWaterFlow,
+	"water_full":     seWaterFull,
+	"water_drain":    seWaterDrain,
+	"encounter":      seEncounter,
+	"battle_start":   seBattleStart,
+	"attack_normal":  seAttackNormal,
+	"skill_attack":   seSkillAttack,
+	"skill_heal":     seSkillHeal,
+	"critical":       seCritical,
+	"heal":           seHeal,
+	"buff":           seBuff,
+	"debuff":         seDebuff,
+	"damage":         seDamage,
+	"evade":          seEvade,
+	"guard":          seGuard,
+	"enemy_defeated": seEnemyDefeated,
+	"level_up":       seLevelUp,
+}
+
+func resolveSEKey(key string) (string, bool) {
+	path, ok := seByKey[key]
+	return path, ok
+}
+
 type AudioManager struct {
 	context *audio.Context
 
@@ -67,21 +145,45 @@ type AudioManager struct {
 	bgmName   string
 	volume    float64
 
+	seVolume     float64
+	masterVolume float64
+	sePlayers    []*audio.Player
+
 	waitingLoopSwitch bool
 	pendingLoopPath   string
 	fadeInActive      bool
 	fadeInTarget      float64
 	fadeInSpeed       float64
 
+	fadeOutActive     bool
+	fadeOutSpeed      float64
+	fadeOutNextPath   string
+	fadeOutNextFadeIn float64
+	fadeOutHardCut    bool
+
 	pcmCache map[string][]byte
 }
 
 func NewAudioManager() *AudioManager {
 	return &AudioManager{
-		context:  audio.NewContext(sampleRate),
-		volume:   defaultBGMVolume,
-		pcmCache: make(map[string][]byte),
+		context:      audio.NewContext(sampleRate),
+		volume:       defaultBGMVolume,
+		seVolume:     defaultSEVolume,
+		masterVolume: defaultMasterVolume,
+		pcmCache:     make(map[string][]byte),
 	}
+}
+
+// effectiveBGMVolume はBGMスライダーと全体音量スライダーを掛け合わせた、
+// 実際にプレイヤーへ渡す再生音量。
+func (a *AudioManager) effectiveBGMVolume() float64 {
+	return a.volume * a.masterVolume
+}
+
+// effectiveSEVolume はSEスライダーと全体音量スライダーを掛け合わせた、
+// 実際にプレイヤーへ渡す再生音量。
+func (a *AudioManager) effectiveSEVolume() float64 {
+	return a.seVolume * a.masterVolume
 }
 
 // decodePCM はmp3を最後まで読み切り、PCMデータを丸ごとメモリに展開する。
@@ -107,8 +209,31 @@ func (a *AudioManager) decodePCM(path string) (*bytes.Reader, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	pcm = trimTrailingSilence(pcm)
 	a.pcmCache[path] = pcm
 	return bytes.NewReader(pcm), int64(len(pcm)), nil
+}
+
+// trimTrailingSilence はmp3→PCM変換後の完全な無音区間(エンコーダーが
+// ファイル末尾に付与するパディング)を取り除く。これを残したまま
+// NewInfiniteLoopで無限ループさせると、曲が実質的に終わった後も
+// 無音のまま再生され続けてから先頭に戻るため、ループが即座に
+// 繋がらず体感で大きな空白ができてしまう。
+func trimTrailingSilence(pcm []byte) []byte {
+	const bytesPerFrame = 4 // 16bit stereo
+	i := len(pcm)
+	for i >= bytesPerFrame {
+		frame := pcm[i-bytesPerFrame : i]
+		silent := frame[0] == 0 && frame[1] == 0 && frame[2] == 0 && frame[3] == 0
+		if !silent {
+			break
+		}
+		i -= bytesPerFrame
+	}
+	if i == 0 {
+		return pcm
+	}
+	return pcm[:i]
 }
 
 func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
@@ -121,7 +246,7 @@ func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
 		return nil, err
 	}
 	p.SetBufferSize(bgmBufferSize)
-	p.SetVolume(a.volume)
+	p.SetVolume(a.effectiveBGMVolume())
 	return p, nil
 }
 
@@ -136,7 +261,7 @@ func (a *AudioManager) loadLoopPlayer(path string) (*audio.Player, error) {
 		return nil, err
 	}
 	p.SetBufferSize(bgmBufferSize)
-	p.SetVolume(a.volume)
+	p.SetVolume(a.effectiveBGMVolume())
 	return p, nil
 }
 
@@ -151,7 +276,6 @@ func (a *AudioManager) PlayBGM(path string) {
 
 	p, err := a.loadLoopPlayer(path)
 	if err != nil {
-		fmt.Printf("警告: BGM再生に失敗しました(%s): %v\n", path, err)
 		return
 	}
 	p.Play()
@@ -170,7 +294,6 @@ func (a *AudioManager) PlayBGMFadeIn(path string, duration float64) {
 
 	p, err := a.loadLoopPlayer(path)
 	if err != nil {
-		fmt.Printf("警告: BGM再生に失敗しました(%s): %v\n", path, err)
 		return
 	}
 	p.SetVolume(0)
@@ -178,8 +301,8 @@ func (a *AudioManager) PlayBGMFadeIn(path string, duration float64) {
 	a.bgmPlayer = p
 	a.bgmName = path
 	a.fadeInActive = true
-	a.fadeInTarget = a.volume
-	a.fadeInSpeed = a.volume / duration
+	a.fadeInTarget = a.effectiveBGMVolume()
+	a.fadeInSpeed = a.fadeInTarget / duration
 }
 
 func (a *AudioManager) PlayBGMWithIntro(introPath, loopPath string) {
@@ -190,7 +313,6 @@ func (a *AudioManager) PlayBGMWithIntro(introPath, loopPath string) {
 
 	p, err := a.loadStreamPlayer(introPath)
 	if err != nil {
-		fmt.Printf("警告: イントロBGM再生に失敗しました(%s): %v\n", introPath, err)
 		a.PlayBGM(loopPath)
 		return
 	}
@@ -199,6 +321,42 @@ func (a *AudioManager) PlayBGMWithIntro(introPath, loopPath string) {
 	a.bgmName = introPath
 	a.waitingLoopSwitch = true
 	a.pendingLoopPath = loopPath
+}
+
+// FadeOutThenPlay は現在のBGMを fadeOutDuration 秒かけてフェードアウトし、
+// 完全に無音になった瞬間に次の曲を再生する。シーン遷移の画面フェードと
+// 同じ長さを fadeOutDuration に渡せば、画面が暗転しきるタイミングと
+// 曲が切り替わるタイミングが自然に一致する(両方とも毎フレーム同じdtで
+// 減っていくため)。次の曲は hardCut なら即座にフルボリュームで、
+// そうでなければ fadeInDuration 秒かけてフェードインする。
+func (a *AudioManager) FadeOutThenPlay(nextPath string, fadeOutDuration, fadeInDuration float64, hardCut bool) {
+	if a == nil {
+		return
+	}
+	if a.bgmName == nextPath && a.bgmPlayer != nil && a.bgmPlayer.IsPlaying() {
+		a.fadeOutActive = false
+		a.fadeInActive = false
+		a.bgmPlayer.SetVolume(a.effectiveBGMVolume())
+		return
+	}
+	if fadeOutDuration <= 0 || a.bgmPlayer == nil || !a.bgmPlayer.IsPlaying() {
+		a.startNext(nextPath, fadeInDuration, hardCut)
+		return
+	}
+	a.fadeInActive = false
+	a.fadeOutActive = true
+	a.fadeOutSpeed = a.bgmPlayer.Volume() / fadeOutDuration
+	a.fadeOutNextPath = nextPath
+	a.fadeOutNextFadeIn = fadeInDuration
+	a.fadeOutHardCut = hardCut
+}
+
+func (a *AudioManager) startNext(path string, fadeInDuration float64, hardCut bool) {
+	if hardCut || fadeInDuration <= 0 {
+		a.PlayBGM(path)
+	} else {
+		a.PlayBGMFadeIn(path, fadeInDuration)
+	}
 }
 
 func (a *AudioManager) StopBGM() {
@@ -216,21 +374,82 @@ func (a *AudioManager) stopCurrent() {
 	a.bgmName = ""
 	a.waitingLoopSwitch = false
 	a.pendingLoopPath = ""
+	// フェード中に直接PlayBGM系が呼ばれてプレイヤーが差し替わった場合、
+	// 古いフェード情報(fadeOutActive等)が残っていると、次のUpdateで
+	// 新しく再生し始めたばかりの曲に対して古いフェードアウトが適用され、
+	// 突然無音になって別の曲に切り替わってしまう(意図しないBGM停止の原因)。
+	// プレイヤー差し替え時は必ず両方のフェード状態を破棄する。
+	a.fadeOutActive = false
+	a.fadeInActive = false
 }
 
 func (a *AudioManager) SetVolume(v float64) {
 	if a == nil {
 		return
 	}
+	a.volume = clampVolume(v)
+	if a.bgmPlayer != nil {
+		a.bgmPlayer.SetVolume(a.effectiveBGMVolume())
+	}
+}
+
+func (a *AudioManager) SetSEVolume(v float64) {
+	if a == nil {
+		return
+	}
+	a.seVolume = clampVolume(v)
+}
+
+// SetMasterVolume はゲーム全体の音量を設定する。BGM/SEそれぞれのスライダー値に
+// 掛け合わされる形で最終的な再生音量が決まる。
+func (a *AudioManager) SetMasterVolume(v float64) {
+	if a == nil {
+		return
+	}
+	a.masterVolume = clampVolume(v)
+	if a.bgmPlayer != nil {
+		a.bgmPlayer.SetVolume(a.effectiveBGMVolume())
+	}
+}
+
+func clampVolume(v float64) float64 {
 	if v < 0 {
-		v = 0
+		return 0
 	}
 	if v > 1 {
-		v = 1
+		return 1
 	}
-	a.volume = v
-	if a.bgmPlayer != nil {
-		a.bgmPlayer.SetVolume(v)
+	return v
+}
+
+// PlaySE は短い効果音を1回再生する(BGMとは独立した一回限りのPlayerを使う)。
+// アセットが空のプレースホルダーのままだとデコードに失敗するが、これは
+// 差し替え前の既知の状態であり警告するようなバグではないため、
+// 黙って再生をスキップするだけにする。
+func (a *AudioManager) PlaySE(path string) {
+	if a == nil || path == "" {
+		return
+	}
+	r, _, err := a.decodePCM(path)
+	if err != nil {
+		return
+	}
+	p, err := a.context.NewPlayer(r)
+	if err != nil {
+		return
+	}
+	p.SetVolume(a.effectiveSEVolume())
+	p.Play()
+	a.sePlayers = append(a.sePlayers, p)
+}
+
+// PlaySEByKey はseByKeyのキー経由でSEを再生する。未登録キーは何もしない。
+func (a *AudioManager) PlaySEByKey(key string) {
+	if a == nil {
+		return
+	}
+	if path, ok := resolveSEKey(key); ok {
+		a.PlaySE(path)
 	}
 }
 
@@ -238,10 +457,33 @@ func (a *AudioManager) Update(dt float64) {
 	if a == nil {
 		return
 	}
+	if len(a.sePlayers) > 0 {
+		alive := a.sePlayers[:0]
+		for _, p := range a.sePlayers {
+			if p.IsPlaying() {
+				alive = append(alive, p)
+			} else {
+				p.Close()
+			}
+		}
+		a.sePlayers = alive
+	}
 	if a.waitingLoopSwitch && a.bgmPlayer != nil && !a.bgmPlayer.IsPlaying() {
 		loopPath := a.pendingLoopPath
 		a.waitingLoopSwitch = false
 		a.PlayBGM(loopPath)
+	}
+	if a.fadeOutActive && a.bgmPlayer != nil {
+		cur := a.bgmPlayer.Volume()
+		cur -= a.fadeOutSpeed * dt
+		if cur <= 0 {
+			cur = 0
+			a.bgmPlayer.SetVolume(cur)
+			a.fadeOutActive = false
+			a.startNext(a.fadeOutNextPath, a.fadeOutNextFadeIn, a.fadeOutHardCut)
+		} else {
+			a.bgmPlayer.SetVolume(cur)
+		}
 	}
 	if a.fadeInActive && a.bgmPlayer != nil {
 		cur := a.bgmPlayer.Volume()

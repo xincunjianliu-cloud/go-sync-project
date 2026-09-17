@@ -12,6 +12,8 @@ const windowResizeSettleTicks = 30
 
 type GameSettings struct {
 	BGMVolume      float64 `json:"bgmVolume"`
+	SEVolume       float64 `json:"seVolume"`
+	MasterVolume   float64 `json:"masterVolume"`
 	MessageSpeed   int     `json:"messageSpeed"`
 	Fullscreen     bool    `json:"fullscreen"`
 	WindowWidth    int     `json:"windowWidth"`
@@ -22,6 +24,8 @@ type GameSettings struct {
 func LoadSettings() GameSettings {
 	s := GameSettings{
 		BGMVolume:      defaultBGMVolume,
+		SEVolume:       defaultSEVolume,
+		MasterVolume:   defaultMasterVolume,
 		MessageSpeed:   defaultMessageSpeed,
 		Fullscreen:     defaultFullscreen,
 		WindowWidth:    defaultWindowWidth,
@@ -87,11 +91,17 @@ func (g *Game) updateWindowSizeTracking() {
 
 func (g *Game) SaveGameSettings() {
 	vol := defaultBGMVolume
+	seVol := defaultSEVolume
+	masterVol := defaultMasterVolume
 	if g.Audio != nil {
 		vol = g.Audio.volume
+		seVol = g.Audio.seVolume
+		masterVol = g.Audio.masterVolume
 	}
 	SaveSettings(GameSettings{
 		BGMVolume:      vol,
+		SEVolume:       seVol,
+		MasterVolume:   masterVol,
 		MessageSpeed:   g.MessageSpeed,
 		Fullscreen:     g.Fullscreen,
 		WindowWidth:    g.WindowWidth,

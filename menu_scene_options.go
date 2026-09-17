@@ -5,7 +5,9 @@ import (
 )
 
 const (
-	optionIdxBGM = iota
+	optionIdxMaster = iota
+	optionIdxBGM
+	optionIdxSE
 	optionIdxDisplayMode
 	optionIdxMessageSpeed
 	optionIdxCursorMemory
@@ -13,38 +15,85 @@ const (
 	optionCount
 )
 
-func optionRowPositions() (barY, displayRowY, speedRowY, cursorRowY, resetY float64) {
-	barY = volumePanelY
-	dispHeaderY := barY + volumeBarH + 30
+func isVolumeOptionRow(idx int) bool {
+	return idx == optionIdxBGM || idx == optionIdxSE || idx == optionIdxMaster
+}
+
+// isValueToggleRow は画面モード/メッセージ速度/カーソル記憶のように、
+// 確定操作で値そのものが切り替わる行かどうかを返す。これらの行は、
+// ラベルや値の文字部分をタップしても選択されるだけにして、値の変更は
+// ◀▶矢印のタップか確定キー（Enter/Z等）でのみ行えるようにする。
+func isValueToggleRow(idx int) bool {
+	return idx == optionIdxDisplayMode || idx == optionIdxMessageSpeed || idx == optionIdxCursorMemory
+}
+
+func optionRowPositions() (masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY float64) {
+	masterBarY = volumePanelY
+	bgmBarY = masterBarY + volumeRowGapY
+	seBarY = bgmBarY + volumeRowGapY
+	dispHeaderY := seBarY + volumeBarH + 25
 	lineY2 := dispHeaderY + 24
-	displayRowY = lineY2 + 40
-	speedRowY = displayRowY + 40
-	descRowY := speedRowY + 30
-	lineY3 := descRowY + 20
-	cursorRowY = lineY3 + 30
+	displayRowY = lineY2 + 33
+	speedRowY = displayRowY + 37
+	descRowY = speedRowY + 27
+	sysHeaderY = descRowY + 37
+	lineY4 := sysHeaderY + 24
+	cursorRowY = lineY4 + 33
 	resetY = cursorRowY + volumeResetGapY
 	return
 }
 
-const optionValueX = volumeGroupX + volumeLabelBarGap + 180
+// optionBoxCenterX はメニュー枠の縦区切り線から右端までの、右側ボックスの
+// 水平中央。オプション画面の各項目はここを基準に中央揃えする。
+const optionBoxCenterX = (menuFrameDividerX + menuFrameRight) / 2
+
+// controlRowLabelValueOffset は画面モード/メッセージ速度/カーソル記憶の各行で
+// ラベル起点(optionCtrlLabelX)から値の中心(optionValueX)までの水平距離。
+const controlRowLabelValueOffset float64 = volumeLabelBarGap + 180
+
+// optionArrowGap は画面モード/メッセージ速度/カーソル記憶3行共通の、
+// 値中心(optionValueX)から◀▶矢印までの距離。3行とも同じ値にすることで
+// 矢印が縦一列に揃う。3つの値のうち最も幅が広い「フルスクリーン」
+// （約126px）が矢印と重ならない最小限の余白を基準にしている。
+const (
+	optionArrowGap        float64 = 82
+	optionDisplayArrowGap float64 = optionArrowGap
+	optionSpeedArrowGap   float64 = optionArrowGap
+	optionCursorArrowGap  float64 = optionArrowGap
+)
+
+// controlRowHalfWidth はラベル起点から右矢印(3行のうち最大到達幅)までを
+// 含めた行全体の半幅。これでラベル起点をボックス中央に対して逆算する。
+const controlRowHalfWidth float64 = (controlRowLabelValueOffset + optionDisplayArrowGap) / 2
+
+const optionCtrlLabelX = optionBoxCenterX - controlRowHalfWidth
+const optionValueX = optionCtrlLabelX + controlRowLabelValueOffset
 
 func (m *MenuScene) hitTestOptionList() (int, bool) {
-	barY, displayRowY, speedRowY, cursorRowY, resetY := optionRowPositions()
-	ys := []float64{barY + volumeBarH/2, displayRowY, speedRowY, cursorRowY, resetY + 10}
-	rects := make([]tapRect, len(ys))
-	for i, y := range ys {
-		rects[i] = tapRect{x: volumeGroupX - 4, y: y - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32}
+	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, _, _, cursorRowY, resetY := optionRowPositions()
+	volumeRects := []tapRect{
+		{x: volumeGroupX - 4, y: masterBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
+		{x: volumeGroupX - 4, y: bgmBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
+		{x: volumeGroupX - 4, y: seBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
 	}
+	ctrlYs := []float64{displayRowY, speedRowY, cursorRowY}
+	ctrlRects := make([]tapRect, len(ctrlYs))
+	for i, y := range ctrlYs {
+		ctrlRects[i] = tapRect{x: optionCtrlLabelX - 4, y: y - 16, w: controlRowHalfWidth*2 + 4, h: 32}
+	}
+	resetRect := tapRect{x: volumeGroupX - 4, y: resetY + 10 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32}
+
+	rects := append(append(volumeRects, ctrlRects...), resetRect)
 	return hitTestTapRects(rects)
 }
 
 func optionPanelRect() tapRect {
-	_, _, _, _, resetY := optionRowPositions()
+	_, _, _, _, _, _, _, _, resetY := optionRowPositions()
 	top := volumePanelY - 40
 	return tapRect{
 		x: volumeGroupX - 10,
 		y: top,
-		w: volumeLabelBarGap + volumeBarW + volumeBarPercentGap + 80,
+		w: volumeContentW + 10,
 		h: resetY + 40 - top,
 	}
 }
@@ -67,68 +116,81 @@ func hitTestLeftRightArrow(x, y float64) bool {
 
 func (m *MenuScene) updateOption() {
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.finishVolumeInput()
 		m.menuState = menuStateMain
 		return
 	}
 
 	if m.updateVolumeBarDrag() {
-		m.optionIndex = optionIdxBGM
+		m.optionIndex = m.volumeDragRow
 		return
 	}
 
 	if idx, dir, ok := m.hitTestOptionArrows(); ok {
 		m.optionIndex = idx
 		m.changeOptionValue(idx, dir)
+		m.game.Audio.PlaySEByKey("cursor")
 		return
 	}
 
 	if isMenuUpRepeat() {
 		m.optionIndex = (m.optionIndex - 1 + optionCount) % optionCount
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownRepeat() {
 		m.optionIndex = (m.optionIndex + 1) % optionCount
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	tappedIdx, tappedOk := m.hitTestOptionList()
-	tapConfirm := tapSelectOrConfirm(tappedIdx, tappedOk, &m.optionIndex)
+	tapConfirm := tapSelectOrConfirm(tappedIdx, tappedOk, &m.optionIndex, m.game.Audio)
+	if tapConfirm && isValueToggleRow(tappedIdx) {
+		// 矢印以外(ラベルや値の文字)のタップは選択のみ。値の切り替えは
+		// 矢印タップ(hitTestOptionArrowsで別途処理済み)か確定キーのみで行う。
+		tapConfirm = false
+	}
 
-	if m.optionIndex == optionIdxBGM {
+	if isVolumeOptionRow(m.optionIndex) {
 		m.updateVolumeKeys()
 	} else {
 		m.finishVolumeInput()
 		if isMenuRightPressed() {
 			m.changeOptionValue(m.optionIndex, +1)
+			m.game.Audio.PlaySEByKey("cursor")
 		}
 		if isMenuLeftPressed() {
 			m.changeOptionValue(m.optionIndex, -1)
+			m.game.Audio.PlaySEByKey("cursor")
 		}
 	}
 
 	if isConfirmKeyPressed() || tapConfirm {
+		m.game.Audio.PlaySEByKey("decide")
 		m.activateOption(m.optionIndex)
 		return
 	}
 
 	if !tappedOk && unrelatedTapOutsideRects(optionPanelRect()) {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.finishVolumeInput()
 		m.menuState = menuStateMain
 	}
 }
 
 func (m *MenuScene) hitTestOptionArrows() (int, int, bool) {
-	_, displayRowY, speedRowY, cursorRowY, _ := optionRowPositions()
+	_, _, _, displayRowY, speedRowY, _, _, cursorRowY, _ := optionRowPositions()
 	type arrow struct {
 		idx, dir int
 		x, y     float64
 		visible  bool
 	}
 	arrows := []arrow{
-		{optionIdxDisplayMode, -1, optionValueX - 70, displayRowY, true},
-		{optionIdxDisplayMode, +1, optionValueX + 70, displayRowY, true},
-		{optionIdxMessageSpeed, -1, optionValueX - 60, speedRowY, m.game.MessageSpeed > 0},
-		{optionIdxMessageSpeed, +1, optionValueX + 60, speedRowY, m.game.MessageSpeed < 2},
-		{optionIdxCursorMemory, -1, optionValueX - 70, cursorRowY, true},
-		{optionIdxCursorMemory, +1, optionValueX + 70, cursorRowY, true},
+		{optionIdxDisplayMode, -1, optionValueX - optionDisplayArrowGap, displayRowY, true},
+		{optionIdxDisplayMode, +1, optionValueX + optionDisplayArrowGap, displayRowY, true},
+		{optionIdxMessageSpeed, -1, optionValueX - optionSpeedArrowGap, speedRowY, m.game.MessageSpeed > 0},
+		{optionIdxMessageSpeed, +1, optionValueX + optionSpeedArrowGap, speedRowY, m.game.MessageSpeed < 2},
+		{optionIdxCursorMemory, -1, optionValueX - optionCursorArrowGap, cursorRowY, true},
+		{optionIdxCursorMemory, +1, optionValueX + optionCursorArrowGap, cursorRowY, true},
 	}
 	for _, a := range arrows {
 		if a.visible && hitTestLeftRightArrow(a.x, a.y) {
@@ -158,7 +220,7 @@ func (m *MenuScene) changeOptionValue(idx, dir int) {
 
 func (m *MenuScene) activateOption(idx int) {
 	switch idx {
-	case optionIdxBGM:
+	case optionIdxBGM, optionIdxSE, optionIdxMaster:
 	case optionIdxDisplayMode:
 		m.toggleDisplayMode()
 	case optionIdxMessageSpeed:
@@ -193,6 +255,8 @@ func (m *MenuScene) toggleDisplayMode() {
 func (m *MenuScene) performOptionReset() {
 	if m.game.Audio != nil {
 		m.game.Audio.SetVolume(defaultBGMVolume)
+		m.game.Audio.SetSEVolume(defaultSEVolume)
+		m.game.Audio.SetMasterVolume(defaultMasterVolume)
 	}
 	m.game.MessageSpeed = defaultMessageSpeed
 	m.game.Fullscreen = defaultFullscreen
@@ -223,9 +287,49 @@ func (m *MenuScene) updateOptionResetDone() {
 	}
 }
 
+// volumeRowSetter はidx(optionIdxBGM/SE/Master)に対応する音量セッターを返す。
+func (m *MenuScene) volumeRowSetter(idx int) func(float64) {
+	if m.game.Audio == nil {
+		return nil
+	}
+	switch idx {
+	case optionIdxBGM:
+		return m.game.Audio.SetVolume
+	case optionIdxSE:
+		return m.game.Audio.SetSEVolume
+	case optionIdxMaster:
+		return m.game.Audio.SetMasterVolume
+	}
+	return nil
+}
+
+// volumeRowValue はidx(optionIdxBGM/SE/Master)に対応する現在の音量を返す。
+func (m *MenuScene) volumeRowValue(idx int) float64 {
+	if m.game.Audio == nil {
+		return 0
+	}
+	switch idx {
+	case optionIdxBGM:
+		return m.game.Audio.volume
+	case optionIdxSE:
+		return m.game.Audio.seVolume
+	case optionIdxMaster:
+		return m.game.Audio.masterVolume
+	}
+	return 0
+}
+
 func (m *MenuScene) updateVolumeBarDrag() bool {
-	barY, _, _, _, _ := optionRowPositions()
+	masterBarY, bgmBarY, seBarY, _, _, _, _, _, _ := optionRowPositions()
 	barX := volumeGroupX + volumeLabelBarGap
+	rows := []struct {
+		idx int
+		y   float64
+	}{
+		{optionIdxMaster, masterBarY},
+		{optionIdxBGM, bgmBarY},
+		{optionIdxSE, seBarY},
+	}
 
 	var pt touchPoint
 	found := false
@@ -234,9 +338,19 @@ func (m *MenuScene) updateVolumeBarDrag() bool {
 			pt, found = pts[0], true
 		}
 	} else {
+		const hitHalfH = 16.0
+		hitX := barX - volumeKnobRSel
+		hitW := volumeBarW + volumeKnobRSel*2
 		for _, p := range justPressedTouchPoints() {
-			if p.inRect(barX, barY-8, volumeBarW, volumeBarH+16) {
-				pt, found = p, true
+			for _, row := range rows {
+				midY := row.y + volumeBarH/2
+				if p.inRect(hitX, midY-hitHalfH, hitW, hitHalfH*2) {
+					pt, found = p, true
+					m.volumeDragRow = row.idx
+					break
+				}
+			}
+			if found {
 				break
 			}
 		}
@@ -257,8 +371,8 @@ func (m *MenuScene) updateVolumeBarDrag() bool {
 	} else if ratio > 1 {
 		ratio = 1
 	}
-	if m.game.Audio != nil {
-		m.game.Audio.SetVolume(ratio)
+	if set := m.volumeRowSetter(m.volumeDragRow); set != nil {
+		set(ratio)
 	}
 	return true
 }
@@ -280,10 +394,10 @@ func (m *MenuScene) updateVolumeKeys() {
 	}
 
 	if repeatFires(m.volumeRightHoldTicks, bgmVolumeRepeatDelayTicks, bgmVolumeRepeatIntervalTicks) {
-		m.changeBGMVolume(bgmVolumeStep)
+		m.changeRowVolume(m.optionIndex, bgmVolumeStep)
 	}
 	if repeatFires(m.volumeLeftHoldTicks, bgmVolumeRepeatDelayTicks, bgmVolumeRepeatIntervalTicks) {
-		m.changeBGMVolume(-bgmVolumeStep)
+		m.changeRowVolume(m.optionIndex, -bgmVolumeStep)
 	}
 	if wasHeld && !rightHeld && !leftHeld {
 		m.persistSettings()
@@ -299,18 +413,12 @@ func (m *MenuScene) finishVolumeInput() {
 	m.volumeLeftHoldTicks = 0
 }
 
-func (m *MenuScene) changeBGMVolume(delta float64) {
-	if m.game.Audio == nil {
+func (m *MenuScene) changeRowVolume(idx int, delta float64) {
+	set := m.volumeRowSetter(idx)
+	if set == nil {
 		return
 	}
-	v := m.game.Audio.volume + delta
-	if v < 0 {
-		v = 0
-	}
-	if v > 1 {
-		v = 1
-	}
-	m.game.Audio.SetVolume(v)
+	set(clampVolume(m.volumeRowValue(idx) + delta))
 }
 
 var menuCommandDescriptions = map[string]string{
@@ -325,6 +433,8 @@ var menuCommandDescriptions = map[string]string{
 
 var menuOptionDescriptions = map[int]string{
 	optionIdxBGM:          "BGMの音量を調整します（←→ / バーをタップ・ドラッグ）",
+	optionIdxSE:           "効果音の音量を調整します（←→ / バーをタップ・ドラッグ）",
+	optionIdxMaster:       "ゲーム全体の音量を調整します（←→ / バーをタップ・ドラッグ）",
 	optionIdxDisplayMode:  "フルスクリーン/ウィンドウを切り替えます（ウィンドウは端をドラッグしてサイズ変更できます）",
 	optionIdxMessageSpeed: "メッセージの表示速度を変更します（←→）",
 	optionIdxCursorMemory: "ONにすると、次にこのメニューを開いた時も前回選んでいた項目にカーソルが合った状態にします",

@@ -13,6 +13,13 @@ import (
 
 const chestTriggerMargin = 32
 
+// footstepIntervalTicks/dashFootstepIntervalTicks は歩行中に足音SEを鳴らす間隔(フレーム数)。
+// ダッシュ中は歩幅が広く歩調が速いため、通常より短い間隔にしている。
+const (
+	footstepIntervalTicks     = 18
+	dashFootstepIntervalTicks = 12
+)
+
 func (s *FieldScene) openMessageLog() {
 	s.isLogActive = true
 	s.logScrollOffset = 0
@@ -65,9 +72,11 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if s.isLogActive {
 		if isMenuUpPressed() {
 			s.moveLogCursor(-1)
+			s.game.Audio.PlaySEByKey("cursor")
 		}
 		if isMenuDownPressed() {
 			s.moveLogCursor(1)
+			s.game.Audio.PlaySEByKey("cursor")
 		}
 
 		maxLogScroll := float64(len(s.msgLog) - logVisibleCount)
@@ -98,6 +107,9 @@ func (s *FieldScene) Update(dt float64) Scene {
 			}
 			if s.logDrag.justTapped {
 				if idx, ok := hitTestLogEntries(s.game, len(s.msgLog), s.logScrollOffset, s.logDrag.tapX, s.logDrag.tapY); ok {
+					if idx != s.logCursorIndex {
+						s.game.Audio.PlaySEByKey("cursor")
+					}
 					s.logCursorIndex = idx
 				}
 			}
@@ -110,10 +122,12 @@ func (s *FieldScene) Update(dt float64) Scene {
 		barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
 		if unrelatedTapOutsideRects(logRect, barRect) {
 			s.isLogActive = false
+			s.game.Audio.PlaySEByKey("menu_toggle")
 		}
 
 		if isConfirmKeyPressed() || isEscapePressed() || isLogTogglePressed() {
 			s.isLogActive = false
+			s.game.Audio.PlaySEByKey("menu_toggle")
 		}
 		return s
 	}
@@ -128,8 +142,10 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if s.isChoiceActive {
 		if isMenuUpPressed() || isMenuDownPressed() {
 			s.choiceIndex = 1 - s.choiceIndex
+			s.game.Audio.PlaySEByKey("cursor")
 		}
 		if isConfirmKeyPressed() {
+			s.game.Audio.PlaySEByKey("decide")
 			cb := s.onChoiceConfirm
 			selected := s.choiceIndex
 			s.isChoiceActive = false
@@ -303,6 +319,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 			s.msgSkipHoldElapsed += dt
 			if s.msgSkipHoldElapsed >= endingSkipHoldSeconds {
 				s.msgSkipHoldElapsed = 0
+				s.game.Audio.PlaySEByKey("decide")
 				return s.skipMessage()
 			}
 		} else {
@@ -312,9 +329,11 @@ func (s *FieldScene) Update(dt float64) Scene {
 		if isAutoTogglePressed() || isAutoIconJustPressed(s.game) {
 			s.autoMode = !s.autoMode
 			s.autoWaitElapsed = 0
+			s.game.Audio.PlaySEByKey("menu_toggle")
 		}
 
 		if isLogTogglePressed() || isLogIconJustPressed(s.game) {
+			s.game.Audio.PlaySEByKey("menu_toggle")
 			s.openMessageLog()
 			return s
 		}
@@ -322,6 +341,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 		finished := s.msg.IsFinished(s.msgTexts[s.msgIndex])
 
 		if isMessageAdvancePressed() {
+			s.game.Audio.PlaySEByKey("text_advance")
 			if !finished {
 				s.msg.SkipToEnd(s.msgTexts[s.msgIndex])
 				return s
@@ -488,6 +508,15 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 	if actualMovedDist > 0 {
 		s.animCount++
+		interval := footstepIntervalTicks
+		seKey := "footstep"
+		if s.isDashingNow {
+			interval = dashFootstepIntervalTicks
+			seKey = "dash_footstep"
+		}
+		if s.animCount%interval == 0 {
+			s.game.Audio.PlaySEByKey(seKey)
+		}
 	} else {
 		s.animCount = 0
 	}
@@ -505,10 +534,12 @@ func (s *FieldScene) Update(dt float64) Scene {
 		full := ebiten.NewImage(gameWidth, gameHeight)
 		s.Draw(full)
 		s.game.captureMenuEntryThumb(full)
+		s.game.Audio.PlaySEByKey("menu_toggle")
 		return NewMenuScene(s.game, s)
 	}
 
 	if isLogTogglePressed() {
+		s.game.Audio.PlaySEByKey("menu_toggle")
 		s.openMessageLog()
 		return s
 	}
@@ -552,7 +583,8 @@ func (s *FieldScene) Update(dt float64) Scene {
 					}
 				} else if evType == "event" && evText == "event_wall" && p["lever"] != "" {
 				} else if evType == "event" && evText == "event_lever" {
-					if objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
+					exhausted := p["oneway"] == "true" && s.game.RaisedLevers[p["id"]]
+					if !exhausted && objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
 						s.nearExamineEvent = true
 					}
 				} else if evType == "event" && (evText == "event_block" || evText == "event_blockspot" || evText == "event_blockdoor") {
@@ -667,6 +699,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 					for i := 0; i < count; i++ {
 						chosenEnemyNames[i] = strings.TrimSpace(allowedEnemies[rand.Intn(len(allowedEnemies))])
 					}
+					s.game.Audio.PlaySEByKey("encounter")
 					battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, "enemy", chosenEnemyNames)
 					s.game.ChangeSceneWithFade(battleScene, fadeTimeBattleIn)
 					return s
@@ -963,6 +996,7 @@ func (s *FieldScene) triggerDoorWarp() Scene {
 	if err != nil {
 		return nil
 	}
+	s.game.Audio.PlaySEByKey("door")
 	s.game.ChangeSceneWithFade(nextRoom, fadeTimeDoor)
 	return s
 }
@@ -976,9 +1010,7 @@ func (s *FieldScene) beginMessage() {
 	s.msg.Start()
 	if s.msgBGM != "" {
 		if path, ok := resolveBGMKey(s.msgBGM); ok {
-			s.game.Audio.PlayBGM(path)
-		} else {
-			fmt.Printf("警告: 会話のbgmキー %q が見つかりません\n", s.msgBGM)
+			s.game.Audio.FadeOutThenPlay(path, msgBGMFadeOut, msgBGMFadeIn, false)
 		}
 	}
 }
@@ -991,8 +1023,15 @@ func (s *FieldScene) endMessage() {
 	s.autoMode = false
 	s.autoWaitElapsed = 0
 	s.nearExamineEvent = false
-	s.game.Audio.PlayBGM(s.mapBGM)
+	s.game.Audio.FadeOutThenPlay(s.mapBGM, msgBGMFadeOut, msgBGMFadeIn, false)
 }
+
+// 会話専用BGM(msgBGM)は画面の暗転を伴わないため、音だけで短くクロスフェード
+// させて曲の切り替わりを自然に見せる。
+const (
+	msgBGMFadeOut = 0.4
+	msgBGMFadeIn  = 0.6
+)
 
 const (
 	autoBaseSeconds    = 0.4

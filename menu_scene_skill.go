@@ -68,16 +68,19 @@ func (m *MenuScene) reachableSkillLevel(charIdx, skillIdx int) int {
 
 func (m *MenuScene) updateSkillCharSel() {
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.menuState = menuStateMain
 		return
 	}
 	if isMenuUpRepeat() {
 		m.skillCharIndex = (m.skillCharIndex - 1 + partySize) % partySize
 		m.game.LastSkillCharIndex = m.skillCharIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownRepeat() {
 		m.skillCharIndex = (m.skillCharIndex + 1) % partySize
 		m.game.LastSkillCharIndex = m.skillCharIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	tapped := false
 	if idx, ok := m.hitTestPartyRows(); ok {
@@ -87,10 +90,12 @@ func (m *MenuScene) updateSkillCharSel() {
 	}
 	if !isConfirmKeyPressed() && !tapped {
 		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.menuState = menuStateMain
 		}
 		return
 	}
+	m.game.Audio.PlaySEByKey("decide")
 	m.enterSkillCharacter(m.skillCharIndex)
 }
 
@@ -125,12 +130,16 @@ func (m *MenuScene) trySkillLevelConfirm(skills []SkillDef, skillIdx, lv int) {
 	caster := m.skillCharIndex
 	switch {
 	case !data.IsHeal:
+		m.game.Audio.PlaySEByKey("error")
 		m.showNotice("このスキルはメニューからは使えません（戦闘中に使用します）")
 	case m.game.PlayerHP[caster] <= 0:
+		m.game.Audio.PlaySEByKey("error")
 		m.showNotice(PlayerNames[caster] + "は戦闘不能のためスキルを使えません")
 	case m.game.PlayerMP[caster] < data.MPCost:
+		m.game.Audio.PlaySEByKey("error")
 		m.showNotice(fmt.Sprintf("MPが足りません（必要MP:%d）", data.MPCost))
 	default:
+		m.game.Audio.PlaySEByKey("decide")
 		m.pendingSkill = skillIdx + 1
 		m.pendingSkillLevel = lv
 		if m.healTargetIndex < 0 || m.healTargetIndex > partySize {
@@ -198,6 +207,7 @@ func (m *MenuScene) nextEnabledSkillIndex(from, dir int) int {
 func (m *MenuScene) updateSkillSub() {
 	if idx, ok := m.hitTestPartyRows(); ok {
 		if idx != m.skillCharIndex {
+			m.game.Audio.PlaySEByKey("decide")
 			m.enterSkillCharacter(idx)
 		}
 		return
@@ -236,13 +246,14 @@ func (m *MenuScene) updateSkillSub() {
 				m.upgradeHoldArmed = false
 				m.game.LastSkillSubIndex = m.skillSubIndex
 				m.game.LastSkillLevelCursor = m.skillLevelCursor
+				m.game.Audio.PlaySEByKey("cursor")
 				return
 			}
 			if lvT != m.skillLevelCursor {
 				m.upgradeProgress = 0
 				m.upgradeHoldArmed = false
 			}
-			tappedLvConfirm = tapSelectOrConfirm(lvT, true, &m.skillLevelCursor)
+			tappedLvConfirm = tapSelectOrConfirm(lvT, true, &m.skillLevelCursor, m.game.Audio)
 			m.game.LastSkillLevelCursor = m.skillLevelCursor
 		} else if rowT, ok := m.hitTestSkillNameRows(n); ok {
 			levelAreaTapped = true
@@ -257,6 +268,7 @@ func (m *MenuScene) updateSkillSub() {
 				m.upgradeHoldArmed = false
 				m.game.LastSkillSubIndex = m.skillSubIndex
 				m.game.LastSkillLevelCursor = m.skillLevelCursor
+				m.game.Audio.PlaySEByKey("cursor")
 				return
 			}
 		}
@@ -267,6 +279,7 @@ func (m *MenuScene) updateSkillSub() {
 			m.upgradeProgress = 0
 		}
 		if isEscapePressed() {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.skillLevelSelecting = false
 			m.upgradeHoldArmed = false
 			return
@@ -291,18 +304,21 @@ func (m *MenuScene) updateSkillSub() {
 			m.upgradeHoldArmed = false
 			m.game.LastSkillSubIndex = m.skillSubIndex
 			m.game.LastSkillLevelCursor = m.skillLevelCursor
+			m.game.Audio.PlaySEByKey("cursor")
 			return
 		}
 		if isMenuRightPressed() {
 			if m.skillLevelCursor < reachable {
 				m.skillLevelCursor++
 				m.game.LastSkillLevelCursor = m.skillLevelCursor
+				m.game.Audio.PlaySEByKey("cursor")
 			}
 		}
 		if isMenuLeftPressed() {
 			if m.skillLevelCursor > 1 {
 				m.skillLevelCursor--
 				m.game.LastSkillLevelCursor = m.skillLevelCursor
+				m.game.Audio.PlaySEByKey("cursor")
 			}
 		}
 		if dg, ok := pressedDigitKey(); ok {
@@ -344,12 +360,14 @@ func (m *MenuScene) updateSkillSub() {
 			m.skillLevelCursor = m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 			m.game.LastSkillLevelCursor = m.skillLevelCursor
 			m.showNotice(fmt.Sprintf("%sをLv%dに強化しました", skills[m.skillSubIndex].Name, m.skillLevelCursor))
+			m.game.Audio.PlaySEByKey("decide")
 			m.upgradeHoldArmed = false
 		}
 		return
 	}
 
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.menuState = menuStateSkillCharSel
 		return
 	}
@@ -366,6 +384,7 @@ func (m *MenuScene) updateSkillSub() {
 		m.upgradeHoldArmed = false
 		m.game.LastSkillSubIndex = m.skillSubIndex
 		m.game.LastSkillLevelCursor = m.skillLevelCursor
+		m.game.Audio.PlaySEByKey("decide")
 		return
 	}
 
@@ -377,7 +396,7 @@ func (m *MenuScene) updateSkillSub() {
 		m.skillSubIndex = (m.skillSubIndex - 1 + n) % n
 	}
 	tappedIdx, tappedOk := m.hitTestSkillNameRows(n)
-	tapConfirmed := tapSelectOrConfirm(tappedIdx, tappedOk, &m.skillSubIndex)
+	tapConfirmed := tapSelectOrConfirm(tappedIdx, tappedOk, &m.skillSubIndex, m.game.Audio)
 	if m.skillSubIndex != prevIndex {
 		newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 		if newCurLv < 1 {
@@ -387,9 +406,10 @@ func (m *MenuScene) updateSkillSub() {
 
 		m.game.LastSkillSubIndex = m.skillSubIndex
 		m.game.LastSkillLevelCursor = m.skillLevelCursor
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 
-	if isMenuRightPressed() {
+	if isMenuRightPressed() || isConfirmKeyPressed() || tapConfirmed {
 		m.skillLevelSelecting = true
 		m.upgradeProgress = 0
 		m.upgradeHoldArmed = false
@@ -398,15 +418,7 @@ func (m *MenuScene) updateSkillSub() {
 		}
 		m.game.LastSkillSubIndex = m.skillSubIndex
 		m.game.LastSkillLevelCursor = m.skillLevelCursor
-		return
-	}
-
-	if isConfirmKeyPressed() || tapConfirmed {
-		curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
-		if curLv < 1 {
-			curLv = 1
-		}
-		m.trySkillLevelConfirm(skills, m.skillSubIndex, curLv)
+		m.game.Audio.PlaySEByKey("decide")
 		return
 	}
 
@@ -417,6 +429,7 @@ func (m *MenuScene) updateSkillSub() {
 
 func (m *MenuScene) updateHealTarget() {
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.pendingSkill = 0
 		m.menuState = menuStateSkillSub
 		return
@@ -424,19 +437,23 @@ func (m *MenuScene) updateHealTarget() {
 	const cycleLen = partySize + 1
 	if isMenuUpPressed() {
 		m.healTargetIndex = (m.healTargetIndex - 1 + cycleLen) % cycleLen
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownPressed() {
 		m.healTargetIndex = (m.healTargetIndex + 1) % cycleLen
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	tappedIdx, tappedOk := m.hitTestPartyRowsWithAll(true)
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &m.healTargetIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &m.healTargetIndex, m.game.Audio)
 	if !isConfirmKeyPressed() && !tapped {
 		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.pendingSkill = 0
 			m.menuState = menuStateSkillSub
 		}
 		return
 	}
+	m.game.Audio.PlaySEByKey("decide")
 
 	caster := m.skillCharIndex
 

@@ -66,9 +66,9 @@ type logEntryLayout struct {
 func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scrollOffset float64, cursorIndex int) {
 	ebitenutil.DrawRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, 170})
 
-	titleFace := game.FontFace(30)
+	titleFace := game.LatinFontFace(30)
 	titleOp := &text.DrawOptions{}
-	titleOp.GeoM.Translate(logBottomMargin, logBottomMargin)
+	titleOp.GeoM.Translate(logBottomMargin, logBottomMargin+game.latinBaselineAdjust(30, text.AlignStart))
 	titleOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, "EVENT LOG", titleFace, titleOp)
 
@@ -81,9 +81,6 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 	if len(log) == 0 {
 		return
 	}
-
-	nameFace := game.FontFace(13)
-	textFace := game.FontFace(13)
 
 	maxTextLinesF := (imgH - logTextOffsetY) / logTextLineH
 	maxTextLines := int(maxTextLinesF)
@@ -149,18 +146,12 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 		}
 		nameX := imgX + logNameOffsetX
 		nameY := imgY + logNameOffsetY
-		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(nameX, nameY)
-		nameOp.ColorScale.ScaleWithColor(logTextColor)
-		text.Draw(dst, speakerLabel, nameFace, nameOp)
+		game.DrawMixedText(dst, speakerLabel, 13, nameX, nameY, text.AlignStart, text.AlignStart, logTextColor)
 
 		textX := imgX + logTextOffsetX
 		textY := imgY + logTextOffsetY
 		for li, line := range e.lines {
-			lineOp := &text.DrawOptions{}
-			lineOp.GeoM.Translate(textX, textY+float64(li)*logTextLineH)
-			lineOp.ColorScale.ScaleWithColor(logTextColor)
-			text.Draw(dst, line, textFace, lineOp)
+			game.DrawMixedText(dst, line, 13, textX, textY+float64(li)*logTextLineH, text.AlignStart, text.AlignStart, logTextColor)
 		}
 	}
 

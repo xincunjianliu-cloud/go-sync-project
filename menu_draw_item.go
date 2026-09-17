@@ -57,6 +57,6 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 		countOp.SecondaryAlign = text.AlignCenter
 		countOp.PrimaryAlign = text.AlignEnd
 		countOp.ColorScale.ScaleWithColor(nameCol)
-		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), m.game.FontFace(itemCountFontSize), countOp)
+		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), m.game.LatinFontFace(itemCountFontSize), countOp)
 	}
 }

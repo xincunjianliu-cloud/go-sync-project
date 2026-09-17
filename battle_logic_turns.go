@@ -211,15 +211,19 @@ func hitTestCommandMenu(game *Game) (int, bool) {
 func (s *BattleScene) updatePlayerMenu() Scene {
 	if isMenuUpPressed() {
 		s.commandIndex = 0
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuLeftPressed() {
 		s.commandIndex = 1
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuRightPressed() {
 		s.commandIndex = 2
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownPressed() {
 		s.commandIndex = 3
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	tappedIdx, tappedOk := hitTestCommandMenu(s.game)
 	rewindTapped := isRewindButtonJustPressed(s.game)
@@ -238,13 +242,14 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.rewindButtonArmed = false
 	}
 
-	tapped := tapArmSelectOrConfirm(tappedIdx, tappedOk, &s.commandIndex, &s.commandTapArmed)
-	rewindConfirm := tapArmButtonConfirm(rewindTapped, &s.rewindButtonArmed)
-	itemConfirm := tapArmButtonConfirm(itemTapped, &s.itemButtonArmed)
+	tapped := tapArmSelectOrConfirm(tappedIdx, tappedOk, &s.commandIndex, &s.commandTapArmed, s.game.Audio)
+	rewindConfirm := tapArmButtonConfirm(rewindTapped, &s.rewindButtonArmed, s.game.Audio)
+	itemConfirm := tapArmButtonConfirm(itemTapped, &s.itemButtonArmed, s.game.Audio)
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyF) || rewindConfirm {
 		p := s.waitingActor
 		if p >= 0 && p < partySize && s.canUseRewind(p) {
+			s.game.Audio.PlaySEByKey("decide")
 			s.executeRewind(p)
 			return nil
 		}
@@ -253,6 +258,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	if inpututil.IsKeyJustPressed(ebiten.KeyI) || itemConfirm {
 		p := s.waitingActor
 		if p >= 0 && p < partySize && s.hasAnyBattleUsableItem() {
+			s.game.Audio.PlaySEByKey("decide")
 			s.itemIndex = 0
 			s.battlePhase = phaseItemMenu
 			return nil
@@ -272,6 +278,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		return nil
 	}
 
+	s.game.Audio.PlaySEByKey("decide")
 	s.lastCommandIndex[p] = s.commandIndex
 
 	switch s.commandIndex {
@@ -360,10 +367,12 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	if isMenuDownPressed() {
 		s.skillIndex = (s.skillIndex + 1) % menuLen
 		s.lastSkillIndex[p] = s.skillIndex
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuUpPressed() {
 		s.skillIndex = (s.skillIndex - 1 + menuLen) % menuLen
 		s.lastSkillIndex[p] = s.skillIndex
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 
 	arrowTapped := s.handleSkillLevelArrowTaps(p, skills)
@@ -371,7 +380,7 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	if !arrowTapped {
 		tappedIdx, tappedOk = s.hitTestBattleSubRows(menuLen)
 	}
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skillIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skillIndex, s.game.Audio)
 	if tappedOk {
 		s.lastSkillIndex[p] = s.skillIndex
 	}
@@ -394,20 +403,24 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	if isMenuRightPressed() {
 		if s.skillLevelCursors[p][s.skillIndex] < curLv {
 			s.skillLevelCursors[p][s.skillIndex]++
+			s.game.Audio.PlaySEByKey("cursor")
 		}
 	}
 	if isMenuLeftPressed() {
 		if s.skillLevelCursors[p][s.skillIndex] > 1 {
 			s.skillLevelCursors[p][s.skillIndex]--
+			s.game.Audio.PlaySEByKey("cursor")
 		}
 	}
 	if isEscapePressed() || (!arrowTapped && !tappedOk && s.isTapOutsideBattleSubPanel()) {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.battlePhase = phasePlayerMenu
 		return
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyF) {
 		if s.canUseRewind(p) {
+			s.game.Audio.PlaySEByKey("decide")
 			s.executeRewind(p)
 			return
 		}
@@ -424,8 +437,10 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	}
 	data := skills[s.skillIndex].Levels[lv-1]
 	if s.game.PlayerMP[p] < s.effectiveMPCost(data.MPCost) {
+		s.game.Audio.PlaySEByKey("error")
 		return
 	}
+	s.game.Audio.PlaySEByKey("decide")
 	s.pendingSkill = s.skillIndex + 1
 
 	if s.skillIndex < len(s.lastSkillLevel[p]) {

@@ -125,7 +125,6 @@ func resolveEventDialogue(text string) ([]EventCommand, map[string]int, string) 
 		if d, found := GetStoryDialogue(id); found {
 			return d.Commands, d.SpeakerSlots, d.BGM
 		}
-		fmt.Printf("警告: event_story_%s が assets/dialogues/story.json に見つかりません\n", id)
 		return []EventCommand{{Speaker: "", Text: "……"}}, nil, ""
 	}
 	return dialoguePagesFromText(text), nil, ""
@@ -395,7 +394,6 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 			}
 			id := p["id"]
 			if id == "" {
-				fmt.Printf("警告: ブロックに\"id\"プロパティが設定されていません（%s %.1f_%.1f）\n", mapPath, obj.X, obj.Y)
 				continue
 			}
 			bx, by := obj.X, obj.Y
@@ -407,7 +405,6 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	}
 
 	if targetSpawnName != "" && !spawnFound {
-		fmt.Printf("警告: マップ%sにスポーン地点 %q が見つかりません。デフォルト座標にフォールバックします\n", mapPath, targetSpawnName)
 		spawnX = 190
 		spawnY = 320
 	}
@@ -462,12 +459,9 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	if key, ok := tmap.mapBGMKey(); ok {
 		if path, found := resolveBGMKey(key); found {
 			mapBGM = path
-		} else {
-			fmt.Printf("警告: マップ%sのbgmプロパティ %q は未知のキーです\n", mapPath, key)
 		}
 	}
 	scene.mapBGM = mapBGM
-	game.Audio.PlayBGMFadeIn(mapBGM, 2.0)
 
 	if autoHealMaps[mapPath] {
 		scene.healParty()
@@ -481,6 +475,13 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	}
 
 	return scene, nil
+}
+
+// desiredBGM はシーン切り替えの画面フェードと同じ長さでマップBGMを
+// フェードインさせる。ドア移動のような短い暗転(0.3秒)なら曲もさっと
+// 切り替わり、タイトルからのニューゲーム(1.5秒)ならゆっくり立ち上がる。
+func (s *FieldScene) desiredBGM(transitionDuration float64) (string, float64, bool) {
+	return s.mapBGM, transitionDuration, false
 }
 
 var globalActiveFieldInstanceForSave *FieldScene
@@ -637,10 +638,10 @@ func (s *FieldScene) openChest(obj TiledObject, itemID string) {
 	}
 	s.game.OpenedChests[key] = true
 	s.nearExamineEvent = false
+	s.game.Audio.PlaySEByKey("treasure_open")
 
 	def, ok := GetItemDef(itemID)
 	if !ok {
-		fmt.Printf("警告: チェストのアイテムID %q が見つかりません\n", itemID)
 		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
 		s.msgBGM = ""
 		s.msgIndex = 0
@@ -656,6 +657,7 @@ func (s *FieldScene) openItemGetPopup(itemName string, subLabel string) {
 	s.itemGetSubLabel = subLabel
 	s.itemGetPlainMessage = false
 	s.isItemGetActive = true
+	s.game.Audio.PlaySEByKey("item_get")
 }
 
 func (s *FieldScene) openCenterMessagePopup(message string) {
@@ -688,9 +690,9 @@ func (s *FieldScene) openKeyChest(obj TiledObject, keyName string) {
 	}
 	s.game.OpenedChests[key] = true
 	s.nearExamineEvent = false
+	s.game.Audio.PlaySEByKey("treasure_open")
 
 	if keyName == "" {
-		fmt.Printf("警告: 鍵チェストのtextに鍵の名前がありません（%s）\n", key)
 		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
 		s.msgBGM = ""
 		s.msgIndex = 0
@@ -728,6 +730,7 @@ func (s *FieldScene) examineWall(obj TiledObject) {
 	s.nearExamineEvent = false
 
 	if missing > 0 {
+		s.game.Audio.PlaySEByKey("error")
 		s.openCenterMessagePopup("ここから先に進むには鍵が必要なようだ")
 		return
 	}
@@ -735,6 +738,7 @@ func (s *FieldScene) examineWall(obj TiledObject) {
 	s.wallFadeActive = true
 	s.wallFadeKey = key
 	s.wallFadeAlpha = 1.0
+	s.game.Audio.PlaySEByKey("sliding_door")
 }
 
 func (s *FieldScene) updateWallFade(dt float64) {
@@ -760,15 +764,13 @@ func (s *FieldScene) pullLever(obj TiledObject) {
 	}
 
 	id := objProps(obj)["id"]
-	if id == "" {
-		fmt.Printf("警告: レバーに\"id\"プロパティが設定されていません（%s）\n", chestKey(s.currentMap, obj))
-	}
 
 	s.nearExamineEvent = false
 	if objProps(obj)["oneway"] == "true" && s.game.RaisedLevers[id] {
 		return
 	}
 	s.game.RaisedLevers[id] = !s.game.RaisedLevers[id]
+	s.game.Audio.PlaySEByKey("lever")
 }
 
 const defaultDarknessRadius = 110.0

@@ -124,6 +124,11 @@ func (s *BattleScene) tryWaitSynergy() bool {
 	for _, slot := range s.aliveEnemyIndices() {
 		def := s.effectiveEnemyDef(slot, false)
 		dmg := s.rollDamage(float64(atk), power, float64(def), 1.0, luck)
+		if s.lastRollWasCrit {
+			s.game.Audio.PlaySEByKey("critical")
+		} else {
+			s.game.Audio.PlaySEByKey("damage")
+		}
 		s.applyDamageToEnemySlot(slot, dmg)
 		cx, _ := s.enemyCenter(slot)
 		s.damagePops = append(s.damagePops, DamagePop{
@@ -256,6 +261,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 			s.lastEnemyAttackPrevHP = s.game.PlayerHP[target]
 			s.lastEnemyAttackDamage = 0
 			s.evadeOffsetX[target] = evadeDodgeShiftX
+			s.game.Audio.PlaySEByKey("evade")
 			s.damagePops = append(s.damagePops, DamagePop{
 				X:      targetX,
 				Y:      targetY,
@@ -271,6 +277,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 		s.lastEnemyAttackTarget = target
 		s.lastEnemyAttackPrevHP = prevHP
 		s.lastEnemyAttackDamage = dmg
+		s.game.Audio.PlaySEByKey("damage")
 
 		s.game.PlayerHP[target] -= dmg
 
@@ -454,19 +461,21 @@ func (s *BattleScene) updateTargetSelect() {
 				if isMenuRightPressed() {
 					s.selectedSkillTarget = TargetAll
 					s.targetIndex = maxEnemies
+					s.game.Audio.PlaySEByKey("cursor")
 				}
 				if isMenuLeftPressed() {
 					s.selectedSkillTarget = TargetSingle
 					if s.targetIndex == maxEnemies {
 						s.targetIndex = s.firstAliveEnemySlot()
 					}
+					s.game.Audio.PlaySEByKey("cursor")
 				}
 			}
 		}
 	}
 
 	tappedIdx, tappedOk := s.hitTestEnemyTarget()
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.targetIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.targetIndex, s.game.Audio)
 	if tappedOk {
 		if s.targetIndex == maxEnemies {
 			s.selectedSkillTarget = TargetAll
@@ -477,6 +486,7 @@ func (s *BattleScene) updateTargetSelect() {
 
 	hadTouch := len(justPressedTouchPoints()) > 0
 	if isEscapePressed() || (hadTouch && !tappedOk) {
+		s.game.Audio.PlaySEByKey("cancel")
 		if s.pendingSkill >= 1 {
 			s.battlePhase = phaseSkillMenu
 		} else {
@@ -550,6 +560,7 @@ func (s *BattleScene) updateTargetSelect() {
 	}
 
 	s.attackAnimType = animNormal
+	s.game.Audio.PlaySEByKey("attack_normal")
 	targets := s.enemyTargetsForAttack(false)
 	target := targets[0]
 	firstDmg := s.rollNormalDamage(target)
@@ -579,16 +590,19 @@ func (s *BattleScene) updateHealTargetSelect() {
 	const cycleLen = partySize + 1
 	if isMenuUpPressed() {
 		s.healTargetIndex = (s.healTargetIndex - 1 + cycleLen) % cycleLen
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownPressed() {
 		s.healTargetIndex = (s.healTargetIndex + 1) % cycleLen
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 
 	tappedIdx, tappedOk := s.hitTestHealTargets()
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.healTargetIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.healTargetIndex, s.game.Audio)
 
 	hadTouch := len(justPressedTouchPoints()) > 0
 	if isEscapePressed() || (hadTouch && !tappedOk) {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.battlePhase = phaseSkillMenu
 		return
 	}
@@ -611,8 +625,10 @@ func (s *BattleScene) updateHealTargetSelect() {
 
 	if s.healTargetIndex == partySize {
 		if s.game.PlayerMP[p] < cost {
+			s.game.Audio.PlaySEByKey("error")
 			return
 		}
+		s.game.Audio.PlaySEByKey("decide")
 		s.startCast(p)
 		s.game.PlayerMP[p] -= cost
 		healAmount := s.rollSkillHeal(p, skillIdx, lv, true)
@@ -660,8 +676,10 @@ func (s *BattleScene) updateHealTargetSelect() {
 			return
 		}
 		if s.game.PlayerMP[p] < cost {
+			s.game.Audio.PlaySEByKey("error")
 			return
 		}
+		s.game.Audio.PlaySEByKey("decide")
 		s.startCast(p)
 		s.game.PlayerMP[p] -= cost
 		healAmount := s.rollSkillHeal(p, skillIdx, lv, false)

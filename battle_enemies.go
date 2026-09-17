@@ -82,6 +82,7 @@ func (s *BattleScene) applyDamageToEnemySlot(slot int, dmg int) bool {
 		e.DeathPhase = 1
 		e.DeathTimer = 0
 		e.Alpha = 1.0
+		s.game.Audio.PlaySEByKey("enemy_defeated")
 		return true
 	}
 	return false

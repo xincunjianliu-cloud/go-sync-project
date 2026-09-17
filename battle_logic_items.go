@@ -40,13 +40,16 @@ func (s *BattleScene) updateItemMenu(dt float64) {
 
 	if isMenuDownPressed() {
 		s.itemIndex = (s.itemIndex + 1) % len(items)
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuUpPressed() {
 		s.itemIndex = (s.itemIndex - 1 + len(items)) % len(items)
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	tappedIdx, tappedOk := s.hitTestBattleSubRows(len(items))
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemIndex, s.game.Audio)
 	if isEscapePressed() || (!tappedOk && s.isTapOutsideBattleSubPanel()) {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.battlePhase = phasePlayerMenu
 		return
 	}
@@ -58,6 +61,7 @@ func (s *BattleScene) updateItemMenu(dt float64) {
 	if !ok {
 		return
 	}
+	s.game.Audio.PlaySEByKey("decide")
 	s.pendingItemID = def.ID
 	s.itemTargetIndex = 0
 	s.battlePhase = phaseItemTarget
@@ -84,16 +88,19 @@ func (s *BattleScene) updateItemTargetSelect() {
 	}
 	if isMenuUpPressed() {
 		s.itemTargetIndex = (s.itemTargetIndex - 1 + cycleLen) % cycleLen
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownPressed() {
 		s.itemTargetIndex = (s.itemTargetIndex + 1) % cycleLen
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 
 	tappedIdx, tappedOk := s.hitTestItemTargets(allowAll)
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemTargetIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemTargetIndex, s.game.Audio)
 
 	hadTouch := len(justPressedTouchPoints()) > 0
 	if isEscapePressed() || (hadTouch && !tappedOk) {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.pendingItemID = ""
 		s.battlePhase = phaseItemMenu
 		return
@@ -123,6 +130,7 @@ func (s *BattleScene) updateItemTargetSelect() {
 		return
 	}
 
+	s.game.Audio.PlaySEByKey("decide")
 	s.game.ConsumeItem(s.pendingItemID, 1)
 	s.battleLog = def.Name
 	s.battleLogTimer = battleLogDuration

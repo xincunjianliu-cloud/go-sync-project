@@ -932,15 +932,10 @@
                  "opacity":1,
                  "properties":[
                         {
-                         "name":"image",
-                         "type":"string",
-                         "value":"lever_wall.png"
-                        }, 
-                        {
                          "name":"lever",
                          "type":"string",
                          "value":"lever_a"
-                        }, 
+                        },
                         {
                          "name":"text",
                          "type":"string",

@@ -389,6 +389,7 @@ type BattleScene struct {
 	enemyNames      []string
 	enemies         []EnemyUnit
 	actingEnemySlot int
+	bgmPath         string
 
 	evadeOffsetX [partySize]float64
 
@@ -671,14 +672,22 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 	}
 
 	if evType == lastBossEventType {
-		game.Audio.PlayBGM(bgmBattleLastBoss)
+		s.bgmPath = bgmBattleLastBoss
 	} else if isBoss {
-		game.Audio.PlayBGM(bgmBattleBoss)
+		s.bgmPath = bgmBattleBoss
 	} else {
-		game.Audio.PlayBGM(bgmBattleNormal)
+		s.bgmPath = bgmBattleNormal
 	}
 
+	game.Audio.PlaySEByKey("battle_start")
+
 	return s
+}
+
+// desiredBGM は戦闘BGMを暗転しきった瞬間にハードカットで鳴らす。フェード
+// インさせず一気に切り替わる方が、遭遇の緊張感やボス戦の盛り上がりに合う。
+func (s *BattleScene) desiredBGM(transitionDuration float64) (string, float64, bool) {
+	return s.bgmPath, 0, true
 }
 
 var gaugeCumThresholds = [gaugeMaxStage - 1]int{8, 16, 24, 32}

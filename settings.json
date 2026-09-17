@@ -1,8 +1,10 @@
 {
-  "bgmVolume": 0,
+  "bgmVolume": 0.023333333333333345,
+  "seVolume": 0.7100000000000003,
+  "masterVolume": 0.3,
   "messageSpeed": 1,
   "fullscreen": false,
-  "windowWidth": 960,
+  "windowWidth": 961,
   "windowHeight": 540,
-  "rememberCursor": true
+  "rememberCursor": false
 }

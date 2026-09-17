@@ -49,6 +49,8 @@ const (
 )
 
 const defaultBGMVolume = 0.
+const defaultSEVolume = 0.
+const defaultMasterVolume = 1.
 
 const defaultMessageSpeed = 1
 const defaultFullscreen = false
@@ -85,6 +87,7 @@ type MenuScene struct {
 	slotDragAccum     float64
 
 	volumeDragActive     bool
+	volumeDragRow        int
 	volumeLeftHoldTicks  int
 	volumeRightHoldTicks int
 
@@ -126,6 +129,7 @@ func (m *MenuScene) Update(dt float64) Scene {
 
 	if !m.isModalMenuState() && m.menuState != menuStateMain {
 		if idx, ok := m.hitTestMainCommandList(); ok {
+			m.game.Audio.PlaySEByKey("decide")
 			m.enterCommand(idx)
 			if m.nextScene != nil {
 				return m.nextScene
@@ -221,16 +225,19 @@ func (m *MenuScene) hitTestPartyRowsWithAll(allowAll bool) (int, bool) {
 
 func (m *MenuScene) updateMain() {
 	if isEscapePressed() || isMenuCloseKeyPressed() {
+		m.game.Audio.PlaySEByKey("menu_toggle")
 		m.nextScene = m.backScene
 		return
 	}
 	if isMenuDownRepeat() {
 		m.menuIndex = (m.menuIndex + 1) % len(m.commands)
 		m.game.LastMenuIndex = m.menuIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuUpRepeat() {
 		m.menuIndex = (m.menuIndex - 1 + len(m.commands)) % len(m.commands)
 		m.game.LastMenuIndex = m.menuIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	tapped := false
 	if idx, ok := m.hitTestMainCommandList(); ok {
@@ -240,10 +247,12 @@ func (m *MenuScene) updateMain() {
 	}
 	if !isConfirmKeyPressed() && !tapped {
 		if unrelatedTapOutsideRects(menuMainContentRect()) {
+			m.game.Audio.PlaySEByKey("menu_toggle")
 			m.nextScene = m.backScene
 		}
 		return
 	}
+	m.game.Audio.PlaySEByKey("decide")
 	m.enterCommand(m.menuIndex)
 }
 
@@ -299,18 +308,24 @@ func (m *MenuScene) hitTestStatusPartyIcons() (int, bool) {
 
 func (m *MenuScene) updateStatus() {
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.menuState = m.statusBackState()
 		return
 	}
 	if isMenuRightPressed() {
 		m.statusCharIndex = (m.statusCharIndex + 1) % partySize
 		m.game.LastStatusCharIndex = m.statusCharIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuLeftPressed() {
 		m.statusCharIndex = (m.statusCharIndex - 1 + partySize) % partySize
 		m.game.LastStatusCharIndex = m.statusCharIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if idx, ok := m.hitTestStatusPartyIcons(); ok {
+		if idx != m.statusCharIndex {
+			m.game.Audio.PlaySEByKey("cursor")
+		}
 		m.statusCharIndex = idx
 		m.game.LastStatusCharIndex = m.statusCharIndex
 	}
@@ -319,12 +334,15 @@ func (m *MenuScene) updateStatus() {
 	if hitTestLeftRightArrow(leftArrowX, statusPartyIconY) {
 		m.statusCharIndex = (m.statusCharIndex - 1 + partySize) % partySize
 		m.game.LastStatusCharIndex = m.statusCharIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if hitTestLeftRightArrow(rightArrowX, statusPartyIconY) {
 		m.statusCharIndex = (m.statusCharIndex + 1) % partySize
 		m.game.LastStatusCharIndex = m.statusCharIndex
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if unrelatedTapOutsideRects(menuMainContentRect()) {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.menuState = m.statusBackState()
 	}
 }
@@ -361,6 +379,7 @@ func (m *MenuScene) reloadSlotData() {
 
 func (m *MenuScene) updateSlot() {
 	if isEscapePressed() {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.menuState = menuStateMain
 		return
 	}
@@ -368,11 +387,13 @@ func (m *MenuScene) updateSlot() {
 		m.slotIndex = (m.slotIndex - 1 + maxSaveSlots) % maxSaveSlots
 		m.slotScrollTop = clampSlotScrollTop(m.slotScrollTop, m.slotIndex)
 		m.slotDragAccum = 0
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownRepeat() {
 		m.slotIndex = (m.slotIndex + 1) % maxSaveSlots
 		m.slotScrollTop = clampSlotScrollTop(m.slotScrollTop, m.slotIndex)
 		m.slotDragAccum = 0
+		m.game.Audio.PlaySEByKey("cursor")
 	}
 
 	cardH := float64(m.game.SaveThumbFrameImg.Bounds().Dy())
@@ -410,6 +431,7 @@ func (m *MenuScene) updateSlot() {
 		cardRect := tapRect{x: slotCardStartX, y: slotCardStartY, w: cardW, h: dragArea}
 		barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
 		if unrelatedTapOutsideRects(cardRect, barRect) {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.menuState = menuStateMain
 		}
 		return
@@ -420,9 +442,11 @@ func (m *MenuScene) updateSlot() {
 
 	if m.saveMode {
 		if _, ok := m.backScene.(*FieldScene); !ok {
+			m.game.Audio.PlaySEByKey("error")
 			m.showNotice("ここではセーブできません")
 			return
 		}
+		m.game.Audio.PlaySEByKey("decide")
 		m.pendingSlot = slot
 		m.confirmIndex = 0
 		m.menuState = menuStateSaveConfirm
@@ -430,9 +454,11 @@ func (m *MenuScene) updateSlot() {
 	} else {
 		d := m.slotData[m.slotIndex]
 		if d == nil {
+			m.game.Audio.PlaySEByKey("error")
 			m.showNotice("このスロットにはセーブデータがありません")
 			return
 		}
+		m.game.Audio.PlaySEByKey("decide")
 		m.pendingSlot = slot
 		m.confirmIndex = 0
 		m.menuState = menuStateLoadConfirm

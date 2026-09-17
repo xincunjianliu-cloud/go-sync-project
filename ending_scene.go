@@ -92,11 +92,16 @@ type EndingScene struct {
 func NewEndingScene(game *Game, field *FieldScene) *EndingScene {
 	pages, err := loadCredits("assets/credits.json")
 	if err != nil || len(pages) == 0 {
-		fmt.Printf("警告: クレジットデータの読み込みに失敗しました（デフォルト表示に切替）: %v\n", err)
 		pages = []CreditPage{{Lines: []string{"THE END"}}}
 	}
-	game.Audio.PlayBGMFadeIn(bgmEnding, 2.0)
 	return &EndingScene{game: game, field: field, pages: pages, phase: endingPhaseFadeIn}
+}
+
+// desiredBGM はボス撃破後の暗転(fadeTimeBossOut)が明けた瞬間に、余韻を
+// 持たせて2秒かけてエンディング曲をフェードインさせる。暗転の長さに
+// 関わらずこの秒数は固定でよい(締めの演出なので画面遷移と揃える必要はない)。
+func (s *EndingScene) desiredBGM(transitionDuration float64) (string, float64, bool) {
+	return bgmEnding, 2.0, false
 }
 
 func (s *EndingScene) Update(dt float64) Scene {
@@ -111,6 +116,7 @@ func (s *EndingScene) Update(dt float64) Scene {
 		if isSkipKeyDown() {
 			s.skipHoldElapsed += dt
 			if s.skipHoldElapsed >= endingSkipHoldSeconds {
+				s.game.Audio.PlaySEByKey("decide")
 				s.pageIndex = len(s.pages)
 				s.enterAskSave()
 				return s
@@ -172,16 +178,19 @@ func (s *EndingScene) updateAskSave() {
 	}
 	if isMenuUpPressed() || isMenuDownPressed() {
 		s.askSaveIndex = 1 - s.askSaveIndex
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.askSaveIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.askSaveIndex, s.game.Audio)
 	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 	if s.askSaveIndex == 1 {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.nextScene = NewTitleScene(s.game)
 		return
 	}
+	s.game.Audio.PlaySEByKey("decide")
 	s.reloadSlotData()
 	s.slotIndex = 0
 	s.slotScrollTop = 0
@@ -199,12 +208,15 @@ func (s *EndingScene) updateSaveSlot() {
 	if isMenuUpPressed() {
 		s.slotIndex = (s.slotIndex - 1 + maxSaveSlots) % maxSaveSlots
 		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownPressed() {
 		s.slotIndex = (s.slotIndex + 1) % maxSaveSlots
 		s.slotScrollTop = clampSlotScrollTop(s.slotScrollTop, s.slotIndex)
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isEscapePressed() {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.phase = endingPhaseAskSave
 		s.askSaveIndex = 0
 		return
@@ -243,6 +255,7 @@ func (s *EndingScene) updateSaveSlot() {
 	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
+	s.game.Audio.PlaySEByKey("decide")
 	s.pendingSlot = s.slotIndex + 1
 	s.confirmIndex = 0
 	s.phase = endingPhaseSlotConfirm
@@ -255,20 +268,24 @@ func (s *EndingScene) updateSlotConfirm() {
 	}
 	if isMenuUpPressed() || isMenuDownPressed() {
 		s.confirmIndex = 1 - s.confirmIndex
+		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isEscapePressed() {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.phase = endingPhaseSaveSlot
 		return
 	}
 	tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
-	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.confirmIndex)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.confirmIndex, s.game.Audio)
 	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
 	if s.confirmIndex == 1 {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.phase = endingPhaseSaveSlot
 		return
 	}
+	s.game.Audio.PlaySEByKey("decide")
 
 	slot := s.pendingSlot
 	if s.field == nil {
@@ -296,6 +313,7 @@ func (s *EndingScene) updateSaveDone() {
 	if !isConfirmKeyPressed() && !tapped {
 		return
 	}
+	s.game.Audio.PlaySEByKey("decide")
 	s.nextScene = NewTitleScene(s.game)
 }
 
@@ -330,15 +348,11 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		return
 	}
 	page := s.pages[s.pageIndex]
-	face := s.game.FontFace(creditFontSize)
 	totalH := float64(len(page.Lines)) * creditLineGap
 	startY := float64(gameHeight)/2 - totalH/2
+	col := color.RGBA{255, 255, 255, uint8(s.alpha * 255)}
 
 	for i, line := range page.Lines {
-		op := &text.DrawOptions{}
-		op.GeoM.Translate(float64(gameWidth)/2, startY+float64(i)*creditLineGap)
-		op.PrimaryAlign = text.AlignCenter
-		op.ColorScale.Scale(1, 1, 1, float32(s.alpha))
-		text.Draw(screen, line, face, op)
+		s.game.DrawMixedText(screen, line, creditFontSize, float64(gameWidth)/2, startY+float64(i)*creditLineGap, text.AlignCenter, text.AlignStart, col)
 	}
 }

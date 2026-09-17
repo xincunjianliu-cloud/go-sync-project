@@ -122,31 +122,31 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	titleOp.GeoM.Translate(resultTitleX, resultTitleY)
 	titleOp.ColorScale.ScaleWithColor(uiColorText)
 	titleOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, "Battle Results", s.game.FontFace(resultTitleFontSize), titleOp)
+	text.Draw(screen, "Battle Results", s.game.LatinFontFace(resultTitleFontSize), titleOp)
 
 	expLabelOp := &text.DrawOptions{}
 	expLabelOp.GeoM.Translate(resultExpLabelX, resultExpY)
 	expLabelOp.ColorScale.ScaleWithColor(uiColorText)
 	expLabelOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, "EXP", s.game.FontFace(resultExpFontSize), expLabelOp)
+	text.Draw(screen, "EXP", s.game.LatinFontFace(resultExpFontSize), expLabelOp)
 
 	expValueOp := &text.DrawOptions{}
 	expValueOp.GeoM.Translate(resultExpValueX, resultExpY)
 	expValueOp.ColorScale.ScaleWithColor(uiColorText)
 	expValueOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemyExp()), s.game.FontFace(resultExpFontSize), expValueOp)
+	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemyExp()), s.game.LatinFontFace(resultExpFontSize), expValueOp)
 
 	spLabelOp := &text.DrawOptions{}
 	spLabelOp.GeoM.Translate(resultSpLabelX, resultSpY)
 	spLabelOp.ColorScale.ScaleWithColor(uiColorText)
 	spLabelOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, "SP", s.game.FontFace(resultSpFontSize), spLabelOp)
+	text.Draw(screen, "SP", s.game.LatinFontFace(resultSpFontSize), spLabelOp)
 
 	spValueOp := &text.DrawOptions{}
 	spValueOp.GeoM.Translate(resultSpValueX, resultSpY)
 	spValueOp.ColorScale.ScaleWithColor(uiColorText)
 	spValueOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemySP()), s.game.FontFace(resultSpFontSize), spValueOp)
+	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemySP()), s.game.LatinFontFace(resultSpFontSize), spValueOp)
 
 	ebitenutil.DrawRect(screen, resultDividerX, resultDividerY, resultDividerW, resultDividerH, uiColorText)
 
@@ -169,10 +169,10 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		text.Draw(screen, PlayerNames[i], s.game.FontFace(resultNameFontSize), nameOp)
 
 		levelOp := &text.DrawOptions{}
-		levelOp.GeoM.Translate(barX+resultLevelOffsetX, barY+resultNameOffsetY)
+		levelOp.GeoM.Translate(barX+resultLevelOffsetX, barY+resultNameOffsetY+s.game.latinBaselineAdjust(resultNameFontSize, text.AlignStart))
 		levelOp.ColorScale.ScaleWithColor(nameColor)
 		levelOp.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, fmt.Sprintf("Lv %d", s.drawPlayerLv[i]), s.game.FontFace(resultNameFontSize), levelOp)
+		text.Draw(screen, fmt.Sprintf("Lv %d", s.drawPlayerLv[i]), s.game.LatinFontFace(resultNameFontSize), levelOp)
 
 		curExpStr := strconv.Itoa(s.drawPlayerEXP[i])
 		maxExpStr := fmt.Sprintf("/%d", s.drawPlayerMaxEXP[i])
@@ -185,9 +185,9 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		maxOp.GeoM.Translate(expRightX, expBaseY)
 		maxOp.ColorScale.ScaleWithColor(uiColorText)
 		maxOp.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, maxExpStr, s.game.FontFace(resultExpMaxFontSize), maxOp)
+		text.Draw(screen, maxExpStr, s.game.LatinFontFace(resultExpMaxFontSize), maxOp)
 
-		maxExpW, _ := text.Measure(maxExpStr, s.game.FontFace(resultExpMaxFontSize), 0)
+		maxExpW, _ := text.Measure(maxExpStr, s.game.LatinFontFace(resultExpMaxFontSize), 0)
 
 		curOp := &text.DrawOptions{}
 		curOp.PrimaryAlign = text.AlignEnd
@@ -195,13 +195,13 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		curOp.GeoM.Translate(expRightX-maxExpW, expBaseY)
 		curOp.ColorScale.ScaleWithColor(uiColorText)
 		curOp.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, curExpStr, s.game.FontFace(resultExpCurFontSize), curOp)
+		text.Draw(screen, curExpStr, s.game.LatinFontFace(resultExpCurFontSize), curOp)
 
 		expLabelOp2 := &text.DrawOptions{}
 		expLabelOp2.GeoM.Translate(barX+resultExpLabelOffsetX, barY+resultExpLabelOffsetY)
 		expLabelOp2.ColorScale.ScaleWithColor(uiColorText)
 		expLabelOp2.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, "EXP", s.game.FontFace(resultExpLabelFontSize), expLabelOp2)
+		text.Draw(screen, "EXP", s.game.LatinFontFace(resultExpLabelFontSize), expLabelOp2)
 
 		if s.resultSubPhase >= resSubBarAnimate {
 			ebitenutil.DrawRect(screen, barX, barY, barW, barH, resultBarBgColor)
@@ -224,7 +224,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 			lvOp.GeoM.Translate(barX+resultLevelUpOffsetX, barY+resultLevelUpOffsetY)
 			lvOp.ColorScale.ScaleWithColor(resultLevelUpColor)
 			lvOp.ColorScale.ScaleAlpha(panelAlpha)
-			text.Draw(screen, "LEVEL UP!", s.game.FontFace(resultLevelUpFontSize), lvOp)
+			text.Draw(screen, "LEVEL UP!", s.game.LatinFontFace(resultLevelUpFontSize), lvOp)
 		}
 	}
 
@@ -248,17 +248,15 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 
 		countOp := &text.DrawOptions{}
 		countOp.PrimaryAlign = text.AlignEnd
-		countOp.GeoM.Translate(resultItemsCountX, rowY)
+		countOp.GeoM.Translate(resultItemsCountX, rowY+s.game.latinBaselineAdjust(resultItemsFontSize, text.AlignStart))
 		countOp.ColorScale.ScaleWithColor(uiColorText)
 		countOp.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, fmt.Sprintf("x%d", item.Count), s.game.FontFace(resultItemsFontSize), countOp)
+		text.Draw(screen, fmt.Sprintf("x%d", item.Count), s.game.LatinFontFace(resultItemsFontSize), countOp)
 	}
 
 	if s.resultSubPhase == resSubDoneWait {
-		hintOp := &text.DrawOptions{}
-		hintOp.GeoM.Translate(resultHintX, float64(gameHeight)-resultHintYFromBtm)
-		hintOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "Enter / Space / Z で進む", s.game.FontFace(resultHintFontSize), hintOp)
+		s.game.DrawMixedText(screen, "Enter / Space / Z で進む", resultHintFontSize,
+			resultHintX, float64(gameHeight)-resultHintYFromBtm, text.AlignStart, text.AlignStart, uiColorText)
 	}
 }
 
@@ -266,29 +264,17 @@ func (s *BattleScene) drawControlHint(screen *ebiten.Image, hint string) {
 	if hint == "" {
 		return
 	}
-	hintOp := &text.DrawOptions{}
-	hintOp.GeoM.Translate(float64(gameWidth)/2, hintY)
-	hintOp.PrimaryAlign = text.AlignCenter
-	hintOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, hint, s.game.FontFace(15), hintOp)
+	s.game.DrawMixedText(screen, hint, 15, float64(gameWidth)/2, hintY, text.AlignCenter, text.AlignStart, uiColorText)
 }
 
 func (s *BattleScene) drawBottomDescription(screen *ebiten.Image, desc string, hint string) {
-	descOp := &text.DrawOptions{}
-	descOp.GeoM.Scale(descScale, descScale)
-	descOp.GeoM.Translate(descX, descY)
-	descOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, desc, s.game.FontFace(descFontSize), descOp)
+	s.game.DrawMixedText(screen, desc, descFontSize*descScale, descX, descY, text.AlignStart, text.AlignStart, uiColorText)
 
 	if hint == "" {
 		return
 	}
 
-	hintOp := &text.DrawOptions{}
-	hintOp.GeoM.Scale(hintScale, hintScale)
-	hintOp.GeoM.Translate(descX+hintOffsetX, descY)
-	hintOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, hint, s.game.FontFace(hintFontSize), hintOp)
+	s.game.DrawMixedText(screen, hint, hintFontSize*hintScale, descX+hintOffsetX, descY, text.AlignStart, text.AlignStart, uiColorText)
 }
 
 func scaleAlpha(c color.RGBA, factor float64) color.RGBA {

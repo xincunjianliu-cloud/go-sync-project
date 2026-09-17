@@ -37,11 +37,9 @@ const (
 )
 
 const (
-	statusFontSizeJP  = 20.0
-	statusFontSizeNum = 25.0
-	statusFontSizeEN  = 25.0
+	statusFontSize = 20.0
 
-	statusFaceBoxX     = 250.0
+	statusFaceBoxX     = 270.0
 	statusFaceBoxY     = 8.0
 	statusFaceBoxW     = 195.0
 	statusFaceBoxH     = 352.0
@@ -74,8 +72,8 @@ const (
 	statusPartyIconStartX    = 610.0
 	statusPartyIconFallbackR = 30.0
 
-	statusLeftLineOffsetY  = statusFontSizeNum + 8.0
-	statusRightLineOffsetY = statusFontSizeNum + 8.0
+	statusLeftLineOffsetY  = statusFontSize*latinFontScale + 4.0
+	statusRightLineOffsetY = statusFontSize*latinFontScale + 4.0
 )
 
 var statusLineColor = uiColorText
@@ -94,20 +92,14 @@ var statusStatRows = []statusStatRow{
 	{"運", statusRightBoxY + 5*statusRightRowH},
 }
 
-func drawStatusRow(screen *ebiten.Image, g *Game, label, value string, labelX, valueX, y, lineX, lineW, labelFontSize, valueFontSize, lineOffsetY float64) {
-	labelFace := g.FontFace(labelFontSize)
-	valueFace := g.FontFace(valueFontSize)
-
-	labelOp := &text.DrawOptions{}
-	labelOp.GeoM.Translate(labelX, y)
-	labelOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, label, labelFace, labelOp)
-
-	valOp := &text.DrawOptions{}
-	valOp.GeoM.Translate(valueX, y)
-	valOp.PrimaryAlign = text.AlignEnd
-	valOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, value, valueFace, valOp)
+// drawStatusRow draws a label/value pair for the status screen. label may be
+// Japanese ("物理攻撃力") or Latin ("Lv", "EXP", ...); value is always a
+// number. Both are sized via DrawMixedText, which picks FontFace or
+// LatinFontFace per string automatically, so callers only supply one
+// nominal size instead of maintaining a matching Latin-scaled constant.
+func drawStatusRow(screen *ebiten.Image, g *Game, label, value string, labelX, valueX, y, lineX, lineW, fontSize, lineOffsetY float64) {
+	g.DrawMixedText(screen, label, fontSize, labelX, y, text.AlignStart, text.AlignStart, uiColorText)
+	g.DrawMixedText(screen, value, fontSize, valueX, y, text.AlignEnd, text.AlignStart, uiColorText)
 
 	ebitenutil.DrawRect(screen, lineX, y+lineOffsetY, lineW, 1, statusLineColor)
 }
@@ -136,19 +128,19 @@ func (m *MenuScene) drawStatusScreen(screen *ebiten.Image) {
 
 	drawStatusRow(screen, g, "Lv", fmt.Sprintf("%d/%d", g.PlayerLv[i], maxPlayerLevel),
 		statusLevelX, statusLeftValueX, statusLvY, statusLeftLineX, statusLeftLineW,
-		statusFontSizeEN, statusFontSizeNum, statusLeftLineOffsetY)
+		statusFontSize, statusLeftLineOffsetY)
 
 	drawStatusRow(screen, g, "EXP", fmt.Sprintf("%d/%d", g.PlayerEXP[i], g.PlayerNextEXP[i]),
 		statusLeftLabelX, statusLeftValueX, statusExpY, statusLeftLineX, statusLeftLineW,
-		statusFontSizeEN, statusFontSizeNum, statusLeftLineOffsetY)
+		statusFontSize, statusLeftLineOffsetY)
 
 	drawStatusRow(screen, g, "HP", fmt.Sprintf("%d", g.PlayerMaxHP[i]),
 		statusLeftLabelX, statusLeftValueX, statusHpY, statusLeftLineX, statusLeftLineW,
-		statusFontSizeEN, statusFontSizeNum, statusLeftLineOffsetY)
+		statusFontSize, statusLeftLineOffsetY)
 
 	drawStatusRow(screen, g, "MP", fmt.Sprintf("%d", g.PlayerMaxMP[i]),
 		statusLeftLabelX, statusLeftValueX, statusMpY, statusLeftLineX, statusLeftLineW,
-		statusFontSizeEN, statusFontSizeNum, statusLeftLineOffsetY)
+		statusFontSize, statusLeftLineOffsetY)
 
 	statusValues := []int{
 		g.PlayerAtk[i],
@@ -161,7 +153,7 @@ func (m *MenuScene) drawStatusScreen(screen *ebiten.Image) {
 	for idx, row := range statusStatRows {
 		drawStatusRow(screen, g, row.label, fmt.Sprintf("%d", statusValues[idx]),
 			statusRightLabelX, statusRightValueX, row.y, statusRightLineX, statusRightLineW,
-			statusFontSizeJP, statusFontSizeNum, statusRightLineOffsetY)
+			statusFontSize, statusRightLineOffsetY)
 	}
 
 	for idx := 0; idx < partySize; idx++ {
@@ -262,7 +254,7 @@ func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [ma
 		numOp.GeoM.Translate(cardX+slotNumOffsetX, cardY+cardH*slotNumYRatio)
 		numOp.SecondaryAlign = text.AlignCenter
 		numOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(dst, fmt.Sprintf("%02d", i+1), g.FontFace(slotNumSize), numOp)
+		text.Draw(dst, fmt.Sprintf("%02d", i+1), g.LatinFontFace(slotNumSize), numOp)
 
 		thumbX := cardX + slotThumbOffsetX
 		thumbY := cardY + cardH*slotThumbYRatio - slotThumbH/2
@@ -283,17 +275,17 @@ func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [ma
 			lvOp := &text.DrawOptions{}
 			lvOp.GeoM.Translate(tx, ty+slotTextLineGap)
 			lvOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(dst, fmt.Sprintf("Lv %d", d.PlayerLv[0]), g.FontFace(slotTextFontSize), lvOp)
+			text.Draw(dst, fmt.Sprintf("Lv %d", d.PlayerLv[0]), g.LatinFontFace(slotTextFontSize), lvOp)
 
 			timeOp := &text.DrawOptions{}
 			timeOp.GeoM.Translate(tx, ty+slotTextLineGap*2)
 			timeOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(dst, FormatPlayTime(d.PlayTime), g.FontFace(slotTextFontSize), timeOp)
+			text.Draw(dst, FormatPlayTime(d.PlayTime), g.LatinFontFace(slotTextFontSize), timeOp)
 
 			dateOp := &text.DrawOptions{}
 			dateOp.GeoM.Translate(tx, ty+slotTextLineGap*3)
 			dateOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(dst, d.SavedAt, g.FontFace(slotTextFontSize), dateOp)
+			text.Draw(dst, d.SavedAt, g.LatinFontFace(slotTextFontSize), dateOp)
 		}
 	}
 

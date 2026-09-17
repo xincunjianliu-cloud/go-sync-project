@@ -152,8 +152,6 @@ type Game struct {
 
 	LightMaskImg *ebiten.Image
 
-	fieldImageCache map[string]*ebiten.Image
-
 	Audio                  *AudioManager
 	mouseLastX, mouseLastY int
 	mouseIdleTime          float64
@@ -191,22 +189,16 @@ func (g *Game) FontFace(size float64) *text.GoTextFace {
 	return &text.GoTextFace{Source: g.fontSource, Size: size}
 }
 
-func (g *Game) LoadFieldImage(filename string) *ebiten.Image {
-	if g.fieldImageCache == nil {
-		g.fieldImageCache = make(map[string]*ebiten.Image)
-	}
-	if img, cached := g.fieldImageCache[filename]; cached {
-		return img
-	}
+// latinFontScale compensates for PixelMplus drawing Latin letters/digits
+// visually smaller than Japanese glyphs at the same Size, so a bigger value
+// here makes English/numbers render bigger relative to Japanese text.
+const latinFontScale = 1.2
 
-	img, err := loadAssetImage("assets/images/field/" + filename)
-	if err != nil {
-		fmt.Printf("警告: 画像 \"assets/images/field/%s\" の読み込みに失敗しました: %v\n", filename, err)
-		g.fieldImageCache[filename] = nil
-		return nil
-	}
-	g.fieldImageCache[filename] = img
-	return img
+// LatinFontFace is for text.Draw calls whose whole string is Latin
+// letters/digits (no Japanese), so it reads at the same visual size as
+// Japanese text drawn with FontFace(size).
+func (g *Game) LatinFontFace(size float64) *text.GoTextFace {
+	return &text.GoTextFace{Source: g.fontSource, Size: size * latinFontScale}
 }
 
 func generateLightMaskImage(size int) *ebiten.Image {
@@ -389,8 +381,11 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 
 	g.Audio = NewAudioManager()
 	g.Audio.SetVolume(settings.BGMVolume)
+	g.Audio.SetSEVolume(settings.SEVolume)
+	g.Audio.SetMasterVolume(settings.MasterVolume)
 
 	g.currentScene = NewTitleScene(g)
+	g.Audio.PlayBGMFadeIn(bgmTitle, 2.0)
 
 	applyDisplayMode(g.Fullscreen, g.WindowWidth, g.WindowHeight)
 	if !g.Fullscreen {
@@ -445,13 +440,19 @@ func (g *Game) Update() error {
 	if g.currentScene != nil {
 		nextScene := g.currentScene.Update(dt)
 		if nextScene != nil && nextScene != g.currentScene {
-			g.pendingScene = nextScene
-			g.fadeMode = FadeOut
-			g.fadeAlpha = 0.0
-			g.fadeSpeed = 1.0 / fadeTimeBattleOut
+			g.ChangeSceneWithFade(nextScene, fadeTimeBattleOut)
 		}
 	}
 	return nil
+}
+
+// bgmScene は遷移先のシーンが希望するBGMを表す。ChangeSceneWithFade はこれを
+// 実装しているシーンに対してのみBGM切り替えを行う。切り替え自体は画面が
+// 暗転しきった瞬間に発生するよう、フェードアウトを画面フェードと同じ
+// durationSeconds で開始する(Game.Update内で両者は毎フレーム同じdtで
+// 進むため、暗転完了と曲の無音化がほぼ同時に起きる)。
+type bgmScene interface {
+	desiredBGM(transitionDuration float64) (path string, fadeInDuration float64, hardCut bool)
 }
 
 func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
@@ -459,6 +460,10 @@ func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
 	g.fadeMode = FadeOut
 	g.fadeAlpha = 0.0
 	g.fadeSpeed = 1.0 / durationSeconds
+	if bs, ok := nextScene.(bgmScene); ok {
+		path, fadeIn, hardCut := bs.desiredBGM(durationSeconds)
+		g.Audio.FadeOutThenPlay(path, durationSeconds, fadeIn, hardCut)
+	}
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
@@ -510,12 +515,9 @@ func (g *Game) saveThumbToFile(slot int) {
 	path := fmt.Sprintf("save_thumb_%d.png", slot)
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, g.MenuEntryThumb); err != nil {
-		fmt.Printf("警告: サムネイルのエンコードに失敗しました: %v\n", err)
 		return
 	}
-	if err := writeRuntimeFile(path, buf.Bytes()); err != nil {
-		fmt.Printf("警告: サムネイルの保存に失敗しました: %v\n", err)
-	}
+	writeRuntimeFile(path, buf.Bytes())
 }
 
 func FormatPlayTime(seconds float64) string {

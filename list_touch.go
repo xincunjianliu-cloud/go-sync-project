@@ -25,30 +25,43 @@ func hitTestTapRects(rects []tapRect) (int, bool) {
 	return -1, false
 }
 
-func tapSelectOrConfirm(tappedIdx int, tappedOk bool, currentIdx *int) bool {
+// tapSelectOrConfirm はタップ位置の項目を選択・確定するための二段階方式の
+// 共通ロジック。1回目のタップは選択のみ(カーソルがジャンプする)、既に
+// 選択済みの項目への2回目のタップで確定となる。選択がジャンプした瞬間にも
+// キー操作のカーソル移動と同じ選択音を鳴らす。
+func tapSelectOrConfirm(tappedIdx int, tappedOk bool, currentIdx *int, audio *AudioManager) bool {
 	if !tappedOk {
 		return false
 	}
 	alreadySelected := tappedIdx == *currentIdx
 	*currentIdx = tappedIdx
+	if !alreadySelected {
+		audio.PlaySEByKey("cursor")
+	}
 	return alreadySelected
 }
 
-func tapArmSelectOrConfirm(tappedIdx int, tappedOk bool, currentIdx *int, armed *bool) bool {
+func tapArmSelectOrConfirm(tappedIdx int, tappedOk bool, currentIdx *int, armed *bool, audio *AudioManager) bool {
 	if !tappedOk {
 		return false
 	}
 	confirm := *armed && tappedIdx == *currentIdx
+	if !confirm {
+		audio.PlaySEByKey("cursor")
+	}
 	*currentIdx = tappedIdx
 	*armed = true
 	return confirm
 }
 
-func tapArmButtonConfirm(pressed bool, armed *bool) bool {
+func tapArmButtonConfirm(pressed bool, armed *bool, audio *AudioManager) bool {
 	if !pressed {
 		return false
 	}
 	confirm := *armed
+	if !confirm {
+		audio.PlaySEByKey("cursor")
+	}
 	*armed = true
 	return confirm
 }

@@ -65,16 +65,15 @@ func resolveSpeaker(key string) (string, error) {
 	return "", fmt.Errorf("未知の話者キー: %q", key)
 }
 
-func convertBossDialogue(src *bossDialogueJSON, fileName string) BossDialogue {
+func convertBossDialogue(src *bossDialogueJSON) BossDialogue {
 	if src == nil {
 		return BossDialogue{}
 	}
 
 	commands := make([]EventCommand, 0, len(src.Commands))
-	for i, c := range src.Commands {
+	for _, c := range src.Commands {
 		speaker, err := resolveSpeaker(c.Speaker)
 		if err != nil {
-			fmt.Printf("警告: %s の %d番目のコマンドで話者解決に失敗: %v（このコマンドはスキップ）\n", fileName, i, err)
 			continue
 		}
 		commands = append(commands, EventCommand{Speaker: speaker, Text: c.Text})
@@ -84,7 +83,6 @@ func convertBossDialogue(src *bossDialogueJSON, fileName string) BossDialogue {
 	for key, slot := range src.SpeakerSlots {
 		speaker, err := resolveSpeaker(key)
 		if err != nil {
-			fmt.Printf("警告: %s の speakerSlots で話者解決に失敗: %v（このエントリはスキップ）\n", fileName, err)
 			continue
 		}
 		slots[speaker] = slot
@@ -99,45 +97,40 @@ func LoadDialogues(dir string) error {
 
 		data, err := loadAssetBytes(filePath)
 		if err != nil {
-			fmt.Printf("警告: %s の読み込みに失敗しました（このボスのセリフは空になります）: %v\n", filePath, err)
 			continue
 		}
 
 		var fileJSON bossDialogueFileJSON
 		if err := json.Unmarshal(data, &fileJSON); err != nil {
-			fmt.Printf("警告: %s のJSON解析に失敗しました（このボスのセリフは空になります）: %v\n", filePath, err)
 			continue
 		}
 
-		bossBattleDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Battle, filePath))
-		bossClearDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Clear, filePath))
+		bossBattleDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Battle))
+		bossClearDialogues[bossNum] = filterEmptyCommands(convertBossDialogue(fileJSON.Clear))
 	}
 
-	if err := loadStoryDialogues(dir); err != nil {
-		fmt.Printf("警告: %v\n", err)
-	}
+	loadStoryDialogues(dir)
 
 	return nil
 }
 
-func loadStoryDialogues(dir string) error {
+func loadStoryDialogues(dir string) {
 	filePath := path.Join(dir, "story.json")
 
 	data, err := loadAssetBytes(filePath)
 	if err != nil {
-		return nil
+		return
 	}
 
 	var fileJSON map[string]bossDialogueJSON
 	if err := json.Unmarshal(data, &fileJSON); err != nil {
-		return fmt.Errorf("%s のJSON解析に失敗しました: %w", filePath, err)
+		return
 	}
 
 	for id, entry := range fileJSON {
 		entry := entry
-		storyDialogues[id] = filterEmptyCommands(convertBossDialogue(&entry, fmt.Sprintf("%s[%s]", filePath, id)))
+		storyDialogues[id] = filterEmptyCommands(convertBossDialogue(&entry))
 	}
-	return nil
 }
 
 func GetEventCommands(eventID string, game *Game) BossDialogue {
@@ -183,22 +176,4 @@ func filterEmptyCommands(d BossDialogue) BossDialogue {
 	}
 	d.Commands = filtered
 	return d
-}
-
-func validateDialogueSlots() {
-	check := func(label string, dialogues map[int]BossDialogue) {
-		for bossNum, d := range dialogues {
-			seen := map[int]string{}
-			for speaker, slot := range d.SpeakerSlots {
-				if other, ok := seen[slot]; ok {
-					fmt.Printf("警告: %s ボス%d でスロット%dに複数の話者が割り当てられています（%s, %s）\n",
-						label, bossNum, slot, other, speaker)
-					continue
-				}
-				seen[slot] = speaker
-			}
-		}
-	}
-	check("bossBattleDialogues", bossBattleDialogues)
-	check("bossClearDialogues", bossClearDialogues)
 }

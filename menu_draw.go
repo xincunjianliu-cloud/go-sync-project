@@ -295,14 +295,14 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		text.Draw(screen, PlayerNames[i], m.game.FontFace(menuStatusFontSize), nameOp)
 
 		levelOp := &text.DrawOptions{}
-		levelOp.GeoM.Translate(statusX+menuStatusLevelX, itemY)
+		levelOp.GeoM.Translate(statusX+menuStatusLevelX, itemY+m.game.latinBaselineAdjust(menuStatusFontSize, text.AlignStart))
 		levelOp.ColorScale.ScaleWithColor(textColor)
-		text.Draw(screen, fmt.Sprintf("Lv %d", m.game.PlayerLv[i]), m.game.FontFace(menuStatusFontSize), levelOp)
+		text.Draw(screen, fmt.Sprintf("Lv %d", m.game.PlayerLv[i]), m.game.LatinFontFace(menuStatusFontSize), levelOp)
 
 		drawStatusValue(screen,
 			statusX+20, itemY+18,
 			m.game.PlayerHP[i], m.game.PlayerMaxHP[i],
-			m.game.FontFace(17.5), m.game.FontFace(14), alpha, uiColorText)
+			m.game.LatinFontFace(15), m.game.LatinFontFace(12), alpha, uiColorText)
 
 		hpRatio := 0.0
 		if m.game.PlayerMaxHP[i] > 0 {
@@ -318,7 +318,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		drawStatusValue(screen,
 			statusX+20, itemY+48,
 			m.game.PlayerMP[i], m.game.PlayerMaxMP[i],
-			m.game.FontFace(17.5), m.game.FontFace(14), alpha, uiColorText)
+			m.game.LatinFontFace(15), m.game.LatinFontFace(12), alpha, uiColorText)
 
 		mpRatio := 0.0
 		if m.game.PlayerMaxMP[i] > 0 {
@@ -363,7 +363,7 @@ const (
 	skillRowGapY      = 55.0
 	skillNameFontSize = 20.0
 
-	skillLevelStartX       = 720.0
+	skillLevelStartX       = 710.0
 	skillLevelGapX         = 90.0
 	skillLevelOffsetY      = 0.0
 	skillLevelFontSize     = 40.0
@@ -371,20 +371,17 @@ const (
 	skillGaugeOffsetY      = 20.0
 	skillGaugeWidth        = 40.0
 	skillGaugeHeight       = 10.0
-	skillRequiredSPOffsetX = 12.0
+	skillRequiredSPOffsetX = 23.0
 	skillRequiredSPOffsetY = 15.0
-	skillBottomFontSize    = 16.0
+	skillBottomFontSize    = 13.0
 
 	skillSPHeaderX = 920.0
 	skillSPHeaderY = 20.0
 )
 
 func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
-	spHeaderOp := &text.DrawOptions{}
-	spHeaderOp.GeoM.Translate(skillSPHeaderX, skillSPHeaderY)
-	spHeaderOp.PrimaryAlign = text.AlignEnd
-	spHeaderOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, fmt.Sprintf("所持SP: %d", m.game.PlayerSP[m.skillCharIndex]), m.game.FontFace(skillBottomFontSize), spHeaderOp)
+	m.game.DrawMixedText(screen, fmt.Sprintf("所持SP: %d", m.game.PlayerSP[m.skillCharIndex]), skillBottomFontSize,
+		skillSPHeaderX, skillSPHeaderY, text.AlignEnd, text.AlignStart, uiColorText)
 
 	skills := m.game.CharacterSkills(m.skillCharIndex)
 
@@ -448,7 +445,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 			numOp.PrimaryAlign = text.AlignCenter
 			numOp.SecondaryAlign = text.AlignCenter
 			numOp.ColorScale.ScaleWithColor(col)
-			text.Draw(screen, label, m.game.FontFace(skillLevelFontSize), numOp)
+			text.Draw(screen, label, m.game.LatinFontFace(skillLevelFontSize), numOp)
 
 			if lv > curLv {
 				gaugeX := numX - skillGaugeWidth/2
@@ -469,7 +466,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 				spOp := &text.DrawOptions{}
 				spOp.GeoM.Translate(numX+skillRequiredSPOffsetX, numCenterY+skillRequiredSPOffsetY)
 				spOp.ColorScale.ScaleWithColor(uiColorText)
-				text.Draw(screen, requiredSP, m.game.FontFace(skillBottomFontSize), spOp)
+				text.Draw(screen, requiredSP, m.game.LatinFontFace(skillBottomFontSize), spOp)
 			}
 
 			if selected {

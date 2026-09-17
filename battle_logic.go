@@ -242,6 +242,11 @@ func (s *BattleScene) Update(dt float64) Scene {
 				if hit.dmg <= 0 {
 					continue
 				}
+				if hit.crit {
+					s.game.Audio.PlaySEByKey("critical")
+				} else {
+					s.game.Audio.PlaySEByKey("damage")
+				}
 				x, y, w, _ := s.enemyDrawRect(hit.slot)
 				s.damagePops = append(s.damagePops, DamagePop{
 					Value:  hit.dmg,
@@ -314,8 +319,10 @@ func (s *BattleScene) Update(dt float64) Scene {
 		}
 		if isMenuUpPressed() || isMenuDownPressed() {
 			s.gameOverIdx = (s.gameOverIdx + 1) % 2
+			s.game.Audio.PlaySEByKey("cursor")
 		}
 		if isConfirmKeyPressed() {
+			s.game.Audio.PlaySEByKey("decide")
 			if s.gameOverIdx == 0 {
 				for i := 0; i < partySize; i++ {
 					s.game.PlayerHP[i] = s.preBattlePlayerHP[i]
@@ -553,6 +560,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 					s.levelUpPauseTimer[i] = 0
 					if s.drawPlayerLv[i] < s.game.PlayerLv[i] {
 						s.drawPlayerLv[i]++
+						s.game.Audio.PlaySEByKey("level_up")
 						if s.drawPlayerLv[i] == s.game.PlayerLv[i] {
 							s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 						} else {
@@ -598,6 +606,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 					if s.levelUpPauseTimer[i] <= 0 {
 						s.levelUpPauseTimer[i] = 0
 						s.drawPlayerLv[i]++
+						s.game.Audio.PlaySEByKey("level_up")
 						if s.drawPlayerLv[i] == s.game.PlayerLv[i] {
 							s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 						} else {
@@ -641,6 +650,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 		case resSubDoneWait:
 			if isResultAdvancePressed() {
+				s.game.Audio.PlaySEByKey("decide")
 				s.exitBattleToField()
 			}
 		}

@@ -101,7 +101,7 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 	}
 
 	if s.isMsgActive && s.msgIndex >= 0 && s.msgIndex < len(s.msgTexts) {
-		s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game.FontFace(15))
+		s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game, 15)
 	}
 
 	if s.isMsgActive {
@@ -201,7 +201,6 @@ func (s *FieldScene) drawLockedWalls(screen *ebiten.Image, camX, camY float64) {
 
 			isLeverWall := p["lever"] != ""
 			open := s.wallIsOpen(obj)
-
 			if !isLeverWall && open {
 				continue
 			}
@@ -210,38 +209,24 @@ func (s *FieldScene) drawLockedWalls(screen *ebiten.Image, camX, camY float64) {
 			if isLeverWall {
 				img = s.game.LeverWallImg
 			}
-			if filename := p["image"]; filename != "" {
-				if custom := s.game.LoadFieldImage(filename); custom != nil {
-					img = custom
-				}
-			}
 			if img == nil {
 				continue
 			}
 
-			var srcRect image.Rectangle
-			var frameW, frameH float64
+			frameW := float64(img.Bounds().Dx())
+			frameH := float64(img.Bounds().Dy())
+			frame := 0
 			if isLeverWall {
-				fw := img.Bounds().Dx() / 2
-				fh := img.Bounds().Dy()
-				if fw <= 0 || fh <= 0 {
-					continue
-				}
-				frame := 0
+				frameW /= 2
 				if open {
 					frame = 1
 				}
-				sx := frame * fw
-				srcRect = image.Rect(sx, 0, sx+fw, fh)
-				frameW, frameH = float64(fw), float64(fh)
-			} else {
-				srcRect = img.Bounds()
-				frameW = float64(img.Bounds().Dx())
-				frameH = float64(img.Bounds().Dy())
 			}
 			if frameW <= 0 || frameH <= 0 {
 				continue
 			}
+			sx := frame * int(frameW)
+			srcRect := image.Rect(sx, 0, sx+int(frameW), int(frameH))
 
 			op := &ebiten.DrawImageOptions{}
 			if obj.Width > 0 && obj.Height > 0 {
@@ -481,17 +466,15 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 	bx := float64(gameWidth)/2 - boxW/2
 	by := float64(gameHeight)/2 - boxH/2
 
-	nameFace := s.game.FontFace(16)
 	label := s.itemGetName
 	if !s.itemGetPlainMessage {
 		label += "を手に入れた！"
 	}
-	textW, textH := text.Measure(label, nameFace, 0)
+	textW, textH := s.game.MeasureMixedText(label, 16)
 
-	subFace := s.game.FontFace(13)
 	var subW, subH float64
 	if s.itemGetSubLabel != "" {
-		subW, subH = text.Measure(s.itemGetSubLabel, subFace, 0)
+		subW, subH = s.game.MeasureMixedText(s.itemGetSubLabel, 13)
 	}
 
 	ebitenutil.DrawRect(screen, bx, by, boxW, boxH, uiColorText)
@@ -503,16 +486,10 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 	}
 	topY := by + boxH/2 - blockH/2
 
-	nameOp := &text.DrawOptions{}
-	nameOp.GeoM.Translate(bx+boxW/2-textW/2, topY)
-	nameOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, label, nameFace, nameOp)
+	s.game.DrawMixedText(screen, label, 16, bx+boxW/2-textW/2, topY, text.AlignStart, text.AlignStart, uiColorText)
 
 	if s.itemGetSubLabel != "" {
-		subOp := &text.DrawOptions{}
-		subOp.GeoM.Translate(bx+boxW/2-subW/2, topY+textH+6)
-		subOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, s.itemGetSubLabel, subFace, subOp)
+		s.game.DrawMixedText(screen, s.itemGetSubLabel, 13, bx+boxW/2-subW/2, topY+textH+6, text.AlignStart, text.AlignStart, uiColorText)
 	}
 }
 
@@ -536,10 +513,7 @@ func (s *FieldScene) drawChoiceUI(screen *ebiten.Image, camX, camY float64) {
 
 	face := s.game.FontFace(14)
 
-	qOp := &text.DrawOptions{}
-	qOp.GeoM.Translate(bx+10, by+10)
-	qOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, s.choiceQuestion, face, qOp)
+	s.game.DrawMixedText(screen, s.choiceQuestion, 14, bx+10, by+10, text.AlignStart, text.AlignStart, uiColorText)
 
 	choiceArrowGap := text.Advance("▶", face)
 	for i, opt := range s.choiceOptions {
@@ -550,9 +524,6 @@ func (s *FieldScene) drawChoiceUI(screen *ebiten.Image, camX, camY float64) {
 			arrowOp.ColorScale.ScaleWithColor(uiColorText)
 			text.Draw(screen, "▶", face, arrowOp)
 		}
-		op := &text.DrawOptions{}
-		op.GeoM.Translate(baseX+choiceArrowGap, baseY)
-		op.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, opt, face, op)
+		s.game.DrawMixedText(screen, opt, 14, baseX+choiceArrowGap, baseY, text.AlignStart, text.AlignStart, uiColorText)
 	}
 }

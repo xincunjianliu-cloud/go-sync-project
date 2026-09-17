@@ -18,7 +18,6 @@ const (
 	ctrlKeyHintGapY  = 4.0
 
 	ctrlLabelFontSize = 11.0
-	ctrlKeyFontSize   = 14.0
 
 	// ctrlIconTapMargin widens the tap target for touch input only (not
 	// mouse), since the 12px icon radius alone is too small to hit
@@ -207,7 +206,7 @@ func drawKeyHintPC(screen *ebiten.Image, game *Game, cx, cy float64, label, key 
 	op.GeoM.Translate(midX, cy+ctrlIconR+ctrlKeyHintGapY)
 	op.PrimaryAlign = text.AlignCenter
 	op.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, key, game.FontFace(ctrlKeyFontSize), op)
+	text.Draw(screen, key, game.LatinFontFace(ctrlLabelFontSize), op)
 }
 
 func drawMessageControlPanel(screen *ebiten.Image, game *Game, autoOn bool, skipHoldElapsed, skipHoldMax float64) {
