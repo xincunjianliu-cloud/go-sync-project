@@ -176,7 +176,7 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 	creditOp.GeoM.Translate(float64(gameWidth)/2, 350)
 	creditOp.PrimaryAlign = text.AlignCenter
 	creditOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, "(C) 2026 Project sitikai", s.game.LatinFontFace(15), creditOp)
+	text.Draw(screen, "(C) 2026 Project sitikai", s.game.FontFace(15), creditOp)
 
 	if s.game.heavyAssetsErr != nil {
 		errOp := &text.DrawOptions{}

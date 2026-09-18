@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fontData, err := loadAssetBytes("assets/fonts/PixelMplus10-Bold.ttf")
+	fontData, err := loadAssetBytes("assets/fonts/k8x12.ttf")
 	if err != nil {
 		log.Fatal("フォントファイルの読み込みに失敗しました: ", err)
 	}

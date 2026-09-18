@@ -84,6 +84,9 @@ func (m *MenuScene) updateSkillCharSel() {
 	}
 	tapped := false
 	if idx, ok := m.hitTestPartyRows(); ok {
+		if idx != m.skillCharIndex {
+			m.game.Audio.PlaySEByKey("cursor")
+		}
 		m.skillCharIndex = idx
 		m.game.LastSkillCharIndex = m.skillCharIndex
 		tapped = true
@@ -132,6 +135,9 @@ func (m *MenuScene) trySkillLevelConfirm(skills []SkillDef, skillIdx, lv int) {
 	case !data.IsHeal:
 		m.game.Audio.PlaySEByKey("error")
 		m.showNotice("このスキルはメニューからは使えません（戦闘中に使用します）")
+	case !m.game.IsSkillUnlocked(caster, skillIdx):
+		m.game.Audio.PlaySEByKey("error")
+		m.showNotice("このスキルはまだ解放されていません")
 	case m.game.PlayerHP[caster] <= 0:
 		m.game.Audio.PlaySEByKey("error")
 		m.showNotice(PlayerNames[caster] + "は戦闘不能のためスキルを使えません")
@@ -285,6 +291,7 @@ func (m *MenuScene) updateSkillSub() {
 			return
 		}
 		if unrelatedTapPressed(levelAreaTapped || areaTapped) {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.skillLevelSelecting = false
 			m.upgradeHoldArmed = false
 			return
@@ -423,6 +430,7 @@ func (m *MenuScene) updateSkillSub() {
 	}
 
 	if unrelatedTapPressed(tappedOk || areaTapped) {
+		m.game.Audio.PlaySEByKey("cancel")
 		m.menuState = menuStateSkillCharSel
 	}
 }

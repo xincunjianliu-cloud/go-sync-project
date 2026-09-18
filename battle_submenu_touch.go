@@ -13,8 +13,8 @@ const (
 	battleSubCmdCenterX = 860.0
 	battleSubCmdCenterY = 440.0
 
-	battleSubLabelOffsetX = 15.0
-	battleSubLabelOffsetY = 20.0
+	battleSubLabelOffsetX = 8.0
+	battleSubLabelOffsetY = 22.0
 	battleSubRowHeight    = 35.0
 	battleSubRightOffsetX = 20.0
 
@@ -76,13 +76,13 @@ func (s *BattleScene) hitTestBattleSubRows(rowCount int) (int, bool) {
 	return hitTestTapRects(rects)
 }
 
-func (s *BattleScene) skillLevelArrowRects(row, lv int, lvFace, arrowFace *text.GoTextFace) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
+func (s *BattleScene) skillLevelArrowRects(row, lv int, face *text.GoTextFace) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
 	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
 	textY = windowY + battleSubLabelOffsetY + float64(row)*battleSubRowHeight
 
-	lvW := text.Advance(skillLvText(lv), lvFace)
-	leftArrowW := text.Advance(skillLvLeftArrow, arrowFace)
-	rightArrowW := text.Advance(skillLvRightArrow, arrowFace)
+	lvW := text.Advance(skillLvText(lv), face)
+	leftArrowW := text.Advance(skillLvLeftArrow, face)
+	rightArrowW := text.Advance(skillLvRightArrow, face)
 
 	blockRightX := windowX + windowW - battleSubLvBlockRightX
 	rightX = blockRightX - rightArrowW
@@ -100,8 +100,7 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 	if len(pts) == 0 {
 		return false
 	}
-	lvFace := s.game.LatinFontFace(15)
-	arrowFace := s.game.FontFace(15)
+	face := s.game.FontFace(15)
 	for i, sk := range skills {
 		curLv := s.game.PlayerSkillLv[p][i]
 		if curLv < 1 {
@@ -120,7 +119,7 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 		if lv > curLv {
 			lv = curLv
 		}
-		leftRect, rightRect, _, _, _, _ := s.skillLevelArrowRects(i, lv, lvFace, arrowFace)
+		leftRect, rightRect, _, _, _, _ := s.skillLevelArrowRects(i, lv, face)
 		for _, pt := range pts {
 			if leftRect.contains(pt) {
 				if lv > 1 {
@@ -172,9 +171,10 @@ func (s *BattleScene) allTargetRowRect() tapRect {
 	}
 }
 
-func (s *BattleScene) drawAllTargetRow(screen *ebiten.Image, selected bool) {
-	r := s.allTargetRowRect()
-
+// drawAllTargetBox renders the "全体" selection box at rect r. Both the ally
+// (heal) target UI and the enemy (attack) target UI call this same function
+// so they always render identically.
+func (s *BattleScene) drawAllTargetBox(screen *ebiten.Image, r tapRect, selected bool) {
 	col := uiColorText
 	boxFillCol := color.RGBA{45, 45, 55, 200}
 	if selected {
@@ -210,6 +210,10 @@ func (s *BattleScene) drawAllTargetRow(screen *ebiten.Image, selected bool) {
 	op.SecondaryAlign = text.AlignCenter
 	op.ColorScale.ScaleWithColor(col)
 	text.Draw(screen, label, face, op)
+}
+
+func (s *BattleScene) drawAllTargetRow(screen *ebiten.Image, selected bool) {
+	s.drawAllTargetBox(screen, s.allTargetRowRect(), selected)
 }
 
 func partyPortraitHitOrder() [partySize]int {
@@ -316,42 +320,7 @@ func (s *BattleScene) drawEnemyAllTargetRow(screen *ebiten.Image, selected bool)
 	if r.w <= 0 {
 		return
 	}
-
-	col := uiColorText
-	boxFillCol := color.RGBA{45, 45, 55, 200}
-	if selected {
-		col = uiColorSelect
-		boxFillCol = color.RGBA{41, 58, 94, 220}
-	}
-
-	ebitenutil.DrawRect(screen, r.x, r.y, r.w, r.h, boxFillCol)
-
-	face := s.game.FontFace(15)
-	label := "全体"
-	centerX := r.x + r.w/2
-	centerY := r.y + r.h/2
-
-	if selected {
-		const bw = 2.0
-		ebitenutil.DrawRect(screen, r.x, r.y, r.w, bw, col)
-		ebitenutil.DrawRect(screen, r.x, r.y+r.h-bw, r.w, bw, col)
-		ebitenutil.DrawRect(screen, r.x, r.y, bw, r.h, col)
-		ebitenutil.DrawRect(screen, r.x+r.w-bw, r.y, bw, r.h, col)
-
-		labelW := text.Advance(label, face)
-		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(centerX-labelW/2-text.Advance("▶ ", face), centerY)
-		arrowOp.SecondaryAlign = text.AlignCenter
-		arrowOp.ColorScale.ScaleWithColor(col)
-		text.Draw(screen, "▶", face, arrowOp)
-	}
-
-	op := &text.DrawOptions{}
-	op.GeoM.Translate(centerX, centerY)
-	op.PrimaryAlign = text.AlignCenter
-	op.SecondaryAlign = text.AlignCenter
-	op.ColorScale.ScaleWithColor(col)
-	text.Draw(screen, label, face, op)
+	s.drawAllTargetBox(screen, r, selected)
 }
 
 func (s *BattleScene) currentSkillTargetType() SkillTarget {
@@ -369,7 +338,10 @@ func (s *BattleScene) currentSkillTargetType() SkillTarget {
 
 func (s *BattleScene) currentTargetAllowsAll() bool {
 	t := s.currentSkillTargetType()
-	return t == TargetAll || t == TargetBoth
+	if t != TargetAll && t != TargetBoth {
+		return false
+	}
+	return len(s.aliveEnemyIndices()) > 1
 }
 
 func (s *BattleScene) currentTargetIsForcedAll() bool {

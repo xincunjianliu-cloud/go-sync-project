@@ -17,7 +17,7 @@ const (
 
 	slotNumOffsetX = 40.0
 	slotNumYRatio  = 0.5
-	slotNumSize    = 26.0
+	slotNumSize    = 30.0
 
 	slotThumbOffsetX = 334.0
 	slotThumbYRatio  = 0.51
@@ -25,10 +25,10 @@ const (
 	slotThumbAspect  = 16.0 / 9.0
 	slotThumbH       = slotThumbW / slotThumbAspect
 
-	slotTextOffsetX  = 90.0
+	slotTextOffsetX  = 87.0
 	slotTextStartY   = 25.0
-	slotTextLineGap  = 16.0
-	slotTextFontSize = 13.0
+	slotTextLineGap  = 17.0
+	slotTextFontSize = 16.0
 
 	slotsPerPageView = 4
 
@@ -37,7 +37,7 @@ const (
 )
 
 const (
-	statusFontSize = 20.0
+	statusFontSize = 30.0
 
 	statusFaceBoxX     = 270.0
 	statusFaceBoxY     = 8.0
@@ -46,7 +46,7 @@ const (
 	statusFaceR        = 78.0
 	statusFaceCYRat    = 0.31
 	statusNameYRat     = 0.60
-	statusNameFontSize = 18.0
+	statusNameFontSize = 25.0
 
 	statusLeftLabelX = 220.0
 	statusLeftValueX = 500.0
@@ -72,8 +72,8 @@ const (
 	statusPartyIconStartX    = 610.0
 	statusPartyIconFallbackR = 30.0
 
-	statusLeftLineOffsetY  = statusFontSize*latinFontScale + 4.0
-	statusRightLineOffsetY = statusFontSize*latinFontScale + 4.0
+	statusLeftLineOffsetY  = statusFontSize + 4.0
+	statusRightLineOffsetY = statusFontSize + 4.0
 )
 
 var statusLineColor = uiColorText
@@ -94,12 +94,20 @@ var statusStatRows = []statusStatRow{
 
 // drawStatusRow draws a label/value pair for the status screen. label may be
 // Japanese ("物理攻撃力") or Latin ("Lv", "EXP", ...); value is always a
-// number. Both are sized via DrawMixedText, which picks FontFace or
-// LatinFontFace per string automatically, so callers only supply one
-// nominal size instead of maintaining a matching Latin-scaled constant.
+// number.
 func drawStatusRow(screen *ebiten.Image, g *Game, label, value string, labelX, valueX, y, lineX, lineW, fontSize, lineOffsetY float64) {
-	g.DrawMixedText(screen, label, fontSize, labelX, y, text.AlignStart, text.AlignStart, uiColorText)
-	g.DrawMixedText(screen, value, fontSize, valueX, y, text.AlignEnd, text.AlignStart, uiColorText)
+	face := g.FontFace(fontSize)
+
+	labelOp := &text.DrawOptions{}
+	labelOp.GeoM.Translate(labelX, y)
+	labelOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, label, face, labelOp)
+
+	valueOp := &text.DrawOptions{}
+	valueOp.GeoM.Translate(valueX, y)
+	valueOp.PrimaryAlign = text.AlignEnd
+	valueOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, value, face, valueOp)
 
 	ebitenutil.DrawRect(screen, lineX, y+lineOffsetY, lineW, 1, statusLineColor)
 }
@@ -254,7 +262,7 @@ func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [ma
 		numOp.GeoM.Translate(cardX+slotNumOffsetX, cardY+cardH*slotNumYRatio)
 		numOp.SecondaryAlign = text.AlignCenter
 		numOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(dst, fmt.Sprintf("%02d", i+1), g.LatinFontFace(slotNumSize), numOp)
+		text.Draw(dst, fmt.Sprintf("%02d", i+1), g.FontFace(slotNumSize), numOp)
 
 		thumbX := cardX + slotThumbOffsetX
 		thumbY := cardY + cardH*slotThumbYRatio - slotThumbH/2
@@ -275,17 +283,17 @@ func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [ma
 			lvOp := &text.DrawOptions{}
 			lvOp.GeoM.Translate(tx, ty+slotTextLineGap)
 			lvOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(dst, fmt.Sprintf("Lv %d", d.PlayerLv[0]), g.LatinFontFace(slotTextFontSize), lvOp)
+			text.Draw(dst, fmt.Sprintf("Lv %d", d.PlayerLv[0]), g.FontFace(slotTextFontSize), lvOp)
 
 			timeOp := &text.DrawOptions{}
 			timeOp.GeoM.Translate(tx, ty+slotTextLineGap*2)
 			timeOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(dst, FormatPlayTime(d.PlayTime), g.LatinFontFace(slotTextFontSize), timeOp)
+			text.Draw(dst, FormatPlayTime(d.PlayTime), g.FontFace(slotTextFontSize), timeOp)
 
 			dateOp := &text.DrawOptions{}
 			dateOp.GeoM.Translate(tx, ty+slotTextLineGap*3)
 			dateOp.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(dst, d.SavedAt, g.LatinFontFace(slotTextFontSize), dateOp)
+			text.Draw(dst, d.SavedAt, g.FontFace(slotTextFontSize), dateOp)
 		}
 	}
 

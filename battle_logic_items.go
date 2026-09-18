@@ -135,7 +135,7 @@ func (s *BattleScene) updateItemTargetSelect() {
 	s.battleLog = def.Name
 	s.battleLogTimer = battleLogDuration
 	s.pendingItemID = ""
-	s.finishPlayerTurn(true)
+	s.finishPlayerTurn(itemUseReturnPosition)
 }
 
 func (s *BattleScene) applyItemToTargetInBattle(def ItemDef, target int) bool {

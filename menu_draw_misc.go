@@ -143,11 +143,11 @@ const (
 	volumeContentW float64 = volumeLabelBarGap + volumeBarW + volumeBarPercentGap + volumePercentColW
 
 	// optionHeaderFontSize は「音量設定」「表示設定」見出しの文字サイズ。
-	optionHeaderFontSize float64 = 18
+	optionHeaderFontSize float64 = 23
 
 	// optionItemFontSize は見出し以外（各行のラベル・値・矢印・パーセント表示・
 	// プレビュー文・リセットボタン）すべてに共通で使う文字サイズ。
-	optionItemFontSize float64 = 18
+	optionItemFontSize float64 = 23
 )
 
 // drawVolumeRow はBGM/効果音/全体音量の各行を同じ見た目で描画する共通処理。
@@ -181,22 +181,28 @@ func (m *MenuScene) drawVolumeRow(screen *ebiten.Image, barY float64, label stri
 	// ラベル列(labelX〜barX)の中央に文字を揃える。矢印はラベルの左に
 	// 添える形にして、選択の有無で文字位置がずれないようにする。
 	labelCenterX := labelX + volumeLabelBarGap/2
-	labelW, _ := m.game.MeasureMixedText(label, optionItemFontSize)
+	labelFace := m.game.FontFace(optionItemFontSize)
+	labelW, _ := text.Measure(label, labelFace, 0)
 	if selected {
 		arrowOp := &text.DrawOptions{}
 		arrowOp.GeoM.Translate(labelCenterX-labelW/2-6, midY)
 		arrowOp.PrimaryAlign = text.AlignEnd
 		arrowOp.SecondaryAlign = text.AlignCenter
 		arrowOp.ColorScale.ScaleWithColor(labelCol)
-		text.Draw(screen, "▶", m.game.FontFace(optionItemFontSize), arrowOp)
+		text.Draw(screen, "▶", labelFace, arrowOp)
 	}
-	m.game.DrawMixedText(screen, label, optionItemFontSize, labelCenterX, midY, text.AlignCenter, text.AlignCenter, labelCol)
+	labelOp := &text.DrawOptions{}
+	labelOp.GeoM.Translate(labelCenterX, midY)
+	labelOp.PrimaryAlign = text.AlignCenter
+	labelOp.SecondaryAlign = text.AlignCenter
+	labelOp.ColorScale.ScaleWithColor(labelCol)
+	text.Draw(screen, label, labelFace, labelOp)
 
 	percentOp := &text.DrawOptions{}
 	percentOp.GeoM.Translate(barX+volumeBarW+volumeBarPercentGap, midY)
 	percentOp.SecondaryAlign = text.AlignCenter
 	percentOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, fmt.Sprintf("%d%%", int(volume*100+0.5)), m.game.LatinFontFace(optionItemFontSize), percentOp)
+	text.Draw(screen, fmt.Sprintf("%d%%", int(volume*100+0.5)), labelFace, percentOp)
 }
 
 func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
@@ -403,7 +409,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	if m.game.RememberCursor {
 		cursorValueLabel = "ON"
 	}
-	text.Draw(screen, cursorValueLabel, m.game.LatinFontFace(optionItemFontSize), cursorValueOp)
+	text.Draw(screen, cursorValueLabel, m.game.FontFace(optionItemFontSize), cursorValueOp)
 
 	cursorLeftOp := &text.DrawOptions{}
 	cursorLeftOp.GeoM.Translate(cursorValueX-optionCursorArrowGap, cursorRowY)
@@ -448,7 +454,7 @@ func (m *MenuScene) drawBottomRightHint(screen *ebiten.Image, hint string) {
 	hintOp.GeoM.Translate(float64(gameWidth)-16, float64(gameHeight)-16)
 	hintOp.PrimaryAlign = text.AlignEnd
 	hintOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, hint, m.game.FontFace(15), hintOp)
+	text.Draw(screen, hint, m.game.FontFace(18), hintOp)
 }
 
 func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
@@ -465,7 +471,11 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 		}
 		x := float64(gameWidth) - menuDescOffsetX
 		y := float64(gameHeight) - menuDescOffsetY
-		m.game.DrawMixedText(screen, desc, 14, x, y, text.AlignEnd, text.AlignStart, uiColorText)
+		descOp := &text.DrawOptions{}
+		descOp.GeoM.Translate(x, y)
+		descOp.PrimaryAlign = text.AlignEnd
+		descOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, desc, m.game.FontFace(14), descOp)
 		return
 	}
 
@@ -583,7 +593,11 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 
 	x := float64(gameWidth) - menuDescOffsetX
 	y := float64(gameHeight) - menuDescOffsetY
-	m.game.DrawMixedText(screen, desc, 14, x, y, text.AlignEnd, text.AlignStart, uiColorText)
+	descOp := &text.DrawOptions{}
+	descOp.GeoM.Translate(x, y)
+	descOp.PrimaryAlign = text.AlignEnd
+	descOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, desc, m.game.FontFace(14), descOp)
 }
 
 func drawMinimapObjectiveIcon(screen *ebiten.Image, g *Game, ox, oy float64) {

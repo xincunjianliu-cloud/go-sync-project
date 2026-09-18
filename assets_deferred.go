@@ -157,6 +157,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		deferredAssetAssign{"assets/images/common/window.png", func(g *Game, img *ebiten.Image) { g.WindowImg = img }},
 		deferredAssetAssign{"assets/images/battle/name_normal.png", func(g *Game, img *ebiten.Image) { g.NameImg = img }},
 		deferredAssetAssign{"assets/images/battle/name_myturn.png", func(g *Game, img *ebiten.Image) { g.NameMyTurnImg = img }},
+		deferredAssetAssign{"assets/images/battle/name_dead.png", func(g *Game, img *ebiten.Image) { g.NameDeadImg = img }},
 		deferredAssetAssign{"assets/images/battle/log_entry_box.png", func(g *Game, img *ebiten.Image) { g.LogEntryImg = img }},
 		deferredAssetAssign{"assets/images/field/調べる.png", func(g *Game, img *ebiten.Image) { g.ExamineIconImg = img }},
 		deferredAssetAssign{"assets/images/field/現在地.png", func(g *Game, img *ebiten.Image) { g.MinimapPlayerIconImg = img }},

@@ -92,6 +92,7 @@ type Game struct {
 
 	NameImg       *ebiten.Image
 	NameMyTurnImg *ebiten.Image
+	NameDeadImg   *ebiten.Image
 
 	TimelineBarImg     *ebiten.Image
 	TimelineBarVertImg *ebiten.Image
@@ -187,18 +188,6 @@ const (
 
 func (g *Game) FontFace(size float64) *text.GoTextFace {
 	return &text.GoTextFace{Source: g.fontSource, Size: size}
-}
-
-// latinFontScale compensates for PixelMplus drawing Latin letters/digits
-// visually smaller than Japanese glyphs at the same Size, so a bigger value
-// here makes English/numbers render bigger relative to Japanese text.
-const latinFontScale = 1.2
-
-// LatinFontFace is for text.Draw calls whose whole string is Latin
-// letters/digits (no Japanese), so it reads at the same visual size as
-// Japanese text drawn with FontFace(size).
-func (g *Game) LatinFontFace(size float64) *text.GoTextFace {
-	return &text.GoTextFace{Source: g.fontSource, Size: size * latinFontScale}
 }
 
 func generateLightMaskImage(size int) *ebiten.Image {

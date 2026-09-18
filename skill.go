@@ -49,11 +49,18 @@ type SkillLevelData struct {
 	MPCost      int
 	Effects     []SkillEffect
 	IsHeal      bool
+	// ReturnPosition is where the actor's timeline icon reappears (0-100)
+	// after this skill is used, independent of the Spd stat.
+	ReturnPosition float64
+	// GaugePoint is how many synergy gauge points using this skill adds.
+	GaugePoint int
 }
 
 type SkillDef struct {
 	Name   string
 	Levels []SkillLevelData
+	// UnlockLevel is the character level required to use this skill.
+	UnlockLevel int
 }
 
 var characterSkillSets = [4][]SkillDef{
@@ -70,23 +77,39 @@ func (g *Game) CharacterSkills(charIdx int) []SkillDef {
 	return characterSkillSets[charIdx]
 }
 
+func (g *Game) IsSkillUnlocked(charIdx, skillIdx int) bool {
+	skills := g.CharacterSkills(charIdx)
+	if skillIdx < 0 || skillIdx >= len(skills) {
+		return false
+	}
+	if charIdx < 0 || charIdx >= len(g.PlayerLv) {
+		return false
+	}
+	return g.PlayerLv[charIdx] >= skills[skillIdx].UnlockLevel
+}
+
 var HeroSkills = []SkillDef{
 	{
-		Name: "強撃",
+		Name:        "強撃",
+		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description: "強い攻撃",
-				Target:      TargetSingle,
-				Element:     ElemPhysicalNone,
-				PowerSingle: 150,
-				MPCost:      5,
+				Description:    "強い攻撃",
+				Target:         TargetSingle,
+				Element:        ElemPhysicalNone,
+				PowerSingle:    150,
+				MPCost:         5,
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
-				Description: "強い攻撃",
-				Target:      TargetSingle,
-				Element:     ElemPhysicalNone,
-				PowerSingle: 170,
-				MPCost:      7,
+				Description:    "強い攻撃",
+				Target:         TargetSingle,
+				Element:        ElemPhysicalNone,
+				PowerSingle:    170,
+				MPCost:         7,
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
 				Description: "強い攻撃 対象に10%の物理防御力低下付与",
@@ -97,45 +120,57 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectDebuffPhysicalDef, Percent: 10, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 		},
 	},
 	{
-		Name: "全体攻撃",
+		Name:        "全体攻撃",
+		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description: "全体にダメージを与える",
-				Target:      TargetAll,
-				Element:     ElemMagicNone,
-				PowerAll:    80,
-				MPCost:      7,
+				Description:    "全体にダメージを与える",
+				Target:         TargetAll,
+				Element:        ElemMagicNone,
+				PowerAll:       80,
+				MPCost:         7,
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
-				Description: "全体にダメージを与える",
-				Target:      TargetAll,
-				Element:     ElemMagicNone,
-				PowerAll:    100,
-				MPCost:      9,
+				Description:    "全体にダメージを与える",
+				Target:         TargetAll,
+				Element:        ElemMagicNone,
+				PowerAll:       100,
+				MPCost:         9,
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
-				Description: "全体にダメージを与える",
-				Target:      TargetAll,
-				Element:     ElemMagicNone,
-				PowerAll:    140,
-				MPCost:      13,
+				Description:    "全体にダメージを与える",
+				Target:         TargetAll,
+				Element:        ElemMagicNone,
+				PowerAll:       140,
+				MPCost:         13,
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 		},
 	},
 	{
-		Name: "炎魔法",
+		Name:        "炎魔法",
+		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description: "炎でばぁん",
-				Target:      TargetBoth,
-				Element:     ElemFire,
-				PowerSingle: 160,
-				PowerAll:    80,
-				MPCost:      7,
+				Description:    "炎でばぁん",
+				Target:         TargetBoth,
+				Element:        ElemFire,
+				PowerSingle:    160,
+				PowerAll:       80,
+				MPCost:         7,
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
 				Description: "炎でばぁん 魔法防御力を15%下げる",
@@ -147,6 +182,8 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectDebuffMagicDef, Percent: 15, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
 				Description: "炎でばぁん 魔法防御力を30%下げる",
@@ -158,11 +195,14 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectDebuffMagicDef, Percent: 30, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 		},
 	},
 	{
-		Name: "デバフ",
+		Name:        "デバフ",
+		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
 				Description: "対象の物理魔法攻撃力を10%下げる",
@@ -172,6 +212,8 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectDebuffAtk, Percent: 10, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
 				Description: "対象の物理魔法攻撃力を20%下げる 対象の物理防御力を15%下げる",
@@ -182,6 +224,8 @@ var HeroSkills = []SkillDef{
 					{Type: EffectDebuffAtk, Percent: 20, Turns: 3},
 					{Type: EffectDebuffPhysicalDef, Percent: 15, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
 				Description: "対象の物理魔法攻撃力を30%下げる 対象の物理魔法防御力を15%下げる",
@@ -192,20 +236,25 @@ var HeroSkills = []SkillDef{
 					{Type: EffectDebuffAtk, Percent: 30, Turns: 3},
 					{Type: EffectDebuffDefBoth, Percent: 15, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 		},
 	},
 	{
-		Name: "回復",
+		Name:        "回復",
+		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description: "対象のHPを回復する",
-				Target:      TargetBoth,
-				Element:     ElemMagicNone,
-				PowerSingle: 20,
-				PowerAll:    10,
-				MPCost:      6,
-				IsHeal:      true,
+				Description:    "対象のHPを回復する",
+				Target:         TargetBoth,
+				Element:        ElemMagicNone,
+				PowerSingle:    20,
+				PowerAll:       10,
+				MPCost:         6,
+				IsHeal:         true,
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
 				Description: "対象のHPを回復する 対象に物理魔法攻撃力up",
@@ -218,6 +267,8 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectBuffAtkUp, Percent: 15, PercentAll: 10, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 			{
 				Description: "対象のHPを大きく回復する 対象に物理魔法攻撃力up",
@@ -230,6 +281,8 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectBuffAtkUp, Percent: 30, PercentAll: 15, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
 			},
 		},
 	},

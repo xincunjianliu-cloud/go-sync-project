@@ -101,7 +101,7 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 	}
 
 	if s.isMsgActive && s.msgIndex >= 0 && s.msgIndex < len(s.msgTexts) {
-		s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game, 15)
+		s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game, 20)
 	}
 
 	if s.isMsgActive {
@@ -470,11 +470,11 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 	if !s.itemGetPlainMessage {
 		label += "を手に入れた！"
 	}
-	textW, textH := s.game.MeasureMixedText(label, 16)
+	textW, textH := text.Measure(label, s.game.FontFace(20), 0)
 
 	var subW, subH float64
 	if s.itemGetSubLabel != "" {
-		subW, subH = s.game.MeasureMixedText(s.itemGetSubLabel, 13)
+		subW, subH = text.Measure(s.itemGetSubLabel, s.game.FontFace(15), 0)
 	}
 
 	ebitenutil.DrawRect(screen, bx, by, boxW, boxH, uiColorText)
@@ -486,10 +486,16 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 	}
 	topY := by + boxH/2 - blockH/2
 
-	s.game.DrawMixedText(screen, label, 16, bx+boxW/2-textW/2, topY, text.AlignStart, text.AlignStart, uiColorText)
+	labelOp := &text.DrawOptions{}
+	labelOp.GeoM.Translate(bx+boxW/2-textW/2, topY)
+	labelOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, label, s.game.FontFace(20), labelOp)
 
 	if s.itemGetSubLabel != "" {
-		s.game.DrawMixedText(screen, s.itemGetSubLabel, 13, bx+boxW/2-subW/2, topY+textH+6, text.AlignStart, text.AlignStart, uiColorText)
+		subOp := &text.DrawOptions{}
+		subOp.GeoM.Translate(bx+boxW/2-subW/2, topY+textH+6)
+		subOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, s.itemGetSubLabel, s.game.FontFace(15), subOp)
 	}
 }
 
@@ -513,7 +519,10 @@ func (s *FieldScene) drawChoiceUI(screen *ebiten.Image, camX, camY float64) {
 
 	face := s.game.FontFace(14)
 
-	s.game.DrawMixedText(screen, s.choiceQuestion, 14, bx+10, by+10, text.AlignStart, text.AlignStart, uiColorText)
+	questionOp := &text.DrawOptions{}
+	questionOp.GeoM.Translate(bx+10, by+10)
+	questionOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, s.choiceQuestion, face, questionOp)
 
 	choiceArrowGap := text.Advance("▶", face)
 	for i, opt := range s.choiceOptions {
@@ -524,6 +533,9 @@ func (s *FieldScene) drawChoiceUI(screen *ebiten.Image, camX, camY float64) {
 			arrowOp.ColorScale.ScaleWithColor(uiColorText)
 			text.Draw(screen, "▶", face, arrowOp)
 		}
-		s.game.DrawMixedText(screen, opt, 14, baseX+choiceArrowGap, baseY, text.AlignStart, text.AlignStart, uiColorText)
+		optOp := &text.DrawOptions{}
+		optOp.GeoM.Translate(baseX+choiceArrowGap, baseY)
+		optOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, opt, face, optOp)
 	}
 }

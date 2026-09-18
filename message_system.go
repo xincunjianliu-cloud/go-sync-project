@@ -162,10 +162,7 @@ func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*eb
 	}
 }
 
-// Draw renders the message box for cmd. size is the nominal font size;
-// Japanese and Latin/digit runs within the speaker name and each line are
-// sized via Game.DrawMixedText so a line like "HPが50回復した" reads at a
-// consistent visual size instead of the digits looking smaller.
+// Draw renders the message box for cmd. size is the nominal font size.
 func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, size float64) {
 	winOp := &ebiten.DrawImageOptions{}
 	winOp.GeoM.Translate(0, 0)
@@ -175,7 +172,10 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, si
 	if cmd.Speaker != "" && cmd.Speaker != "SYSTEM_COMMAND" {
 		nameX := float64(gameWidth) * msgNameXRatio
 		nameY := float64(gameHeight) * msgNameYRatio
-		g.DrawMixedText(screen, cmd.Speaker, size, nameX, nameY, text.AlignStart, text.AlignStart, uiColorText)
+		nameOp := &text.DrawOptions{}
+		nameOp.GeoM.Translate(nameX, nameY)
+		nameOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, cmd.Speaker, g.FontFace(size), nameOp)
 	}
 
 	runes := []rune(cmd.Text)
@@ -197,7 +197,10 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, si
 		if i >= 3 {
 			break
 		}
-		g.DrawMixedText(screen, line, size, startX, startY+float64(i)*lineSpacing, text.AlignStart, text.AlignStart, uiColorText)
+		lineOp := &text.DrawOptions{}
+		lineOp.GeoM.Translate(startX, startY+float64(i)*lineSpacing)
+		lineOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, line, fontFace, lineOp)
 	}
 
 	if count >= len(runes) && len(runes) > 0 {

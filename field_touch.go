@@ -374,7 +374,7 @@ func drawHamburgerMenuButton(screen *ebiten.Image, game *Game) {
 		op.GeoM.Translate(touchMenuCenterX, touchMenuCenterY+touchMenuSize/2+touchMenuKeyGapY)
 		op.PrimaryAlign = text.AlignCenter
 		op.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "M", game.LatinFontFace(ctrlLabelFontSize), op)
+		text.Draw(screen, "M", game.FontFace(ctrlLabelFontSize), op)
 	}
 }
 

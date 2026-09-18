@@ -238,26 +238,26 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 			shadowOp.GeoM.Scale(numScale, numScale)
 			shadowOp.GeoM.Translate(pop.X+offset[0]+s.shakeX, pop.Y+offset[1]+s.shakeY)
 			shadowOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, alpha})
-			text.Draw(screen, msg, s.game.LatinFontFace(16), shadowOp)
+			text.Draw(screen, msg, s.game.FontFace(16), shadowOp)
 		}
 		op := &text.DrawOptions{}
 		op.GeoM.Scale(numScale, numScale)
 		op.GeoM.Translate(pop.X+s.shakeX, pop.Y+s.shakeY)
 		op.ColorScale.ScaleWithColor(mainColor)
-		text.Draw(screen, msg, s.game.LatinFontFace(16), op)
+		text.Draw(screen, msg, s.game.FontFace(16), op)
 
 		if pop.IsCrit {
 			labelOp := &text.DrawOptions{}
 			labelOp.GeoM.Scale(1.3, 1.3)
 			labelOp.GeoM.Translate(pop.X+1.0+s.shakeX, pop.Y-18.0+s.shakeY)
 			labelOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, alpha})
-			text.Draw(screen, "CRITICAL", s.game.LatinFontFace(16), labelOp)
+			text.Draw(screen, "CRITICAL", s.game.FontFace(16), labelOp)
 
 			labelOp2 := &text.DrawOptions{}
 			labelOp2.GeoM.Scale(1.3, 1.3)
 			labelOp2.GeoM.Translate(pop.X+s.shakeX, pop.Y-19.0+s.shakeY)
 			labelOp2.ColorScale.ScaleWithColor(color.RGBA{255, 130, 40, alpha})
-			text.Draw(screen, "CRITICAL", s.game.LatinFontFace(16), labelOp2)
+			text.Draw(screen, "CRITICAL", s.game.FontFace(16), labelOp2)
 		}
 	}
 
@@ -292,6 +292,8 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 		itemDesc, itemHint := s.itemTargetDescriptionAndHint()
 		s.drawBottomDescription(screen, itemDesc, itemHint)
 	}
+
+	s.drawMyTurnOverlay(screen)
 }
 
 func (s *BattleScene) currentSkillDescription() string {

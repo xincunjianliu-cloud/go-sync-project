@@ -186,10 +186,9 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 	}
 }
 
-func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
-
-	winY := statusBarY
-
+// statusBarAlpha computes the intro fade-in alpha shared by the status HUD
+// (name plates, HP/MP, and the my-turn overlay drawn separately on top).
+func (s *BattleScene) statusBarAlpha() float64 {
 	alpha := 1.0
 	if s.introActive {
 		if s.introPhase < 3 {
@@ -207,18 +206,21 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 			}
 		}
 	}
+	return alpha
+}
+
+func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
+
+	winY := statusBarY
+	alpha := s.statusBarAlpha()
 	for i := 0; i < partySize; i++ {
 		xPos := statusStartX + float64(i)*(statusBlockW+statusBlockGap)
 
 		sx := xPos
 		sy := winY
-		barX := sx - statusBarSlant
+		barX := sx
 
-		isMyTurn := s.waitingActor == i &&
-			(s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu ||
-				s.battlePhase == phaseTargetSelect || s.battlePhase == phaseHealSelect ||
-				s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
-		s.drawPartyName(screen, i, xPos, winY, alpha, isMyTurn)
+		s.drawPartyName(screen, i, xPos, winY, alpha)
 
 		isDead := s.game.PlayerHP[i] <= 0
 		valueColor := uiColorText
@@ -235,8 +237,8 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 			hpRatio = 1.0
 		}
 
-		drawStatusValue(screen, sx, sy+statusHPTextY, s.game.PlayerHP[i], maxHP,
-			s.game.LatinFontFace(15), s.game.LatinFontFace(12), alpha, valueColor)
+		drawStatusValue(screen, sx+statusValueOffsetX, sy+statusHPTextY, s.game.PlayerHP[i], maxHP,
+			s.game.FontFace(statusValueFontSizeLarge), s.game.FontFace(statusValueFontSizeSmall), alpha, valueColor)
 
 		if isDead {
 			drawSlantedStatusBar(screen, barX, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
@@ -259,8 +261,8 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 			mpRatio = 1.0
 		}
 
-		drawStatusValue(screen, sx, sy+statusMPTextY, s.game.PlayerMP[i], maxMP,
-			s.game.LatinFontFace(15), s.game.LatinFontFace(12), alpha, valueColor)
+		drawStatusValue(screen, sx+statusValueOffsetX, sy+statusMPTextY, s.game.PlayerMP[i], maxMP,
+			s.game.FontFace(statusValueFontSizeLarge), s.game.FontFace(statusValueFontSizeSmall), alpha, valueColor)
 
 		if isDead {
 			drawSlantedStatusBar(screen, barX, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
@@ -275,12 +277,16 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 		}
 
 		if len(s.PlayerDebuffs[i]) > 0 {
-			s.game.DrawMixedText(screen, fmt.Sprintf("弱体x%d", len(s.PlayerDebuffs[i])), 11,
-				sx, sy-12, text.AlignStart, text.AlignStart, color.RGBA{255, 120, 120, uint8(255 * alpha)})
+			debuffOp := &text.DrawOptions{}
+			debuffOp.GeoM.Translate(sx, sy-12)
+			debuffOp.ColorScale.ScaleWithColor(color.RGBA{255, 120, 120, uint8(255 * alpha)})
+			text.Draw(screen, fmt.Sprintf("弱体x%d", len(s.PlayerDebuffs[i])), s.game.FontFace(11), debuffOp)
 		}
 		if len(s.PlayerBuffs[i]) > 0 {
-			s.game.DrawMixedText(screen, fmt.Sprintf("強化x%d", len(s.PlayerBuffs[i])), 11,
-				sx, sy-24, text.AlignStart, text.AlignStart, color.RGBA{120, 200, 255, uint8(255 * alpha)})
+			buffOp := &text.DrawOptions{}
+			buffOp.GeoM.Translate(sx, sy-24)
+			buffOp.ColorScale.ScaleWithColor(color.RGBA{120, 200, 255, uint8(255 * alpha)})
+			text.Draw(screen, fmt.Sprintf("強化x%d", len(s.PlayerBuffs[i])), s.game.FontFace(11), buffOp)
 		}
 	}
 }
@@ -388,7 +394,7 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 	p := s.waitingActor
 	skills := s.game.CharacterSkills(p)
 
-	skillListFace := s.game.FontFace(15)
+	skillListFace := s.game.FontFace(18)
 	skillListArrowGap := text.Advance("▶ ", skillListFace)
 
 	for i, sk := range skills {
@@ -409,18 +415,20 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		}
 
 		data := sk.Levels[lv-1]
-		label := fmt.Sprintf("%d:%s", i+1, sk.Name)
+		label := sk.Name
 		costText := fmt.Sprintf("MP%d", s.effectiveMPCost(data.MPCost))
 		insufficient := s.game.PlayerMP[p] < s.effectiveMPCost(data.MPCost)
 
-		labelCol := uiColorText
-		mpCol := uiColorText
-		if insufficient {
-			mpCol = uiColorDanger
-		}
 		selected := i == s.skillIndex
+
+		arrowCol := uiColorText
 		if selected {
-			labelCol = uiColorSelect
+			arrowCol = uiColorSelect
+		}
+
+		textCol := arrowCol
+		if insufficient {
+			textCol = uiColorDisabled
 		}
 
 		baseX := windowX + battleSubLabelOffsetX
@@ -428,21 +436,23 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		if selected {
 			arrowOp := &text.DrawOptions{}
 			arrowOp.GeoM.Translate(baseX, baseY)
-			arrowOp.ColorScale.ScaleWithColor(labelCol)
+			arrowOp.ColorScale.ScaleWithColor(arrowCol)
 			text.Draw(screen, "▶", skillListFace, arrowOp)
 		}
-		s.game.DrawMixedText(screen, label, 15, baseX+skillListArrowGap, baseY, text.AlignStart, text.AlignStart, labelCol)
+		labelOp := &text.DrawOptions{}
+		labelOp.GeoM.Translate(baseX+skillListArrowGap, baseY)
+		labelOp.ColorScale.ScaleWithColor(textCol)
+		text.Draw(screen, label, skillListFace, labelOp)
 
-		lvFace := s.game.LatinFontFace(15)
-		_, _, leftX, lvX, rightX, textY := s.skillLevelArrowRects(i, lv, lvFace, skillListFace)
+		_, _, leftX, lvX, rightX, textY := s.skillLevelArrowRects(i, lv, skillListFace)
 
 		lvOp := &text.DrawOptions{}
-		lvOp.GeoM.Translate(lvX, textY+s.game.latinBaselineAdjust(15, text.AlignStart))
-		lvOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, skillLvText(lv), lvFace, lvOp)
+		lvOp.GeoM.Translate(lvX, textY)
+		lvOp.ColorScale.ScaleWithColor(textCol)
+		text.Draw(screen, skillLvText(lv), skillListFace, lvOp)
 
 		if curLv > 1 {
-			leftCol := uiColorText
+			leftCol := textCol
 			if lv <= 1 {
 				leftCol = uiColorDisabled
 			}
@@ -451,7 +461,7 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 			leftOp.ColorScale.ScaleWithColor(leftCol)
 			text.Draw(screen, skillLvLeftArrow, skillListFace, leftOp)
 
-			rightCol := uiColorText
+			rightCol := textCol
 			if lv >= curLv {
 				rightCol = uiColorDisabled
 			}
@@ -462,10 +472,10 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		}
 
 		mpOp := &text.DrawOptions{}
-		mpOp.GeoM.Translate(windowX+windowW-battleSubRightOffsetX, baseY+s.game.latinBaselineAdjust(15, text.AlignStart))
+		mpOp.GeoM.Translate(windowX+windowW-battleSubRightOffsetX, baseY)
 		mpOp.PrimaryAlign = text.AlignEnd
-		mpOp.ColorScale.ScaleWithColor(mpCol)
-		text.Draw(screen, costText, s.game.LatinFontFace(15), mpOp)
+		mpOp.ColorScale.ScaleWithColor(textCol)
+		text.Draw(screen, costText, skillListFace, mpOp)
 	}
 }
 
@@ -486,9 +496,10 @@ func (s *BattleScene) drawBattleMessage(screen *ebiten.Image) {
 	}
 	op := &text.DrawOptions{}
 	op.PrimaryAlign = text.AlignCenter
-	op.GeoM.Translate(float64(gameWidth)/2, logPanelY+6)
+	op.SecondaryAlign = text.AlignCenter
+	op.GeoM.Translate(float64(gameWidth)/2, logPanelY+logPanelH/2)
 	op.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, s.battleLog, s.game.FontFace(15), op)
+	text.Draw(screen, s.battleLog, s.game.FontFace(18), op)
 }
 
 func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
@@ -501,9 +512,7 @@ func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
 		ebitenutil.DrawRect(screen, winX+winW, winY, 1, winH, uiColorDanger)
 
 		gameOverFace := s.game.FontFace(15)
-		gameOverLatinFace := s.game.LatinFontFace(15)
 		gameOverArrowGap := text.Advance("▶ ", gameOverFace)
-		gameOverLatinY := s.game.latinBaselineAdjust(15, text.AlignStart)
 
 		retryCol := uiColorText
 		retrySelected := s.gameOverIdx == 0
@@ -515,9 +524,9 @@ func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
 			text.Draw(screen, "▶", gameOverFace, arrowOp1)
 		}
 		op1 := &text.DrawOptions{}
-		op1.GeoM.Translate(winX+24+gameOverArrowGap, winY+18+gameOverLatinY)
+		op1.GeoM.Translate(winX+24+gameOverArrowGap, winY+18)
 		op1.ColorScale.ScaleWithColor(retryCol)
-		text.Draw(screen, "Retry Game", gameOverLatinFace, op1)
+		text.Draw(screen, "Retry Game", gameOverFace, op1)
 
 		titleCol := uiColorText
 		titleSelected := s.gameOverIdx == 1
@@ -529,8 +538,8 @@ func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
 			text.Draw(screen, "▶", gameOverFace, arrowOp2)
 		}
 		op2 := &text.DrawOptions{}
-		op2.GeoM.Translate(winX+24+gameOverArrowGap, winY+42+gameOverLatinY)
+		op2.GeoM.Translate(winX+24+gameOverArrowGap, winY+42)
 		op2.ColorScale.ScaleWithColor(titleCol)
-		text.Draw(screen, "Title Screen", gameOverLatinFace, op2)
+		text.Draw(screen, "Title Screen", gameOverFace, op2)
 	}
 }

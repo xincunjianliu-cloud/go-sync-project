@@ -42,7 +42,7 @@ func drawSkipHint(screen *ebiten.Image, game *Game, holdElapsed, holdMax float64
 	hintOp.PrimaryAlign = text.AlignCenter
 	hintOp.SecondaryAlign = text.AlignCenter
 	hintOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, "Ctrl", game.LatinFontFace(9), hintOp)
+	text.Draw(screen, "Ctrl", game.FontFace(9), hintOp)
 
 	labelOp := &text.DrawOptions{}
 	labelOp.GeoM.Translate(cx+skipHintRadius+8, cy)

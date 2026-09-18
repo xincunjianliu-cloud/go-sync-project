@@ -23,7 +23,7 @@ func (s *BattleScene) executeRewind(p int) {
 		s.battleLog = "巻き戻しを発動した"
 	}
 	s.battleLogTimer = battleLogDuration
-	s.finishPlayerTurn(true)
+	s.finishPlayerTurn(rewindReturnPosition)
 }
 
 func (s *BattleScene) rollNormalDamage(target int) int {
@@ -40,13 +40,11 @@ func (s *BattleScene) rollNormalDamage(target int) int {
 	return s.rollDamage(float64(atk), power, float64(def), 1.0, s.game.PlayerLuck[p])
 }
 
-func (s *BattleScene) finishPlayerTurn(resetGauge bool) {
+func (s *BattleScene) finishPlayerTurn(returnPos float64) {
 	if s.waitingActor >= 0 && s.waitingActor < partySize {
 		s.tickDebuffs(s.waitingActor, false)
 		s.tickBuffs(s.waitingActor)
-	}
-	if resetGauge && s.waitingActor >= 0 && s.waitingActor < partySize {
-		s.resetPlayerGauge(s.waitingActor)
+		s.resetPlayerGaugeTo(s.waitingActor, returnPos)
 	}
 	s.waitingActor = -1
 	if s.checkBattleEnd() {
@@ -149,7 +147,7 @@ func (s *BattleScene) tryWaitSynergy() bool {
 
 	for i := 0; i < partySize; i++ {
 		s.waitStance[i] = false
-		s.resetPlayerGauge(i)
+		s.resetPlayerGaugeTo(i, synergyReturnPosition)
 	}
 	s.waitOrder = []int{}
 	s.battlePhase = phaseATB
@@ -185,6 +183,7 @@ func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
 	s.pendingEnemySkillName = ""
 	s.pendingEnemySkillEffects = nil
 	s.pendingEnemyIsAll = false
+	s.enemyActionReturnPosition = enemyNormalAttackReturnPosition
 
 	if s.rollIsEvade(s.game.PlayerLuck[target]) {
 		s.pendingEnemyHits = []pendingEnemyHit{{target: target, evaded: true}}
@@ -215,6 +214,7 @@ func (s *BattleScene) rollEnemySkill(skill EnemySkill, aliveList []int) {
 	s.pendingEnemySkillName = skill.Name
 	s.pendingEnemySkillEffects = skill.Effects
 	s.pendingEnemyIsAll = skill.Target == TargetAll
+	s.enemyActionReturnPosition = skill.ReturnPosition
 
 	var hits []pendingEnemyHit
 	anyHit := false
@@ -457,7 +457,7 @@ func (s *BattleScene) updateTargetSelect() {
 		skills := s.game.CharacterSkills(p)
 		if skillIdx >= 0 && skillIdx < len(skills) {
 			data := s.game.CurrentSkillLevelData(p, skillIdx)
-			if data.Target == TargetBoth {
+			if data.Target == TargetBoth && s.currentTargetAllowsAll() {
 				if isMenuRightPressed() {
 					s.selectedSkillTarget = TargetAll
 					s.targetIndex = maxEnemies
@@ -550,7 +550,7 @@ func (s *BattleScene) updateTargetSelect() {
 				s.applySkillEffects(data.Effects, p, true, slot, isAll)
 			}
 		}
-		s.addGaugePoint(1)
+		s.addGaugePoint(data.GaugePoint)
 
 		s.activeAttacker = p
 		s.attackPhaseTimer = 0.0
@@ -576,7 +576,7 @@ func (s *BattleScene) updateTargetSelect() {
 	s.battleLog = "通常攻撃"
 	s.battleLogTimer = battleLogDuration
 
-	s.addGaugePoint(1)
+	s.addGaugePoint(normalAttackGaugePoint)
 
 	s.activeAttacker = p
 	s.attackPhaseTimer = 0.0
@@ -669,7 +669,7 @@ func (s *BattleScene) updateHealTargetSelect() {
 		s.healingAnimTimer[p] = 1.5
 		s.battleLog = skills[skillIdx].Name + "（全体）"
 		s.battleLogTimer = battleLogDuration
-		s.addGaugePoint(1)
+		s.addGaugePoint(data.GaugePoint)
 	} else {
 		target := s.healTargetIndex
 		if s.game.PlayerHP[target] <= 0 {
@@ -715,8 +715,8 @@ func (s *BattleScene) updateHealTargetSelect() {
 		s.healingAnimTimer[p] = 1.5
 		s.battleLog = skills[skillIdx].Name
 		s.battleLogTimer = battleLogDuration
-		s.addGaugePoint(1)
+		s.addGaugePoint(data.GaugePoint)
 	}
 
-	s.finishPlayerTurn(true)
+	s.finishPlayerTurn(s.pendingActionReturnPosition())
 }

@@ -7,16 +7,20 @@ type EnemySkill struct {
 	Element     Element
 	Power       int
 	Effects     []SkillEffect
+	// ReturnPosition is where the enemy's timeline icon reappears (0-100)
+	// after this skill is used, independent of the Speed stat.
+	ReturnPosition float64
 }
 
 const EnemySkillChance = 30
 
 var SkillIceBreath = EnemySkill{
-	Name:        "氷結ブレス",
-	Description: "対象に魔法ダメージ",
-	Target:      TargetSingle,
-	Element:     ElemMagicNone,
-	Power:       120,
+	Name:           "氷結ブレス",
+	Description:    "対象に魔法ダメージ",
+	Target:         TargetSingle,
+	Element:        ElemMagicNone,
+	Power:          120,
+	ReturnPosition: 5,
 }
 
 var SkillWindSlash = EnemySkill{
@@ -28,22 +32,25 @@ var SkillWindSlash = EnemySkill{
 	Effects: []SkillEffect{
 		{Type: EffectAtbDownSmall},
 	},
+	ReturnPosition: 5,
 }
 
 var SkillThunderBolt = EnemySkill{
-	Name:        "雷撃",
-	Description: "対象に魔法ダメージ",
-	Target:      TargetSingle,
-	Element:     ElemMagicNone,
-	Power:       125,
+	Name:           "雷撃",
+	Description:    "対象に魔法ダメージ",
+	Target:         TargetSingle,
+	Element:        ElemMagicNone,
+	Power:          125,
+	ReturnPosition: 5,
 }
 
 var SkillFlameBurst = EnemySkill{
-	Name:        "火炎放射",
-	Description: "味方全員に魔法ダメージ",
-	Target:      TargetAll,
-	Element:     ElemMagicNone,
-	Power:       70,
+	Name:           "火炎放射",
+	Description:    "味方全員に魔法ダメージ",
+	Target:         TargetAll,
+	Element:        ElemMagicNone,
+	Power:          70,
+	ReturnPosition: 5,
 }
 
 var SkillCrushingBlow = EnemySkill{
@@ -55,4 +62,5 @@ var SkillCrushingBlow = EnemySkill{
 	Effects: []SkillEffect{
 		{Type: EffectDebuffPhysicalDef, Percent: 10, Turns: 3},
 	},
+	ReturnPosition: 5,
 }

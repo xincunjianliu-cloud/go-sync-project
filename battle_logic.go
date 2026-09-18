@@ -122,6 +122,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 	s.applyDebugCheats()
 
 	s.gaugeColorAnimTimer += dt
+	s.updateEnemyDeath(dt)
 
 	if s.introActive {
 		s.introPhaseTimer += dt
@@ -342,7 +343,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			s.waitCancelHold[i] -= dt
 			if s.waitCancelHold[i] < 0 {
 				s.waitCancelHold[i] = 0
-				s.resetPlayerGauge(i)
+				s.resetPlayerGaugeTo(i, waitCancelReturnPosition)
 				s.readySlideX[i] = 0
 			}
 		}
@@ -450,7 +451,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			s.enemyActionWaitTimer = 0
 			if s.enemyIsActing {
 				s.enemyIsActing = false
-				s.resetEnemyGauge(s.actingEnemySlot)
+				s.resetEnemyGaugeTo(s.actingEnemySlot, s.enemyActionReturnPosition)
 			}
 
 			for i := 0; i < partySize; i++ {
@@ -464,7 +465,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			if s.checkBattleEnd() {
 				return s
 			}
-			s.finishPlayerTurn(true)
+			s.finishPlayerTurn(s.pendingActionReturnPosition())
 		}
 		return s
 	}
@@ -507,7 +508,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 	case phaseBattleEnd:
 		if !s.allEnemyDeathAnimDone() {
-			s.updateEnemyDeath(dt)
 			return s
 		}
 

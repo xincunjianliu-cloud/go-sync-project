@@ -102,16 +102,27 @@ const (
 	cmdPanelH = 120.0
 	hintY     = 524.0
 
-	statusBarY     = 432.0
-	statusBlockW   = 135.0
-	statusBarH     = 5.5
-	statusBarSlant = 8.0
-	statusBlockGap = 42.0
-	statusStartX   = 30.0
-	statusHPTextY  = 22.0
-	statusHPBarY   = 40.0
-	statusMPTextY  = 52.0
-	statusMPBarY   = 70.0
+	statusBarY         = 432.0
+	statusBlockW       = 135.0
+	statusBarH         = 5.5
+	statusBarSlant     = 8.0
+	statusBlockGap     = 42.0
+	statusStartX       = 30.0
+	statusHPTextY      = 21.0
+	statusHPBarY       = 40.0
+	statusMPTextY      = 51.0
+	statusMPBarY       = 70.0
+	statusValueOffsetX = 10.0
+
+	// statusValueFontSizeLarge/Small size the current/max numbers drawn by
+	// drawStatusValue in both the battle HUD and the menu party list, so
+	// they stay visually consistent between screens.
+	statusValueFontSizeLarge = 20.0
+	statusValueFontSizeSmall = 17.0
+
+	// partyNameFontSize sizes the player name drawn on the name plate in
+	// both the battle HUD and the menu party list.
+	partyNameFontSize = 20.0
 
 	descX        = 20.0
 	descY        = 520.0
@@ -443,11 +454,12 @@ type BattleScene struct {
 	enemyHitStopTimer float64
 	playerFlashTimer  [partySize]float64
 
-	pendingEnemyHits         []pendingEnemyHit
-	pendingEnemyHitTier      hitTier
-	pendingEnemySkillName    string
-	pendingEnemySkillEffects []SkillEffect
-	pendingEnemyIsAll        bool
+	pendingEnemyHits          []pendingEnemyHit
+	pendingEnemyHitTier       hitTier
+	pendingEnemySkillName     string
+	pendingEnemySkillEffects  []SkillEffect
+	pendingEnemyIsAll         bool
+	enemyActionReturnPosition float64
 
 	damagePops []DamagePop
 
@@ -665,10 +677,10 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 	}
 
 	for i := 0; i < partySize; i++ {
-		s.atbGauge[i] = 40 + float64(rand.Intn(35))
+		s.atbGauge[i] = atbHeadStart(game.PlayerSpd[i])
 	}
 	for i := range s.enemies {
-		s.atbGauge[s.enemyActorIndex(i)] = float64(rand.Intn(20))
+		s.atbGauge[s.enemyActorIndex(i)] = atbHeadStart(int(s.enemies[i].Speed))
 	}
 
 	if evType == lastBossEventType {

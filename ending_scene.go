@@ -353,6 +353,10 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 	col := color.RGBA{255, 255, 255, uint8(s.alpha * 255)}
 
 	for i, line := range page.Lines {
-		s.game.DrawMixedText(screen, line, creditFontSize, float64(gameWidth)/2, startY+float64(i)*creditLineGap, text.AlignCenter, text.AlignStart, col)
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(float64(gameWidth)/2, startY+float64(i)*creditLineGap)
+		op.PrimaryAlign = text.AlignCenter
+		op.ColorScale.ScaleWithColor(col)
+		text.Draw(screen, line, s.game.FontFace(creditFontSize), op)
 	}
 }

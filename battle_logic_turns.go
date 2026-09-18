@@ -85,13 +85,16 @@ func (s *BattleScene) fleeSuccessRate() int {
 	if strings.HasPrefix(s.enemyType, "boss_") {
 		return 0
 	}
-	highestLv := 0
-	for i := range s.enemies {
-		if s.enemies[i].Lv > highestLv {
-			highestLv = s.enemies[i].Lv
-		}
+	alive := s.aliveEnemyIndices()
+	if len(alive) == 0 {
+		return 100
 	}
-	rate := 70 + (s.game.PlayerLv[0]-highestLv)*10
+	totalLv := 0
+	for _, i := range alive {
+		totalLv += s.enemies[i].Lv
+	}
+	avgLv := float64(totalLv) / float64(len(alive))
+	rate := 70 + int((float64(s.game.PlayerLv[0])-avgLv)*10)
 	if rate < 10 {
 		return 10
 	}
@@ -101,31 +104,76 @@ func (s *BattleScene) fleeSuccessRate() int {
 	return rate
 }
 
-const atbBaseSpeed = 5.0
+const atbBaseSpeed = 10.0
 
-func speedReturnOffsetPercent(spd int) float64 {
+const (
+	// Return-to-timeline position (0-100) after each non-skill action.
+	// Each of these is individually configurable; all default to 5 for now.
+	normalAttackReturnPosition      = 5.0
+	enemyNormalAttackReturnPosition = 5.0
+	itemUseReturnPosition           = 5.0
+	rewindReturnPosition            = 5.0
+	synergyReturnPosition           = 5.0
+	waitCancelReturnPosition        = 5.0
+	fleeFailReturnPosition          = 5.0
+)
+
+// normalAttackGaugePoint is how many synergy gauge points a normal attack
+// adds. Skill uses instead add their own SkillLevelData.GaugePoint.
+const normalAttackGaugePoint = 1
+
+// atbHeadStart determines the timeline position (0-100) an actor starts
+// battle at, based on their Spd stat only. It is not used for the
+// return position after subsequent actions.
+func atbHeadStart(spd int) float64 {
 	if spd <= 0 {
 		return 0
 	}
-	return float64(spd / 10)
+	return float64(spd) / 2.0
 }
 
-func atbHeadStart(spd int) float64 {
-	return speedReturnOffsetPercent(spd) / 100.0 * atbMax
+func clampAtbPosition(pos float64) float64 {
+	if pos < 0 {
+		return 0
+	}
+	if pos > atbMax {
+		return atbMax
+	}
+	return pos
 }
 
-func (s *BattleScene) resetPlayerGauge(actor int) {
+func (s *BattleScene) resetPlayerGaugeTo(actor int, pos float64) {
 	if actor < 0 || actor >= partySize {
 		return
 	}
-	s.atbGauge[actor] = atbHeadStart(s.game.PlayerSpd[actor])
+	s.atbGauge[actor] = clampAtbPosition(pos)
 }
 
-func (s *BattleScene) resetEnemyGauge(slot int) {
+func (s *BattleScene) resetEnemyGaugeTo(slot int, pos float64) {
 	if slot < 0 || slot >= len(s.enemies) {
 		return
 	}
-	s.atbGauge[s.enemyActorIndex(slot)] = atbHeadStart(int(s.enemies[slot].Speed))
+	s.atbGauge[s.enemyActorIndex(slot)] = clampAtbPosition(pos)
+}
+
+// pendingActionReturnPosition resolves the return position for whatever
+// player action is currently recorded in s.pendingSkill.
+func (s *BattleScene) pendingActionReturnPosition() float64 {
+	p := s.waitingActor
+	if p < 0 || p >= partySize || s.pendingSkill < 1 {
+		return normalAttackReturnPosition
+	}
+	skillIdx := s.pendingSkill - 1
+	skills := s.game.CharacterSkills(p)
+	if skillIdx < 0 || skillIdx >= len(skills) {
+		return normalAttackReturnPosition
+	}
+	levels := skills[skillIdx].Levels
+	lv := s.lastSkillLevel[p][skillIdx]
+	if lv < 1 || lv > len(levels) {
+		lv = 1
+	}
+	return levels[lv-1].ReturnPosition
 }
 
 func (s *BattleScene) actorPosX(actor int) float64 {
@@ -336,7 +384,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		return nil
 	case 3:
 		if rand.Intn(100) >= s.fleeSuccessRate() {
-			s.resetPlayerGauge(p)
+			s.resetPlayerGaugeTo(p, fleeFailReturnPosition)
 			s.waitingActor = -1
 			s.battlePhase = phaseATB
 			s.battleLog = "逃げられなかった"
@@ -436,6 +484,10 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		lv = 1
 	}
 	data := skills[s.skillIndex].Levels[lv-1]
+	if !s.game.IsSkillUnlocked(p, s.skillIndex) {
+		s.game.Audio.PlaySEByKey("error")
+		return
+	}
 	if s.game.PlayerMP[p] < s.effectiveMPCost(data.MPCost) {
 		s.game.Audio.PlaySEByKey("error")
 		return

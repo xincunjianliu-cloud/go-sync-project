@@ -69,6 +69,9 @@ func (m *MenuScene) updateItemList() {
 	}
 	tapped := false
 	if idx, ok := m.hitTestItemListRows(len(items)); ok {
+		if idx != m.itemListIndex {
+			m.game.Audio.PlaySEByKey("cursor")
+		}
 		m.itemListIndex = idx
 		tapped = true
 	}
@@ -154,6 +157,7 @@ func (m *MenuScene) updateItemTarget() {
 
 	if !isConfirmKeyPressed() && !tapped {
 		if !hitPartyArea && len(justPressedTouchPoints()) > 0 {
+			m.game.Audio.PlaySEByKey("cancel")
 			m.pendingItemID = ""
 			m.menuState = menuStateItemList
 		}

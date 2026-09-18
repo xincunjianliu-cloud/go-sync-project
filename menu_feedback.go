@@ -30,9 +30,11 @@ func (m *MenuScene) drawNotice(screen *ebiten.Image) bool {
 	if m.noticeTicks <= 0 || m.notice == "" {
 		return false
 	}
-	m.game.DrawMixedText(screen, m.notice, 14,
-		float64(gameWidth)-menuDescOffsetX, float64(gameHeight)-menuDescOffsetY,
-		text.AlignEnd, text.AlignStart, uiColorSelect)
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(float64(gameWidth)-menuDescOffsetX, float64(gameHeight)-menuDescOffsetY)
+	op.PrimaryAlign = text.AlignEnd
+	op.ColorScale.ScaleWithColor(uiColorSelect)
+	text.Draw(screen, m.notice, m.game.FontFace(14), op)
 	return true
 }
 

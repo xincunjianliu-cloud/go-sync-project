@@ -241,6 +241,9 @@ func (m *MenuScene) updateMain() {
 	}
 	tapped := false
 	if idx, ok := m.hitTestMainCommandList(); ok {
+		if idx != m.menuIndex {
+			m.game.Audio.PlaySEByKey("cursor")
+		}
 		m.menuIndex = idx
 		m.game.LastMenuIndex = m.menuIndex
 		tapped = true
@@ -417,6 +420,9 @@ func (m *MenuScene) updateSlot() {
 	tapped := false
 	if m.slotDrag.justTapped {
 		if idx, ok := hitTestSlotList(m.game, m.slotDrag.tapX, m.slotDrag.tapY, m.slotScrollTop, slotCardStartX, slotCardStartY); ok {
+			if idx != m.slotIndex {
+				m.game.Audio.PlaySEByKey("cursor")
+			}
 			m.slotIndex = idx
 			tapped = true
 		}
