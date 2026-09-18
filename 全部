@@ -1,2 +1,0 @@
-置き換え: Set-Content all_in_one.txt -Value "新しい内容"
-追記: Add-Content all_in_one.txt -Value "追加したい行"
