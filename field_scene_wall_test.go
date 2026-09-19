@@ -238,6 +238,53 @@ func TestPullLeverTogglesUpAndDown(t *testing.T) {
 	}
 }
 
+func TestPullLeverVisualOnlyWallStaysBlocked(t *testing.T) {
+	leverID := "lever_deco"
+	wallObj := TiledObject{
+		X: 100, Y: 100, Width: 32, Height: 32,
+		Properties: []TiledProperty{
+			{Name: "type", Type: "string", Value: "event"},
+			{Name: "text", Type: "string", Value: "event_wall"},
+			{Name: "lever", Type: "string", Value: leverID},
+			{Name: "passable", Type: "string", Value: "false"},
+		},
+	}
+	leverObj := TiledObject{
+		X: 200, Y: 200, Width: 32, Height: 32,
+		Properties: []TiledProperty{
+			{Name: "type", Type: "string", Value: "event"},
+			{Name: "text", Type: "string", Value: "event_lever"},
+			{Name: "id", Type: "string", Value: leverID},
+		},
+	}
+
+	g := &Game{RaisedLevers: make(map[string]bool)}
+	s := &FieldScene{
+		game:       g,
+		currentMap: "test_map",
+		tileMap: TiledMap{
+			Width: 100, Height: 100, TileWidth: 16, TileHeight: 16,
+			Layers: []TiledLayer{
+				{Name: "events", Type: "objectgroup", Objects: []TiledObject{wallObj, leverObj}},
+			},
+		},
+	}
+
+	cx, cy := wallObj.X+wallObj.Width/2, wallObj.Y+wallObj.Height/2
+	if !s.isWall(cx, cy) {
+		t.Fatal("expected visual-only wall to block movement before the lever is pulled")
+	}
+
+	s.pullLever(leverObj)
+
+	if !s.wallIsOpen(wallObj) {
+		t.Fatal("expected wallIsOpen to report the wall as visually open once the lever is raised")
+	}
+	if !s.isWall(cx, cy) {
+		t.Fatal("expected passable=\"false\" wall to keep blocking movement even after the lever is raised")
+	}
+}
+
 func TestPullLeverOneWayCannotBeLowered(t *testing.T) {
 	leverObj := TiledObject{
 		X: 200, Y: 200, Width: 32, Height: 32,

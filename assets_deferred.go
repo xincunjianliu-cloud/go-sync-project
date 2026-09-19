@@ -187,7 +187,8 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		deferredAssetAssign{"assets/images/field/chest.png", func(g *Game, img *ebiten.Image) { g.ChestImg = img }},
 		deferredAssetAssign{"assets/images/field/key_chest.png", func(g *Game, img *ebiten.Image) { g.KeyChestImg = img }},
 		deferredAssetAssign{"assets/images/field/locked_wall.png", func(g *Game, img *ebiten.Image) { g.LockedWallImg = img }},
-		deferredAssetAssign{"assets/images/field/lever_wall.png", func(g *Game, img *ebiten.Image) { g.LeverWallImg = img }},
+		deferredAssetAssign{"assets/images/field/lever_wall_open.png", func(g *Game, img *ebiten.Image) { g.LeverWallOpenImg = img }},
+		deferredAssetAssign{"assets/images/field/lever_wall_open_deco.png", func(g *Game, img *ebiten.Image) { g.LeverWallOpenDecoImg = img }},
 		deferredAssetAssign{"assets/images/field/lever.png", func(g *Game, img *ebiten.Image) { g.LeverImg = img }},
 	)
 

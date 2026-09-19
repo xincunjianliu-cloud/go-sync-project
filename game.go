@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -149,11 +150,12 @@ type Game struct {
 	MinimapPlayerIconImg    *ebiten.Image
 	MinimapObjectiveIconImg *ebiten.Image
 
-	ChestImg      *ebiten.Image
-	KeyChestImg   *ebiten.Image
-	LockedWallImg *ebiten.Image
-	LeverWallImg  *ebiten.Image
-	LeverImg      *ebiten.Image
+	ChestImg             *ebiten.Image
+	KeyChestImg          *ebiten.Image
+	LockedWallImg        *ebiten.Image
+	LeverWallOpenImg     *ebiten.Image
+	LeverWallOpenDecoImg *ebiten.Image
+	LeverImg             *ebiten.Image
 
 	BlockImg     *ebiten.Image
 	BlockSpotImg *ebiten.Image
@@ -185,6 +187,17 @@ type Game struct {
 	heavyDecoded     chan decodedHeavyAsset
 	heavyAssetsReady bool
 	heavyAssetsErr   error
+
+	bootDecoded     chan bootResult
+	bootReady       bool
+	loadingAnimTime float64
+}
+
+// bootResult はloadBootAssetsAsyncが読み込む、起動直後に最低限必要な
+// アセット(フォント・タイトル背景・タイトルBGM)の結果をUpdate()側へ渡す。
+type bootResult struct {
+	fontSource *text.GoTextFaceSource
+	titleBg    image.Image
 }
 
 const mouseIdleHideDelay = 2.0
@@ -344,9 +357,8 @@ func (g *Game) ResetForNewGame() {
 	g.UpdateObjective()
 }
 
-func NewGame(source *text.GoTextFaceSource) (*Game, error) {
+func NewGame() *Game {
 	g := &Game{
-		fontSource:           source,
 		Tilesets:             make(map[string]*ebiten.Image),
 		CharaImgs:            make(map[string]*ebiten.Image),
 		OpenedChests:         make(map[string]bool),
@@ -384,28 +396,92 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 	g.Audio.SetSEVolume(settings.SEVolume)
 	g.Audio.SetMasterVolume(settings.MasterVolume)
 
-	g.TitleBgImg, _ = loadAssetImage("assets/images/title/title_bg.png")
-
-	g.currentScene = NewTitleScene(g)
-	g.Audio.PlayBGMFadeIn(bgmTitle, 2.0)
-
 	applyDisplayMode(g.Fullscreen, g.WindowWidth, g.WindowHeight)
 	if !g.Fullscreen {
 		g.WindowWidth, g.WindowHeight = ebiten.WindowSize()
 	}
 	g.lastWindowW, g.lastWindowH = g.WindowWidth, g.WindowHeight
 
-	// ボス・敵・メニューなどタイトル画面自体には不要な画像とデータは、
-	// タイトル画面を即座に表示できるようバックグラウンドで読み込む。
-	// 完了まではTitleScene側でheavyAssetsReadyを見て先の画面に進ませない。
-	g.heavyDecoded = make(chan decodedHeavyAsset, 32)
-	go g.loadHeavyAssetsAsync()
+	// フォント・タイトル背景・タイトルBGMは起動直後の表示に最低限必要な
+	// アセットだが、Web版はすべてネットワーク取得になる。順番に待つと
+	// フェッチ回数分の往復時間が積み重なって初回表示が遅くなるため、
+	// 3つとも並列にバックグラウンドで取得する。完了までのUpdate/Drawは
+	// pumpBootAssets/drawLoadingIndicatorがローディング表示だけを進める。
+	g.bootDecoded = make(chan bootResult, 1)
+	go g.loadBootAssetsAsync()
 
-	return g, nil
+	return g
+}
+
+// loadBootAssetsAsync は起動直後に必要なフォント・タイトル背景・タイトルBGMを
+// 並列に先読みし、フォントソースの生成(CPUのみで完結しGPUテクスチャを
+// 作らないためメインゴルーチン以外でも安全)まで済ませてbootDecodedへ送る。
+// タイトルBGMはここではまだ再生しない(AudioManager.PlayBGMFadeInの再生開始は
+// pumpBootAssets側、メインゴルーチンで行う)が、バイト列だけprefetchAssetBytes
+// 経由でキャッシュしておくことで、再生時にネットワーク待ちが発生しなくなる。
+func (g *Game) loadBootAssetsAsync() {
+	defer close(g.bootDecoded)
+
+	prefetchAssetBytes([]string{
+		"assets/fonts/k8x12.ttf",
+		"assets/images/title/title_bg.png",
+		bgmTitle,
+	})
+
+	fontData, err := loadAssetBytesCached("assets/fonts/k8x12.ttf")
+	if err != nil {
+		log.Fatal("フォントファイルの読み込みに失敗しました: ", err)
+	}
+	source, err := text.NewGoTextFaceSource(bytes.NewReader(fontData))
+	if err != nil {
+		log.Fatal("フォントソースの生成に失敗しました: ", err)
+	}
+
+	titleBg, _ := decodeAssetImage("assets/images/title/title_bg.png")
+
+	g.bootDecoded <- bootResult{fontSource: source, titleBg: titleBg}
+}
+
+// pumpBootAssets はUpdate()から毎フレーム呼ばれ、起動直後のフォント・
+// タイトル背景の読み込み完了を待つ。完了したらタイトル画面を組み立てて
+// BGMを再生し、続けて戦闘・メニュー用画像のバックグラウンド読み込みを
+// 開始する。
+func (g *Game) pumpBootAssets() {
+	if g.bootReady || g.bootDecoded == nil {
+		return
+	}
+	select {
+	case item, ok := <-g.bootDecoded:
+		if !ok {
+			return
+		}
+		g.fontSource = item.fontSource
+		if item.titleBg != nil {
+			g.TitleBgImg = ebiten.NewImageFromImage(item.titleBg)
+		}
+
+		g.currentScene = NewTitleScene(g)
+		g.Audio.PlayBGMFadeIn(bgmTitle, 2.0)
+
+		// ボス・敵・メニューなどタイトル画面自体には不要な画像とデータは、
+		// タイトル画面を即座に表示できるようバックグラウンドで読み込む。
+		// 完了まではTitleScene側でheavyAssetsReadyを見て先の画面に進ませない。
+		g.heavyDecoded = make(chan decodedHeavyAsset, 32)
+		go g.loadHeavyAssetsAsync()
+
+		g.bootReady = true
+	default:
+	}
 }
 
 func (g *Game) Update() error {
 	dt := 1.0 / 60.0
+
+	g.loadingAnimTime += dt
+	g.pumpBootAssets()
+	if !g.bootReady {
+		return nil
+	}
 
 	g.pumpHeavyAssets()
 
@@ -469,12 +545,22 @@ func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	if !g.bootReady {
+		screen.Fill(color.RGBA{10, 10, 30, 255})
+		drawLoadingIndicator(screen, g.loadingAnimTime)
+		return
+	}
+
 	if g.currentScene != nil {
 		g.currentScene.Draw(screen)
 	}
 
 	if g.fadeAlpha > 0 {
 		ebitenutil.DrawRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, uint8(255 * g.fadeAlpha)})
+	}
+
+	if !g.heavyAssetsReady {
+		drawLoadingIndicator(screen, g.loadingAnimTime)
 	}
 }
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {

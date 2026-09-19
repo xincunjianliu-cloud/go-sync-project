@@ -58,6 +58,12 @@ func isLockedWallObj(p map[string]string) bool {
 	return isWallObj(p) && p["lever"] == ""
 }
 
+// isLeverWallVisualOnly はレバーを上げても見た目が変わるだけで、
+// 通行可否には影響しない壁(passable="false"指定)。
+func isLeverWallVisualOnly(p map[string]string) bool {
+	return p["passable"] == "false"
+}
+
 func isLeverObj(p map[string]string) bool {
 	return p["type"] == evTypeEvent && p["text"] == evTextLever
 }

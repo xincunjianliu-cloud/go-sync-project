@@ -838,7 +838,7 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 			p := objProps(obj)
 			switch {
 			case isWallObj(p):
-				if s.wallIsOpen(obj) {
+				if s.wallIsOpen(obj) && !isLeverWallVisualOnly(p) {
 					continue
 				}
 			case isBlockDoorObj(p):
