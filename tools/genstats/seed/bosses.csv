@@ -1,0 +1,5 @@
+Key,Lv,Exp,HP,MP,PhysAtk,MagicAtk,PhysDef,MagicDef,Spd,SP,Element,ResistFire,ResistLightning,ResistIce,ResistWind
+boss_1,15,80,200,50,20,16,1200,1000,18,300,fire,30,-30,0,0
+boss_2,20,100,250,60,24,19,14,12,20,400,lightning,0,30,-30,0
+boss_3,25,130,300,70,27,22,16,14,22,500,ice,0,-30,30,0
+boss_4,35,500,600,100,40,32,26,24,30,1919,wind,0,0,-30,30

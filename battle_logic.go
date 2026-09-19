@@ -10,6 +10,72 @@ import (
 
 const debugModeEnabled = true
 
+// nextUnlockedSkillIndex moves the skill menu cursor by dir (+1/-1),
+// wrapping around, skipping over skills the character hasn't unlocked yet.
+func (s *BattleScene) nextUnlockedSkillIndex(charIdx, from, dir, n int) int {
+	idx := from
+	for i := 0; i < n; i++ {
+		idx = (idx + dir + n) % n
+		if s.game.IsSkillUnlocked(charIdx, idx) {
+			return idx
+		}
+	}
+	return from
+}
+
+func (s *BattleScene) firstUnlockedSkillIndex(charIdx int, skills []SkillDef) int {
+	for i := range skills {
+		if s.game.IsSkillUnlocked(charIdx, i) {
+			return i
+		}
+	}
+	return 0
+}
+
+// skillUnlockedByDrawLevel reports whether the level animation currently
+// displayed for character i (s.drawPlayerLv[i]) has reached or passed a
+// skill's UnlockLevel that wasn't already reached before this battle's
+// level-up animation started (s.resultStartLevel[i]).
+func (s *BattleScene) skillUnlockedByDrawLevel(i int) bool {
+	for _, sk := range s.game.CharacterSkills(i) {
+		if sk.UnlockLevel > s.resultStartLevel[i] && sk.UnlockLevel <= s.drawPlayerLv[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// spawnDamagePop adds a damage/heal popup, nudging it sideways when another
+// very recent popup already occupies roughly the same spot so consecutive
+// hits on the same target don't render on top of each other.
+func (s *BattleScene) spawnDamagePop(pop DamagePop) {
+	const overlapRadiusX = 26.0
+	const overlapRadiusY = 30.0
+	const overlapFreshWindow = 0.2
+	const stackStepX = 22.0
+	const stackStepY = -10.0
+
+	stack := 0
+	for _, existing := range s.damagePops {
+		if existing.Timer < 0 || existing.Timer > overlapFreshWindow {
+			continue
+		}
+		if math.Abs(existing.X-pop.X) < overlapRadiusX && math.Abs(existing.Y-pop.Y) < overlapRadiusY {
+			stack++
+		}
+	}
+	if stack > 0 {
+		dir := 1.0
+		if stack%2 == 0 {
+			dir = -1.0
+		}
+		step := float64((stack + 1) / 2)
+		pop.X += dir * step * stackStepX
+		pop.Y += step * stackStepY
+	}
+	s.damagePops = append(s.damagePops, pop)
+}
+
 func (s *BattleScene) applyDebugCheats() {
 	if !debugModeEnabled {
 		return
@@ -89,6 +155,34 @@ func (s *BattleScene) applyDebugCheats() {
 			s.game.PlayerHP[i] = 0
 		}
 		s.checkBattleEnd()
+
+	case inpututil.IsKeyJustPressed(ebiten.KeyB):
+		if s.debugStatIconTest {
+			for i := 0; i < partySize; i++ {
+				s.PlayerBuffs[i] = nil
+				s.PlayerDebuffs[i] = nil
+			}
+			s.debugStatIconTest = false
+			s.battleLog = "ステータスアイコンのテスト表示を解除（デバッグ）"
+		} else {
+			const testTurns = 999
+			s.PlayerBuffs[0] = []Buff{{Type: StatAtk, Percent: 20, Turns: testTurns}}
+			s.PlayerBuffs[1] = []Buff{
+				{Type: StatAtk, Percent: 20, Turns: testTurns},
+				{Type: StatDef, Percent: 20, Turns: testTurns},
+				{Type: StatLuk, Percent: 20, Turns: testTurns},
+			}
+			s.PlayerDebuffs[1] = []Debuff{
+				{Type: StatMat, Percent: 20, Turns: testTurns},
+				{Type: StatMdf, Percent: 20, Turns: testTurns},
+			}
+			s.PlayerDebuffs[2] = []Debuff{{Type: StatDef, Percent: 20, Turns: testTurns}}
+			s.PlayerBuffs[3] = []Buff{{Type: StatLuk, Percent: 20, Turns: testTurns}}
+			s.PlayerDebuffs[3] = []Debuff{{Type: StatDef, Percent: 20, Turns: testTurns}}
+			s.debugStatIconTest = true
+			s.battleLog = "ステータスアイコンのテスト表示（デバッグ）"
+		}
+		s.battleLogTimer = battleLogDuration
 	}
 }
 
@@ -226,10 +320,9 @@ func (s *BattleScene) Update(dt float64) Scene {
 					break
 				}
 			}
-			initialTimer, dx, dy := 0.0, 0.0, 0.0
+			initialTimer, dy := 0.0, 0.0
 			if s.pendingDamage2Scheduled && !secondHasDamage {
 				initialTimer = -0.18
-				dx = -12.0
 				dy = -8.0
 				s.pendingDamage2Scheduled = false
 			}
@@ -248,11 +341,11 @@ func (s *BattleScene) Update(dt float64) Scene {
 				} else {
 					s.game.Audio.PlaySEByKey("damage")
 				}
-				x, y, w, _ := s.enemyDrawRect(hit.slot)
-				s.damagePops = append(s.damagePops, DamagePop{
+				x, y, w, eh := s.enemyDrawRect(hit.slot)
+				s.spawnDamagePop(DamagePop{
 					Value:  hit.dmg,
-					X:      x + w/2 - 10.0 + dx,
-					Y:      y - 15.0 + dy,
+					X:      x + w/2,
+					Y:      y - eh*damagePopHeadOffsetRatio + dy,
 					Vy:     -180.0,
 					Timer:  initialTimer,
 					IsCrit: hit.crit,
@@ -428,8 +521,10 @@ func (s *BattleScene) Update(dt float64) Scene {
 	var activePops []DamagePop
 	for _, pop := range s.damagePops {
 		pop.Timer += dt
-		pop.Vy *= math.Pow(0.05, dt)
-		pop.Y += pop.Vy * dt
+		if pop.IsHeal {
+			pop.Vy *= math.Pow(0.05, dt)
+			pop.Y += pop.Vy * dt
+		}
 		if pop.Timer <= 1.6 {
 			activePops = append(activePops, pop)
 		}
@@ -537,6 +632,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 					s.drawPlayerEXP[i] = s.expStartEXP[i]
 					s.drawPlayerEXPF[i] = float64(s.expStartEXP[i])
 					s.isLevelUp[i] = s.game.PlayerLv[i] > s.drawPlayerLv[i]
+					s.resultStartLevel[i] = s.drawPlayerLv[i]
 					ratio := float64(s.totalEnemyExp()) / float64(s.drawPlayerMaxEXP[i])
 					if ratio > 1.0 {
 						ratio = 1.0
@@ -593,7 +689,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 				return s
 			}
 
-			const expPerSec = 5.0
 			allFinished := true
 			for i := 0; i < partySize; i++ {
 				if s.game.PlayerHP[i] <= 0 {

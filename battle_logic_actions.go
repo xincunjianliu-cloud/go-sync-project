@@ -127,11 +127,11 @@ func (s *BattleScene) tryWaitSynergy() bool {
 			s.game.Audio.PlaySEByKey("damage")
 		}
 		s.applyDamageToEnemySlot(slot, dmg)
-		cx, _ := s.enemyCenter(slot)
-		s.damagePops = append(s.damagePops, DamagePop{
+		ex, ey, ew, eh := s.enemyDrawRect(slot)
+		s.spawnDamagePop(DamagePop{
 			Value:  dmg,
-			X:      cx - 8.0,
-			Y:      100.0,
+			X:      ex + ew/2,
+			Y:      ey - eh*damagePopHeadOffsetRatio,
 			Vy:     -180.0,
 			Timer:  0.0,
 			IsCrit: s.lastRollWasCrit,
@@ -252,8 +252,8 @@ func (s *BattleScene) beginEnemyHitStop() {
 func (s *BattleScene) applyEnemyPendingHits() {
 	for _, hit := range s.pendingEnemyHits {
 		target := hit.target
-		targetX := s.partyScreenX[target]
-		targetY := s.partyScreenY[target] - 30.0
+		targetX := s.partyScreenX[target] + spriteFrameW/2
+		targetY := s.partyScreenY[target] - partyDamagePopOffsetY
 
 		if hit.evaded {
 			s.lastEnemyAttackTarget = target
@@ -261,7 +261,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 			s.lastEnemyAttackDamage = 0
 			s.evadeOffsetX[target] = evadeDodgeShiftX
 			s.game.Audio.PlaySEByKey("evade")
-			s.damagePops = append(s.damagePops, DamagePop{
+			s.spawnDamagePop(DamagePop{
 				X:      targetX,
 				Y:      targetY,
 				Vy:     -180.0,
@@ -280,7 +280,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 
 		s.game.PlayerHP[target] -= dmg
 
-		s.damagePops = append(s.damagePops, DamagePop{
+		s.spawnDamagePop(DamagePop{
 			Value: dmg,
 			X:     targetX,
 			Y:     targetY,
@@ -473,6 +473,24 @@ func (s *BattleScene) updateTargetSelect() {
 		}
 	}
 
+	if alive := s.aliveEnemyIndices(); len(alive) > 0 && (isMenuUpPressed() || isMenuDownPressed()) {
+		curPos := 0
+		for i, slot := range alive {
+			if slot == s.targetIndex {
+				curPos = i
+				break
+			}
+		}
+		if isMenuDownPressed() {
+			curPos = (curPos + 1) % len(alive)
+		} else {
+			curPos = (curPos - 1 + len(alive)) % len(alive)
+		}
+		s.targetIndex = alive[curPos]
+		s.selectedSkillTarget = TargetSingle
+		s.game.Audio.PlaySEByKey("cursor")
+	}
+
 	tappedIdx, tappedOk := s.hitTestEnemyTarget()
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.targetIndex, s.game.Audio)
 	if tappedOk {
@@ -639,11 +657,11 @@ func (s *BattleScene) updateHealTargetSelect() {
 			if s.game.PlayerHP[i] > s.game.PlayerMaxHP[i] {
 				s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
 			}
-			s.damagePops = append(s.damagePops, DamagePop{
+			s.spawnDamagePop(DamagePop{
 				Value:  healAmount,
-				X:      s.partyScreenX[i],
-				Y:      s.partyScreenY[i] - 30.0,
-				Vy:     -80.0,
+				X:      s.partyScreenX[i] + spriteFrameW/2,
+				Y:      s.partyScreenY[i] - partyDamagePopOffsetY,
+				Vy:     -45.0,
 				Timer:  0.0,
 				IsHeal: true,
 			})
@@ -654,11 +672,11 @@ func (s *BattleScene) updateHealTargetSelect() {
 				if s.game.PlayerHP[i] > s.game.PlayerMaxHP[i] {
 					s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
 				}
-				s.damagePops = append(s.damagePops, DamagePop{
+				s.spawnDamagePop(DamagePop{
 					Value:  healAmount2,
-					X:      s.partyScreenX[i] - 12.0,
-					Y:      s.partyScreenY[i] - 40.0,
-					Vy:     -80.0,
+					X:      s.partyScreenX[i] + spriteFrameW/2,
+					Y:      s.partyScreenY[i] - partyDamagePopOffsetY - 10.0,
+					Vy:     -45.0,
 					Timer:  -0.18,
 					IsHeal: true,
 				})
@@ -687,11 +705,11 @@ func (s *BattleScene) updateHealTargetSelect() {
 		if s.game.PlayerHP[target] > s.game.PlayerMaxHP[target] {
 			s.game.PlayerHP[target] = s.game.PlayerMaxHP[target]
 		}
-		s.damagePops = append(s.damagePops, DamagePop{
+		s.spawnDamagePop(DamagePop{
 			Value:  healAmount,
-			X:      s.partyScreenX[target],
-			Y:      s.partyScreenY[target] - 30.0,
-			Vy:     -80.0,
+			X:      s.partyScreenX[target] + spriteFrameW/2,
+			Y:      s.partyScreenY[target] - partyDamagePopOffsetY,
+			Vy:     -45.0,
 			Timer:  0.0,
 			IsHeal: true,
 		})
@@ -702,11 +720,11 @@ func (s *BattleScene) updateHealTargetSelect() {
 			if s.game.PlayerHP[target] > s.game.PlayerMaxHP[target] {
 				s.game.PlayerHP[target] = s.game.PlayerMaxHP[target]
 			}
-			s.damagePops = append(s.damagePops, DamagePop{
+			s.spawnDamagePop(DamagePop{
 				Value:  healAmount2,
-				X:      s.partyScreenX[target] - 12.0,
-				Y:      s.partyScreenY[target] - 40.0,
-				Vy:     -80.0,
+				X:      s.partyScreenX[target] + spriteFrameW/2,
+				Y:      s.partyScreenY[target] - partyDamagePopOffsetY - 10.0,
+				Vy:     -45.0,
 				Timer:  -0.18,
 				IsHeal: true,
 			})

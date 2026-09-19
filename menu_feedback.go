@@ -34,7 +34,7 @@ func (m *MenuScene) drawNotice(screen *ebiten.Image) bool {
 	op.GeoM.Translate(float64(gameWidth)-menuDescOffsetX, float64(gameHeight)-menuDescOffsetY)
 	op.PrimaryAlign = text.AlignEnd
 	op.ColorScale.ScaleWithColor(uiColorSelect)
-	text.Draw(screen, m.notice, m.game.FontFace(14), op)
+	text.Draw(screen, m.notice, m.game.FontFace(menuDescFontSize), op)
 	return true
 }
 

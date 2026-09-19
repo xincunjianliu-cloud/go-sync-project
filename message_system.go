@@ -165,7 +165,8 @@ func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*eb
 // Draw renders the message box for cmd. size is the nominal font size.
 func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, size float64) {
 	winOp := &ebiten.DrawImageOptions{}
-	winOp.GeoM.Translate(0, 0)
+	winY := float64(gameHeight - m.WindowImg.Bounds().Dy())
+	winOp.GeoM.Translate(0, winY)
 	winOp.Filter = ebiten.FilterNearest
 	screen.DrawImage(m.WindowImg, winOp)
 

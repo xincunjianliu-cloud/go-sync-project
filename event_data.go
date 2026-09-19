@@ -22,7 +22,15 @@ type BossDialogue struct {
 var bossBattleDialogues = map[int]BossDialogue{}
 var bossClearDialogues = map[int]BossDialogue{}
 
-var storyDialogues = map[string]BossDialogue{}
+// storyDialogueEntry は1つの会話イベントの初回セリフと2回目以降セリフを
+// 1つのJSONオブジェクトにまとめたもの(story.json参照)。Repeatは任意で、
+// 省略された場合はFirstがそのまま繰り返される。
+type storyDialogueEntry struct {
+	First  BossDialogue
+	Repeat BossDialogue
+}
+
+var storyDialogues = map[string]storyDialogueEntry{}
 
 type dialogueCommandJSON struct {
 	Speaker string `json:"speaker"`
@@ -114,6 +122,11 @@ func LoadDialogues(dir string) error {
 	return nil
 }
 
+type storyDialogueFileJSON struct {
+	First  *bossDialogueJSON `json:"first"`
+	Repeat *bossDialogueJSON `json:"repeat"`
+}
+
 func loadStoryDialogues(dir string) {
 	filePath := path.Join(dir, "story.json")
 
@@ -122,14 +135,16 @@ func loadStoryDialogues(dir string) {
 		return
 	}
 
-	var fileJSON map[string]bossDialogueJSON
+	var fileJSON map[string]storyDialogueFileJSON
 	if err := json.Unmarshal(data, &fileJSON); err != nil {
 		return
 	}
 
 	for id, entry := range fileJSON {
-		entry := entry
-		storyDialogues[id] = filterEmptyCommands(convertBossDialogue(&entry))
+		storyDialogues[id] = storyDialogueEntry{
+			First:  filterEmptyCommands(convertBossDialogue(entry.First)),
+			Repeat: filterEmptyCommands(convertBossDialogue(entry.Repeat)),
+		}
 	}
 }
 
@@ -161,9 +176,18 @@ func GetEventCommands(eventID string, game *Game) BossDialogue {
 	return bossBattleDialogues[bossNum]
 }
 
-func GetStoryDialogue(id string) (BossDialogue, bool) {
-	d, ok := storyDialogues[id]
-	return d, ok
+// GetStoryDialogue はstory.jsonのidに対応する会話を返す。repeatがtrueで
+// かつそのidに"repeat"セリフが個別に用意されていればそちらを、
+// 無ければ"first"(初回セリフ)をそのまま返す。
+func GetStoryDialogue(id string, repeat bool) (BossDialogue, bool) {
+	entry, ok := storyDialogues[id]
+	if !ok {
+		return BossDialogue{}, false
+	}
+	if repeat && len(entry.Repeat.Commands) > 0 {
+		return entry.Repeat, true
+	}
+	return entry.First, true
 }
 
 func filterEmptyCommands(d BossDialogue) BossDialogue {

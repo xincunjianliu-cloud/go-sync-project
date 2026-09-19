@@ -6,3 +6,10 @@ git add .
 git commit -m "コードを書いたよ"
 git push origin main
 （手元の変更をクラウドにアップロードする）
+
+git add -A
+git commit -m "更新内容"
+git push origin main
+
+
+go run ./tools/genstats

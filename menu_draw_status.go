@@ -210,10 +210,6 @@ func statusPartyArrowX(g *Game) (leftX, rightX float64) {
 	return
 }
 
-func (m *MenuScene) lookupCharaImage(i int) *ebiten.Image {
-	return nil
-}
-
 const maxSlotScrollTop = maxSaveSlots - slotsPerPageView
 
 func clampSlotScrollTop(scrollTop, selectedIndex int) int {

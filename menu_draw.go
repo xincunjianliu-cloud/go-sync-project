@@ -9,15 +9,24 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
+// メニューのステータスボックスは、位置(x/y/行間/レベルx/アイコン位置)以外
+// すべてバトル側の定数・関数をそのまま使う。数値/バーはdrawStatusBox
+// （battle_draw_panels.go、statusValueOffsetX / statusHPTextY / statusHPBarY /
+// statusMPTextY / statusMPBarY / statusBlockW など battle_types.go 参照）、
+// 名前のフォントサイズもpartyNameFontSize（battle_types.go）を流用する。
+// メニュー画面独自に定数化してよいのは以下の6つ（ブロックの位置x/y、行間、
+// レベルのx位置、アイコンの位置x/y）だけで、それ以外はここで新しく定数や
+// 描画ロジックを作らないこと。カーソル「▶」は名前の描画位置から自動で
+// 逆算して置くので、個別の位置調整は不要（かつ用意しない）。
 const (
-	menuStatusOffsetX  = 275.0
+	menuStatusOffsetX  = 280.0
 	menuStatusStartY   = 40.0
 	menuStatusSpacingY = 116.0
-	menuStatusFontSize = 15.0
-	menuStatusCursorX  = 0.0
-	menuStatusNameX    = 20.0
-	menuStatusLevelX   = 135.0
-	menuBarW           = 160.0
+	menuStatusLevelX   = 110.0
+
+	// アイコン画像のオフセット（右端合わせ/縦中央合わせの基準座標からのずれ）。
+	menuStatusIconOffsetX = -5.0
+	menuStatusIconOffsetY = 38.0
 )
 
 const (
@@ -133,14 +142,14 @@ func (m *MenuScene) drawAllTargetRow(screen *ebiten.Image, statusX float64) {
 	}
 
 	iconW := float64(m.game.PartyIconImgs[0].Bounds().Dx())
-	boxX := statusX - iconW + 10 + drawAllTargetRowBoxInset
-	boxRight := statusX + menuStatusNameX + menuBarW - drawAllTargetRowBoxInset
+	boxX := statusX - iconW + menuStatusIconOffsetX + drawAllTargetRowBoxInset
+	boxRight := statusX + partyNameOffsetX + statusBlockW - drawAllTargetRowBoxInset
 	boxW := boxRight - boxX
 	boxY := y - drawAllTargetRowBoxH/2
 
 	ebitenutil.DrawRect(screen, boxX, boxY, boxW, drawAllTargetRowBoxH, boxFillCol)
 
-	nameFace := m.game.FontFace(menuStatusFontSize)
+	nameFace := m.game.FontFace(partyNameFontSize)
 	textCenterX := boxX + boxW/2
 
 	if selected {
@@ -240,6 +249,8 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 	for i := 0; i < 4; i++ {
 		itemY := menuStatusStartY + float64(i)*menuStatusSpacingY
 
+		isDead := m.game.PlayerHP[i] <= 0
+
 		textColor := uiColorText
 		inSkillCharFlow := m.menuState == menuStateSkillCharSel ||
 			m.menuState == menuStateSkillSub
@@ -254,11 +265,11 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 			(m.itemTargetIndex == i || m.itemTargetIndex == partySize) {
 			textColor = uiColorSelect
 		}
-		if m.game.PlayerHP[i] <= 0 {
+		if isDead {
 			textColor = uiColorDead
 		}
 		alpha := 1.0
-		if m.game.PlayerHP[i] <= 0 {
+		if isDead {
 			alpha = 0.4
 		}
 
@@ -266,8 +277,8 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		iw := float64(img.Bounds().Dx())
 		ih := float64(img.Bounds().Dy())
 		iconOp := &ebiten.DrawImageOptions{}
-		iconOp.GeoM.Translate(statusX-iw+10, itemY-ih/2+35)
-		if m.game.PlayerHP[i] <= 0 {
+		iconOp.GeoM.Translate(statusX-iw+menuStatusIconOffsetX, itemY-ih/2+menuStatusIconOffsetY)
+		if isDead {
 			iconOp.ColorScale.Scale(1, 1, 1, float32(alpha))
 		}
 		screen.DrawImage(img, iconOp)
@@ -284,55 +295,38 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 			(m.itemTargetIndex == i || m.itemTargetIndex == partySize) {
 			prefix = "▶ "
 		}
+		// 名前・カーソル・レベルはすべて同じフォント(partyNameFontSize、
+		// battle_types.go)と同じ基準（partyNameOffsetX/Y、常に0、縦方向の
+		// アラインも指定しない＝バトルのdrawBattleOutlinedTextと同じ既定値）
+		// をstatusX/itemYに適用しただけの位置（個別の位置調整はしない）。
+		nameFace := m.game.FontFace(partyNameFontSize)
+		nameX := statusX + partyNameOffsetX
+		nameY := itemY + partyNameOffsetY
+
 		prefixOp := &text.DrawOptions{}
-		prefixOp.GeoM.Translate(statusX+menuStatusCursorX, itemY)
+		prefixOp.GeoM.Translate(nameX-text.Advance(prefix, nameFace), nameY)
 		prefixOp.ColorScale.ScaleWithColor(textColor)
-		text.Draw(screen, prefix, m.game.FontFace(menuStatusFontSize), prefixOp)
+		text.Draw(screen, prefix, nameFace, prefixOp)
 
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(statusX+menuStatusNameX, itemY+12)
-		nameOp.SecondaryAlign = text.AlignEnd
+		nameOp.GeoM.Translate(nameX, nameY)
 		nameOp.ColorScale.ScaleWithColor(textColor)
-		text.Draw(screen, PlayerNames[i], m.game.FontFace(partyNameFontSize), nameOp)
+		text.Draw(screen, PlayerNames[i], nameFace, nameOp)
 
 		levelOp := &text.DrawOptions{}
-		levelOp.GeoM.Translate(statusX+menuStatusLevelX, itemY+12)
-		levelOp.SecondaryAlign = text.AlignEnd
+		levelOp.GeoM.Translate(statusX+menuStatusLevelX, itemY+partyNameOffsetY)
 		levelOp.ColorScale.ScaleWithColor(textColor)
-		text.Draw(screen, fmt.Sprintf("Lv %d", m.game.PlayerLv[i]), m.game.FontFace(menuStatusFontSize), levelOp)
+		text.Draw(screen, fmt.Sprintf("Lv %d", m.game.PlayerLv[i]), nameFace, levelOp)
 
-		drawStatusValue(screen,
-			statusX+20, itemY+18,
+		valueColor := uiColorText
+		if isDead {
+			valueColor = uiColorDead
+		}
+
+		drawStatusBox(screen, m.game, statusX, itemY,
 			m.game.PlayerHP[i], m.game.PlayerMaxHP[i],
-			m.game.FontFace(statusValueFontSizeLarge), m.game.FontFace(statusValueFontSizeSmall), alpha, uiColorText)
-
-		hpRatio := 0.0
-		if m.game.PlayerMaxHP[i] > 0 {
-			hpRatio = float64(m.game.PlayerHP[i]) / float64(m.game.PlayerMaxHP[i])
-		}
-		drawSlantedStatusBar(screen,
-			statusX+20-statusBarSlant, itemY+36,
-			menuBarW, statusBarH, statusBarSlant, hpRatio,
-			scaleAlpha(color.RGBA{75, 171, 120, 255}, alpha),
-			scaleAlpha(color.RGBA{20, 50, 30, 255}, alpha),
-			scaleAlpha(color.RGBA{41, 94, 66, 255}, alpha))
-
-		drawStatusValue(screen,
-			statusX+20, itemY+48,
 			m.game.PlayerMP[i], m.game.PlayerMaxMP[i],
-			m.game.FontFace(statusValueFontSizeLarge), m.game.FontFace(statusValueFontSizeSmall), alpha, uiColorText)
-
-		mpRatio := 0.0
-		if m.game.PlayerMaxMP[i] > 0 {
-			mpRatio = float64(m.game.PlayerMP[i]) / float64(m.game.PlayerMaxMP[i])
-		}
-		drawSlantedStatusBar(screen,
-			statusX+20-statusBarSlant, itemY+66,
-			menuBarW, statusBarH, statusBarSlant, mpRatio,
-			scaleAlpha(color.RGBA{75, 105, 171, 255}, alpha),
-			scaleAlpha(color.RGBA{20, 30, 55, 255}, alpha),
-			scaleAlpha(color.RGBA{41, 58, 94, 255}, alpha))
-
+			alpha, valueColor, isDead)
 	}
 
 	m.drawAllTargetRow(screen, statusX)
@@ -376,6 +370,7 @@ const (
 	skillRequiredSPOffsetX = 23.0
 	skillRequiredSPOffsetY = 18.0
 	skillBottomFontSize    = 15.0
+	skillSPHeaderFontSize  = 20.0
 
 	skillSPHeaderX = 920.0
 	skillSPHeaderY = 20.0
@@ -386,12 +381,15 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 	spHeaderOp.GeoM.Translate(skillSPHeaderX, skillSPHeaderY)
 	spHeaderOp.PrimaryAlign = text.AlignEnd
 	spHeaderOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, fmt.Sprintf("所持SP: %d", m.game.PlayerSP[m.skillCharIndex]), m.game.FontFace(skillBottomFontSize), spHeaderOp)
+	text.Draw(screen, fmt.Sprintf("所持SP: %d", m.game.PlayerSP[m.skillCharIndex]), m.game.FontFace(skillSPHeaderFontSize), spHeaderOp)
 
 	skills := m.game.CharacterSkills(m.skillCharIndex)
 
 	for i, sk := range skills {
 		if len(sk.Levels) == 0 {
+			continue
+		}
+		if !m.game.IsSkillUnlocked(m.skillCharIndex, i) {
 			continue
 		}
 		curLv := m.game.PlayerSkillLv[m.skillCharIndex][i]

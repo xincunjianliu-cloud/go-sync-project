@@ -219,12 +219,21 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 			}
 		}
 
-		if s.isLevelUp[i] && s.game.PlayerHP[i] > 0 && s.drawPlayerLv[i] >= s.game.PlayerLv[i] {
+		if s.isLevelUp[i] && s.game.PlayerHP[i] > 0 && s.drawPlayerLv[i] > s.resultStartLevel[i] {
 			lvOp := &text.DrawOptions{}
 			lvOp.GeoM.Translate(barX+resultLevelUpOffsetX, barY+resultLevelUpOffsetY)
 			lvOp.ColorScale.ScaleWithColor(resultLevelUpColor)
 			lvOp.ColorScale.ScaleAlpha(panelAlpha)
 			text.Draw(screen, "LEVEL UP!", s.game.FontFace(resultLevelUpFontSize), lvOp)
+
+			if s.skillUnlockedByDrawLevel(i) {
+				skillOp := &text.DrawOptions{}
+				skillOp.PrimaryAlign = text.AlignEnd
+				skillOp.GeoM.Translate(barX+barW, barY+resultLevelUpOffsetY)
+				skillOp.ColorScale.ScaleWithColor(resultSkillUnlockColor)
+				skillOp.ColorScale.ScaleAlpha(panelAlpha)
+				text.Draw(screen, "スキル解放！", s.game.FontFace(resultSkillUnlockFontSize), skillOp)
+			}
 		}
 	}
 
@@ -260,17 +269,6 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		hintOp.ColorScale.ScaleWithColor(uiColorText)
 		text.Draw(screen, "Enter / Space / Z で進む", s.game.FontFace(resultHintFontSize), hintOp)
 	}
-}
-
-func (s *BattleScene) drawControlHint(screen *ebiten.Image, hint string) {
-	if hint == "" {
-		return
-	}
-	op := &text.DrawOptions{}
-	op.GeoM.Translate(float64(gameWidth)/2, hintY)
-	op.PrimaryAlign = text.AlignCenter
-	op.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, hint, s.game.FontFace(15), op)
 }
 
 func (s *BattleScene) drawBottomDescription(screen *ebiten.Image, desc string, hint string) {
@@ -380,11 +378,83 @@ func drawSlantedStatusBar(screen *ebiten.Image, x, y, w, h, slant, ratio float64
 	}
 }
 
-// 以下はすべて、ステータスブロックの左上角（baseX/baseY = drawStatusBar の
-// xPos/winY）を基準にした個別オフセット。
+// drawStatusBox draws the HP/MP number+bar pairs shared by the battle HUD
+// and the menu party list, anchored at sx/sy (the block's base position —
+// partyNamePosition's return value in battle, or the menu's equivalent
+// statusX/itemY). This is the single place that lays out the status box
+// content itself; battle_draw_hud.go and menu_draw.go both call this instead
+// of re-implementing it, so the two screens cannot drift apart. alpha is a
+// plain fade multiplier (intro fade-in in battle, dead-row dimming in the
+// menu); isDead switches the bar palette to gray and the value text to
+// valueColor, matching the original battle behavior.
+func drawStatusBox(screen *ebiten.Image, g *Game, sx, sy float64, hp, maxHP, mp, maxMP int, alpha float64, valueColor color.RGBA, isDead bool) {
+	hpRatio := 0.0
+	if maxHP > 0 {
+		hpRatio = float64(hp) / float64(maxHP)
+	}
+	if hpRatio > 1.0 {
+		hpRatio = 1.0
+	}
+
+	drawStatusValue(screen, sx+statusValueOffsetX, sy+statusHPTextY, hp, maxHP,
+		g.FontFace(statusValueFontSizeLarge), g.FontFace(statusValueFontSizeSmall), alpha, valueColor)
+
+	if isDead {
+		drawSlantedStatusBar(screen, sx, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
+			scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
+			scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
+			scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
+	} else {
+		drawSlantedStatusBar(screen, sx, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
+			scaleAlpha(color.RGBA{75, 171, 120, 255}, alpha),
+			scaleAlpha(color.RGBA{20, 50, 30, 255}, alpha),
+			scaleAlpha(color.RGBA{41, 94, 66, 255}, alpha))
+	}
+
+	mpRatio := 0.0
+	if maxMP > 0 {
+		mpRatio = float64(mp) / float64(maxMP)
+	}
+	if mpRatio > 1.0 {
+		mpRatio = 1.0
+	}
+
+	drawStatusValue(screen, sx+statusValueOffsetX, sy+statusMPTextY, mp, maxMP,
+		g.FontFace(statusValueFontSizeLarge), g.FontFace(statusValueFontSizeSmall), alpha, valueColor)
+
+	if isDead {
+		drawSlantedStatusBar(screen, sx, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
+			scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
+			scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
+			scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
+	} else {
+		drawSlantedStatusBar(screen, sx, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
+			scaleAlpha(color.RGBA{75, 105, 171, 255}, alpha),
+			scaleAlpha(color.RGBA{20, 30, 55, 255}, alpha),
+			scaleAlpha(color.RGBA{41, 58, 94, 255}, alpha))
+	}
+}
+
+// partyNamePosition returns the i-th party member's name draw position
+// (baseX/baseY), in screen coordinates. This IS the name's position
+// (partyNameOffsetX/Y below are applied on top and are 0) — every other
+// status-block offset defined here (and statusHPTextY/statusHPBarY/
+// statusMPTextY/statusMPBarY/statusValueOffsetX/statusBlockW in
+// battle_types.go) is positioned relative to this same point. menu_draw.go
+// reuses these same constants directly instead of defining its own
+// equivalents, so this must not be computed ad hoc elsewhere.
+func partyNamePosition(i int) (float64, float64) {
+	return partyNameBaseX + float64(i)*(statusBlockW+statusBlockGap), partyNameBaseY
+}
+
+// 以下はすべて、名前の描画位置（baseX/baseY = partyNamePosition の戻り値）
+// を基準にした個別オフセット。partyNameOffsetX/Y は常に0だが、名前だけを
+// 動かしたい場合の調整用に残してある。バトルとメニュー（menu_draw.go）の
+// 両方で共通の基準として直接参照する。プレート画像やカーソル演出などの
+// 見た目は画面ごとに別で構わないが、名前の位置だけはここを唯一の基準にする。
 const (
-	namePlateTextOffsetX = 0.0
-	namePlateTextOffsetY = 0.0
+	partyNameOffsetX = 0.0
+	partyNameOffsetY = 0.0
 
 	namePlateLineOffsetX = -40.0
 	namePlateLineOffsetY = 0.0
@@ -414,7 +484,9 @@ func (s *BattleScene) drawPartyName(screen *ebiten.Image, i int, xPos, winY, alp
 	op.ColorScale.ScaleAlpha(float32(alpha))
 	screen.DrawImage(lineImg, op)
 
-	drawBattleOutlinedText(screen, baseX+namePlateTextOffsetX, baseY+namePlateTextOffsetY, PlayerNames[i], s.game.FontFace(partyNameFontSize), nameCol, alpha)
+	drawBattleOutlinedText(screen, baseX+partyNameOffsetX, baseY+partyNameOffsetY, PlayerNames[i], s.game.FontFace(partyNameFontSize), nameCol, alpha)
+
+	s.drawPartyStatIcons(screen, i, baseX+partyNameOffsetX+statIconOffsetX, baseY+partyNameOffsetY, alpha)
 }
 
 // drawMyTurnOverlay draws the command-selection highlight image for whichever
@@ -430,9 +502,9 @@ func (s *BattleScene) drawMyTurnOverlay(screen *ebiten.Image) {
 		return
 	}
 
-	xPos := statusStartX + float64(i)*(statusBlockW+statusBlockGap)
+	xPos, winY := partyNamePosition(i)
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(xPos+namePlateMyTurnOffsetX, statusBarY+namePlateMyTurnOffsetY)
+	op.GeoM.Translate(xPos+namePlateMyTurnOffsetX, winY+namePlateMyTurnOffsetY)
 	op.ColorScale.ScaleAlpha(float32(s.statusBarAlpha()))
 	screen.DrawImage(s.game.NameMyTurnImg, op)
 }

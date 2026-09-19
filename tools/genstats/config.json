@@ -1,0 +1,6 @@
+{
+  "playerStatsURL": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRjQcEb10R-xIyXY07Z0Wg0pn8hU1lBtHAckZPtU0U8Fmk_45ZCEdJLLmx2dIcG-_C4h1st94FhYKcs/pub?gid=0&single=true&output=csv",
+  "playerExpURL": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRjQcEb10R-xIyXY07Z0Wg0pn8hU1lBtHAckZPtU0U8Fmk_45ZCEdJLLmx2dIcG-_C4h1st94FhYKcs/pub?gid=1281016181&single=true&output=csv",
+  "enemiesURL": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRjQcEb10R-xIyXY07Z0Wg0pn8hU1lBtHAckZPtU0U8Fmk_45ZCEdJLLmx2dIcG-_C4h1st94FhYKcs/pub?gid=1910187799&single=true&output=csv",
+  "bossesURL": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRjQcEb10R-xIyXY07Z0Wg0pn8hU1lBtHAckZPtU0U8Fmk_45ZCEdJLLmx2dIcG-_C4h1st94FhYKcs/pub?gid=1436238342&single=true&output=csv"
+}

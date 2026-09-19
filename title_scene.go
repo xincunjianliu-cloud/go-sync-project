@@ -134,26 +134,24 @@ func (s *TitleScene) Update(dt float64) Scene {
 }
 
 func (s *TitleScene) hitTestMainMenu() (int, bool) {
-	face := s.game.FontFace(15)
+	face := s.game.FontFace(22)
 	centerX := float64(gameWidth) / 2
 	rects := []tapRect{
-		centeredTextRect(centerX, 260, "はじめから", face, 30),
-		centeredTextRect(centerX, 295, "つづきから", face, 30),
-		centeredTextRect(centerX, 330, "ゲームを終了する", face, 30),
+		centeredTextRect(centerX, 355, "はじめから", face, 30),
+		centeredTextRect(centerX, 400, "つづきから", face, 30),
+		centeredTextRect(centerX, 445, "ゲームを終了する", face, 30),
 	}
 	return hitTestTapRects(rects)
 }
 
 func (s *TitleScene) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{10, 10, 30, 255})
+	if s.game.TitleBgImg != nil {
+		screen.DrawImage(s.game.TitleBgImg, nil)
+	} else {
+		screen.Fill(color.RGBA{10, 10, 30, 255})
+	}
 
-	titleOp := &text.DrawOptions{}
-	titleOp.GeoM.Translate(float64(gameWidth)/2, 160)
-	titleOp.PrimaryAlign = text.AlignCenter
-	titleOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, "七不思議討滅録", s.game.FontFace(15), titleOp)
-
-	titleMenuFace := s.game.FontFace(15)
+	titleMenuFace := s.game.FontFace(22)
 	drawTitleMenuOption := func(label string, y float64, selected bool) {
 		centerX := float64(gameWidth) / 2
 		col := uiColorText
@@ -172,29 +170,9 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 		text.Draw(screen, label, titleMenuFace, op)
 	}
 
-	drawTitleMenuOption("はじめから", 260, s.menuIndex == 0)
-	drawTitleMenuOption("つづきから", 295, s.hasSaveFile && s.menuIndex == 1)
-	drawTitleMenuOption("ゲームを終了する", 330, s.menuIndex == 2)
-
-	creditOp := &text.DrawOptions{}
-	creditOp.GeoM.Translate(float64(gameWidth)/2, 350)
-	creditOp.PrimaryAlign = text.AlignCenter
-	creditOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, "(C) 2026 Project sitikai", s.game.FontFace(15), creditOp)
-
-	if s.game.heavyAssetsErr != nil {
-		errOp := &text.DrawOptions{}
-		errOp.GeoM.Translate(float64(gameWidth)/2, 390)
-		errOp.PrimaryAlign = text.AlignCenter
-		errOp.ColorScale.ScaleWithColor(color.RGBA{255, 120, 120, 255})
-		text.Draw(screen, "データの読み込みに失敗しました", s.game.FontFace(12), errOp)
-	} else if !s.game.heavyAssetsReady {
-		hintOp := &text.DrawOptions{}
-		hintOp.GeoM.Translate(float64(gameWidth)/2, 390)
-		hintOp.PrimaryAlign = text.AlignCenter
-		hintOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "データを読み込み中...", s.game.FontFace(12), hintOp)
-	}
+	drawTitleMenuOption("はじめから", 355, s.menuIndex == 0)
+	drawTitleMenuOption("つづきから", 400, s.hasSaveFile && s.menuIndex == 1)
+	drawTitleMenuOption("ゲームを終了する", 445, s.menuIndex == 2)
 
 	if s.confirmExit {
 		drawConfirmDialog(screen, s.game, "ゲームを終了しますか？", s.exitConfirmIdx, confirmImageOffsetX)
@@ -233,6 +211,7 @@ type SaveData struct {
 	Keys                 map[string]int        `json:"keys"`
 	RaisedLevers         map[string]bool       `json:"raised_levers"`
 	SeenAutoHealMapIntro map[string]bool       `json:"seen_auto_heal_map_intro"`
+	SeenEvents           map[string]bool       `json:"seen_events"`
 	BlockPositions       map[string][2]float64 `json:"block_positions"`
 	UnlockedBlockDoors   map[string]bool       `json:"unlocked_block_doors"`
 }
@@ -397,6 +376,7 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.Keys = d.Keys
 		s.game.RaisedLevers = d.RaisedLevers
 		s.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
+		s.game.SeenEvents = d.SeenEvents
 		s.game.BlockPositions = d.BlockPositions
 		s.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 

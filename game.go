@@ -47,26 +47,27 @@ type Game struct {
 	fontSource   *text.GoTextFaceSource
 	currentScene Scene
 
-	PlayerHP            [4]int
-	PlayerMaxHP         [4]int
-	PlayerMP            [4]int
-	PlayerMaxMP         [4]int
-	PlayerAtk           [4]int
-	PlayerMagicAtk      [4]int
-	PlayerDef           [4]int
-	PlayerMagicDef      [4]int
-	PlayerSpd           [4]int
-	PlayerLuck          [4]int
-	PlayerSP            [4]int
-	PlayerSkillLv       [4][8]int
-	PlayerLv            [4]int
-	PlayerEXP           [4]int
-	PlayerNextEXP       [4]int
-	PlayerAttackSprites [4]*ebiten.Image
-	CommandIcons        [4]*ebiten.Image
-	TimelineIcons       [4]*ebiten.Image
-	TimelineIconsLarge  [4]*ebiten.Image
-	SkillPanelImg       *ebiten.Image
+	PlayerHP             [4]int
+	PlayerMaxHP          [4]int
+	PlayerMP             [4]int
+	PlayerMaxMP          [4]int
+	PlayerAtk            [4]int
+	PlayerMagicAtk       [4]int
+	PlayerDef            [4]int
+	PlayerMagicDef       [4]int
+	PlayerSpd            [4]int
+	PlayerLuck           [4]int
+	PlayerSP             [4]int
+	PlayerSkillLv        [4][8]int
+	PlayerLv             [4]int
+	PlayerEXP            [4]int
+	PlayerNextEXP        [4]int
+	PlayerAttackSprites  [4]*ebiten.Image
+	CommandIcons         [4]*ebiten.Image
+	CommandIconsSelected [4]*ebiten.Image
+	TimelineIcons        [4]*ebiten.Image
+	TimelineIconsLarge   [4]*ebiten.Image
+	SkillPanelImg        *ebiten.Image
 
 	BossDefeatedFlags  [4]bool
 	EnemyImgs          map[string]*ebiten.Image
@@ -94,6 +95,11 @@ type Game struct {
 	NameMyTurnImg *ebiten.Image
 	NameDeadImg   *ebiten.Image
 
+	// StatIconUpImgs/StatIconDownImgs are the battle HUD's per-stat buff/debuff
+	// icons, indexed by StatKind (StatAtk, StatMat, StatDef, StatMdf, StatLuk).
+	StatIconUpImgs   [5]*ebiten.Image
+	StatIconDownImgs [5]*ebiten.Image
+
 	TimelineBarImg     *ebiten.Image
 	TimelineBarVertImg *ebiten.Image
 
@@ -109,6 +115,8 @@ type Game struct {
 	SaveThumbs           [5]*ebiten.Image
 
 	MenuBgImg *ebiten.Image
+
+	TitleBgImg *ebiten.Image
 
 	MenuSkillPanelImg *ebiten.Image
 
@@ -172,6 +180,7 @@ type Game struct {
 	UnlockedBlockDoors map[string]bool
 
 	SeenAutoHealMapIntro map[string]bool
+	SeenEvents           map[string]bool
 
 	heavyDecoded     chan decodedHeavyAsset
 	heavyAssetsReady bool
@@ -321,6 +330,7 @@ func (g *Game) ResetForNewGame() {
 	g.Keys = make(map[string]int)
 	g.RaisedLevers = make(map[string]bool)
 	g.SeenAutoHealMapIntro = make(map[string]bool)
+	g.SeenEvents = make(map[string]bool)
 	g.BlockPositions = make(map[string][2]float64)
 	g.UnlockedBlockDoors = make(map[string]bool)
 
@@ -344,6 +354,7 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 		Keys:                 make(map[string]int),
 		RaisedLevers:         make(map[string]bool),
 		SeenAutoHealMapIntro: make(map[string]bool),
+		SeenEvents:           make(map[string]bool),
 		BlockPositions:       make(map[string][2]float64),
 		UnlockedBlockDoors:   make(map[string]bool),
 	}
@@ -372,6 +383,8 @@ func NewGame(source *text.GoTextFaceSource) (*Game, error) {
 	g.Audio.SetVolume(settings.BGMVolume)
 	g.Audio.SetSEVolume(settings.SEVolume)
 	g.Audio.SetMasterVolume(settings.MasterVolume)
+
+	g.TitleBgImg, _ = loadAssetImage("assets/images/title/title_bg.png")
 
 	g.currentScene = NewTitleScene(g)
 	g.Audio.PlayBGMFadeIn(bgmTitle, 2.0)

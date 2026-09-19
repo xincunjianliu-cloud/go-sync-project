@@ -3,15 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
-)
-
-type ObjectiveType int
-
-const (
-	ObjectiveBoss ObjectiveType = iota
-	ObjectiveNPC
-	ObjectiveStoryEvent
 )
 
 type ObjectiveLocation struct {
@@ -19,47 +12,34 @@ type ObjectiveLocation struct {
 	X, Y    float64
 }
 
-type ObjectiveDef struct {
-	ID   string
-	Type ObjectiveType
-
-	IsActive func(g *Game) bool
+// objectiveDef は目的地1件分の定義。専用オブジェクトを置く必要はなく、
+// ボスやトリガーなど既存のマップオブジェクトに以下のプロパティを足すだけで
+// 目的地として登録される(BuildObjectiveAndMapIndexが読み取る):
+//   - objectiveId    (string, 必須) このオブジェクトの目的地ID
+//   - objectiveOrder (int, 任意)    小さいほど先に目的地になる。省略時は0
+//   - bossId         (int, 任意)    指定するとそのボスを倒すまでが達成条件になる
+//
+// bossIdが無い場合は「このオブジェクトに一度でも調べる/会話した」
+// (SeenEvents)ことが達成条件になるので、ボス以外(NPC・調べるだけの
+// イベントなど)もそのまま目的地にできる。
+type objectiveDef struct {
+	ID      string
+	Order   int
+	BossID  int
+	HasBoss bool
+	SeenKey string
 }
 
-var objectiveQueue = []ObjectiveDef{
-	{
-		ID:   "boss_1",
-		Type: ObjectiveBoss,
-		IsActive: func(g *Game) bool {
-			return !isBossDefeated(g, 1)
-		},
-	},
-	{
-		ID:   "boss_2",
-		Type: ObjectiveBoss,
-		IsActive: func(g *Game) bool {
-			return isBossDefeated(g, 1) && !isBossDefeated(g, 2)
-		},
-	},
-	{
-		ID:   "boss_3",
-		Type: ObjectiveBoss,
-		IsActive: func(g *Game) bool {
-			return isBossDefeated(g, 2) && !isBossDefeated(g, 3)
-		},
-	},
-	{
-		ID:   "boss_4",
-		Type: ObjectiveBoss,
-		IsActive: func(g *Game) bool {
-			return isBossDefeated(g, 3) && !isBossDefeated(g, 4)
-		},
-	},
+func (def objectiveDef) isComplete(g *Game) bool {
+	if def.HasBoss {
+		return isBossDefeated(g, def.BossID)
+	}
+	return g.SeenEvents[def.SeenKey]
 }
 
 func (g *Game) UpdateObjective() {
-	for _, def := range objectiveQueue {
-		if def.IsActive(g) {
+	for _, def := range objectiveDefs {
+		if !def.isComplete(g) {
 			g.CurrentObjectiveID = def.ID
 			return
 		}
@@ -75,6 +55,7 @@ func (g *Game) CurrentObjectiveLocation() (ObjectiveLocation, bool) {
 	return loc, ok
 }
 
+var objectiveDefs []objectiveDef
 var objectiveLocationIndex = map[string]ObjectiveLocation{}
 
 type mapDoor struct {
@@ -85,14 +66,12 @@ type mapDoor struct {
 
 var mapConnectionGraph = map[string][]mapDoor{}
 
-var allMapPaths = []string{
-	"assets/maps/School_Map_1.tmj",
-	"assets/maps/ダンジョンA.tmj",
-}
+var allMapPaths = allRegisteredMapPaths()
 
 func BuildObjectiveAndMapIndex() error {
 	objectiveLocationIndex = map[string]ObjectiveLocation{}
 	mapConnectionGraph = map[string][]mapDoor{}
+	objectiveDefs = nil
 
 	for _, mapPath := range allMapPaths {
 		data, err := loadAssetBytes(mapPath)
@@ -109,21 +88,25 @@ func BuildObjectiveAndMapIndex() error {
 				continue
 			}
 			for _, obj := range layer.Objects {
-				var objectiveID, targetMap string
-
-				for _, prop := range obj.Properties {
-					switch strings.ToLower(prop.Name) {
-					case "objectiveid":
-						objectiveID = fmt.Sprintf("%v", prop.Value)
-					case "targetmap":
-						targetMap = fmt.Sprintf("%v", prop.Value)
-					}
-				}
+				p := objProps(obj)
+				objectiveID := p["objectiveid"]
+				targetMap := p["targetmap"]
+				order, _ := objPropInt(obj, "objectiveorder")
+				bossID, hasBoss := objPropInt(obj, "bossid")
 
 				if objectiveID != "" {
 					objectiveLocationIndex[objectiveID] = ObjectiveLocation{
-						MapPath: mapPath, X: obj.X, Y: obj.Y,
+						MapPath: mapPath,
+						X:       obj.X + obj.Width/2,
+						Y:       obj.Y + obj.Height/2,
 					}
+					objectiveDefs = append(objectiveDefs, objectiveDef{
+						ID:      objectiveID,
+						Order:   order,
+						BossID:  bossID,
+						HasBoss: hasBoss,
+						SeenKey: chestKey(mapPath, obj),
+					})
 				}
 
 				if targetMap != "" {
@@ -137,6 +120,11 @@ func BuildObjectiveAndMapIndex() error {
 			}
 		}
 	}
+
+	sort.SliceStable(objectiveDefs, func(i, j int) bool {
+		return objectiveDefs[i].Order < objectiveDefs[j].Order
+	})
+
 	return nil
 }
 

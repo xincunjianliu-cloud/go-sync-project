@@ -67,7 +67,19 @@ func (s *FieldScene) Update(dt float64) Scene {
 		return s
 	}
 
+	if s.encounterEffectActive {
+		s.encounterEffectTimer += dt
+		if s.encounterEffectTimer >= encounterEffectDuration && s.pendingBattleScene != nil {
+			s.encounterEffectTimer = encounterEffectDuration
+			battleScene := s.pendingBattleScene
+			s.pendingBattleScene = nil
+			s.game.ChangeSceneWithFade(battleScene, fadeTimeBattleIn)
+		}
+		return s
+	}
+
 	s.updateTouchStick()
+	s.wallAnimTick++
 
 	if s.isLogActive {
 		if isMenuUpPressed() {
@@ -390,12 +402,12 @@ func (s *FieldScene) Update(dt float64) Scene {
 				p := objProps(obj)
 				evType := p["type"]
 				evText := p["text"]
-				isKeyChest := strings.HasPrefix(evText, "event_chest_key_")
-				isItemChest := strings.HasPrefix(evText, "event_chest_") && !isKeyChest
+				isKeyChest := isKeyChestObj(p)
+				isItemChest := isItemChestObj(p)
 				isChest := isKeyChest || isItemChest
-				isLockedWall := evText == "event_wall" && p["lever"] == ""
-				isLeverControlledWall := evText == "event_wall" && p["lever"] != ""
-				isLever := evText == "event_lever"
+				isLockedWall := isLockedWallObj(p)
+				isLeverControlledWall := isLeverControlledWallObj(p)
+				isLever := isLeverObj(p)
 
 				if isLockedWall && s.wallIsOpen(obj) {
 					continue
@@ -403,7 +415,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 				if isLeverControlledWall {
 					continue
 				}
-				if evText == "event_block" || evText == "event_blockspot" || evText == "event_blockdoor" {
+				if isBlockObj(p) || isBlockSpotObj(p) || isBlockDoorObj(p) {
 					continue
 				}
 
@@ -415,12 +427,12 @@ func (s *FieldScene) Update(dt float64) Scene {
 					continue
 				}
 
-				if evType == "event" && !strings.HasPrefix(evText, "event_boss_") {
+				if evType == evTypeEvent && !strings.HasPrefix(evText, bossTextPrefix) {
 					if isKeyChest {
-						s.openKeyChest(obj, strings.TrimPrefix(evText, "event_chest_key_"))
+						s.openKeyChest(obj, strings.TrimPrefix(evText, chestKeyTextPrefix))
 						return s
 					} else if isItemChest {
-						s.openChest(obj, strings.TrimPrefix(evText, "event_chest_"))
+						s.openChest(obj, strings.TrimPrefix(evText, chestTextPrefix))
 						return s
 					} else if isLockedWall {
 						s.examineWall(obj)
@@ -429,7 +441,13 @@ func (s *FieldScene) Update(dt float64) Scene {
 						s.pullLever(obj)
 						return s
 					} else if evText != "" {
-						s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(evText)
+						key := chestKey(s.currentMap, obj)
+						seen := s.game.SeenEvents[key]
+						s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(evText, p["repeattext"], seen)
+						if s.game.SeenEvents == nil {
+							s.game.SeenEvents = make(map[string]bool)
+						}
+						s.game.SeenEvents[key] = true
 					} else {
 						s.msgTexts = []EventCommand{{Speaker: "", Text: "調べるとなにかあるかもしれない"}}
 						s.msgBGM = ""
@@ -571,28 +589,28 @@ func (s *FieldScene) Update(dt float64) Scene {
 				evText := p["text"]
 				routeStr := p["route"]
 
-				if evType == "event" && strings.HasPrefix(evText, "event_chest_") {
+				if isChestObj(p) {
 					if !s.game.OpenedChests[chestKey(s.currentMap, obj)] &&
 						objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
 						s.nearExamineEvent = true
 					}
-				} else if evType == "event" && evText == "event_wall" && p["lever"] == "" {
+				} else if isLockedWallObj(p) {
 					if !s.wallIsOpen(obj) &&
 						objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
 						s.nearExamineEvent = true
 					}
-				} else if evType == "event" && evText == "event_wall" && p["lever"] != "" {
-				} else if evType == "event" && evText == "event_lever" {
+				} else if isLeverControlledWallObj(p) {
+				} else if isLeverObj(p) {
 					exhausted := p["oneway"] == "true" && s.game.RaisedLevers[p["id"]]
 					if !exhausted && objContainsMargin(obj, playerFootX, playerFootY, chestTriggerMargin) {
 						s.nearExamineEvent = true
 					}
-				} else if evType == "event" && (evText == "event_block" || evText == "event_blockspot" || evText == "event_blockdoor") {
-				} else if evType == "event" && objContains(obj, playerFootX, playerFootY) {
+				} else if isBlockObj(p) || isBlockSpotObj(p) || isBlockDoorObj(p) {
+				} else if evType == evTypeEvent && objContains(obj, playerFootX, playerFootY) {
 					s.nearExamineEvent = true
 				}
 
-				if evType == "trigger" {
+				if evType == evTypeTrigger {
 					bossID, hasBossID := objPropInt(obj, "bossid")
 					instant, _ := objPropBool(obj, "instant")
 
@@ -600,12 +618,27 @@ func (s *FieldScene) Update(dt float64) Scene {
 						continue
 					}
 
+					// ボスID無しのトリガーは1回きりの演出として扱う。踏むたびに
+					// 同じ台詞が流れるのは不自然なので、2回目以降セリフに切り替える
+					// のではなく、一度発火したら二度と発火しないようにする。
+					var triggerKey string
+					if !hasBossID {
+						triggerKey = chestKey(s.currentMap, obj)
+						if s.game.SeenEvents[triggerKey] {
+							continue
+						}
+					}
+
 					if segmentIntersectsRect(prevPx, prevPy, s.px, s.py, obj.X, obj.Y, obj.Width, obj.Height) {
 
 						if hasBossID {
-							s.pendingCutsceneMsg = fmt.Sprintf("event_boss_%d", bossID)
+							s.pendingCutsceneMsg = fmt.Sprintf("%s%d", bossTextPrefix, bossID)
 						} else {
 							s.pendingCutsceneMsg = evText
+							if s.game.SeenEvents == nil {
+								s.game.SeenEvents = make(map[string]bool)
+							}
+							s.game.SeenEvents[triggerKey] = true
 						}
 						s.cutsceneHasBossID = hasBossID
 
@@ -669,7 +702,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 					}
 				}
 
-				if evType == "enemy" && objContains(obj, playerFootX, playerFootY) {
+				if evType == evTypeEnemy && objContains(obj, playerFootX, playerFootY) {
 					targetEnemiesStr = evText
 					targetMaxCount = 1
 					if n, ok := objPropInt(obj, "maxcount"); ok && n > 1 {
@@ -701,7 +734,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 					}
 					s.game.Audio.PlaySEByKey("encounter")
 					battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, "enemy", chosenEnemyNames)
-					s.game.ChangeSceneWithFade(battleScene, fadeTimeBattleIn)
+					s.startEncounterEffect(battleScene)
 					return s
 				}
 			}
@@ -711,6 +744,19 @@ func (s *FieldScene) Update(dt float64) Scene {
 		}
 	}
 	return s
+}
+
+// startEncounterEffect は現在のフィールド画面を静止画として捉え、
+// カメラが回転しながらズームインしていく演出を開始する。演出が終わると
+// Update側でbattleSceneへフェード切り替えする。
+func (s *FieldScene) startEncounterEffect(battleScene *BattleScene) {
+	snapshot := ebiten.NewImage(gameWidth, gameHeight)
+	s.drawWorld(snapshot)
+
+	s.encounterSnapshot = snapshot
+	s.encounterEffectActive = true
+	s.encounterEffectTimer = 0
+	s.pendingBattleScene = battleScene
 }
 
 func rectsOverlap(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2 float64) bool {
@@ -772,7 +818,7 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 		}
 		index := tileY*s.tileMap.Width + tileX
 		for _, layer := range s.tileMap.Layers {
-			if layer.Name == "kabe" && index >= 0 && index < len(layer.Data) && layer.Data[index] != 0 {
+			if layer.Name == wallTileLayerName && index >= 0 && index < len(layer.Data) && layer.Data[index] != 0 {
 				return true
 			}
 		}
@@ -790,15 +836,12 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" {
-				continue
-			}
-			switch p["text"] {
-			case "event_wall":
+			switch {
+			case isWallObj(p):
 				if s.wallIsOpen(obj) {
 					continue
 				}
-			case "event_blockdoor":
+			case isBlockDoorObj(p):
 				if s.blockDoorIsOpen(obj) {
 					continue
 				}

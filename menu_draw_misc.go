@@ -19,13 +19,9 @@ const (
 )
 
 const (
-	menuDescOffsetX float64 = 20
-	menuDescOffsetY float64 = 30
-)
-
-const (
-	skillSubHintX = 600.0
-	skillSubHintY = 400.0
+	menuDescOffsetX  float64 = 20
+	menuDescOffsetY  float64 = 30
+	menuDescFontSize float64 = 17.0
 )
 
 func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
@@ -59,8 +55,8 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 		if layer.Type != "tilelayer" {
 			continue
 		}
-		isWall := layer.Name == "kabe"
-		isFloor := layer.Name == "floor" || layer.Name == "ground" || layer.Name == "michi"
+		isWall := layer.Name == wallTileLayerName
+		isFloor := layer.Name == floorTileLayerName
 
 		for i, id := range layer.Data {
 			if id == 0 {
@@ -446,17 +442,6 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	text.Draw(screen, resetLabel, resetFace, resetOp)
 }
 
-func (m *MenuScene) drawBottomRightHint(screen *ebiten.Image, hint string) {
-	if hint == "" {
-		return
-	}
-	hintOp := &text.DrawOptions{}
-	hintOp.GeoM.Translate(float64(gameWidth)-16, float64(gameHeight)-16)
-	hintOp.PrimaryAlign = text.AlignEnd
-	hintOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, hint, m.game.FontFace(18), hintOp)
-}
-
 func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 	var desc string
 
@@ -475,7 +460,7 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 		descOp.GeoM.Translate(x, y)
 		descOp.PrimaryAlign = text.AlignEnd
 		descOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, desc, m.game.FontFace(14), descOp)
+		text.Draw(screen, desc, m.game.FontFace(menuDescFontSize), descOp)
 		return
 	}
 
@@ -597,7 +582,7 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 	descOp.GeoM.Translate(x, y)
 	descOp.PrimaryAlign = text.AlignEnd
 	descOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, desc, m.game.FontFace(14), descOp)
+	text.Draw(screen, desc, m.game.FontFace(menuDescFontSize), descOp)
 }
 
 func drawMinimapObjectiveIcon(screen *ebiten.Image, g *Game, ox, oy float64) {

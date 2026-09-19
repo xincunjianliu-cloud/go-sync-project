@@ -127,7 +127,7 @@ var HeroSkills = []SkillDef{
 	},
 	{
 		Name:        "全体攻撃",
-		UnlockLevel: 1,
+		UnlockLevel: 2,
 		Levels: []SkillLevelData{
 			{
 				Description:    "全体にダメージを与える",
@@ -288,15 +288,6 @@ var HeroSkills = []SkillDef{
 	},
 }
 
-func healSkillIndex(skills []SkillDef) int {
-	for i, sk := range skills {
-		if len(sk.Levels) > 0 && sk.Levels[0].IsHeal {
-			return i
-		}
-	}
-	return -1
-}
-
 func SkillUpgradeCost(currentLv int) int {
 	switch currentLv {
 	case 1:
@@ -365,37 +356,41 @@ func (g *Game) CurrentSkillLevelData(charIdx, skillIdx int) SkillLevelData {
 	return levels[lv-1]
 }
 
-type DebuffType int
+// StatKind identifies which stat a Buff or Debuff modifies. statIconOrder
+// (battle_draw_hud.go) draws the battle HUD's per-stat up/down icons next to
+// a party member's name in this same order.
+type StatKind int
 
 const (
-	DebuffAtkDown DebuffType = iota
-	DebuffMagicAtkDown
-	DebuffDefDown
-	DebuffMagicDefDown
+	StatAtk StatKind = iota
+	StatMat
+	StatDef
+	StatMdf
+	StatLuk
 )
 
 type Debuff struct {
-	Type    DebuffType
+	Type    StatKind
 	Percent int
 	Turns   int
 }
 
-func mapEffectToDebuff(t EffectType) DebuffType {
+func mapEffectToDebuff(t EffectType) StatKind {
 	switch t {
 	case EffectDebuffPhysicalDef:
-		return DebuffDefDown
+		return StatDef
 	case EffectDebuffMagicDef:
-		return DebuffMagicDefDown
+		return StatMdf
 	case EffectDebuffAtk:
-		return DebuffAtkDown
+		return StatAtk
 	case EffectDebuffDefBoth:
-		return DebuffDefDown
+		return StatDef
 	default:
-		return DebuffAtkDown
+		return StatAtk
 	}
 }
 
-func SumDebuffPercent(list []Debuff, t DebuffType) int {
+func SumDebuffPercent(list []Debuff, t StatKind) int {
 	total := 0
 	for _, d := range list {
 		if d.Type == t {
@@ -419,19 +414,13 @@ func TickDebuffList(list []Debuff) []Debuff {
 	return alive
 }
 
-type BuffType int
-
-const (
-	BuffAtkUp BuffType = iota
-)
-
 type Buff struct {
-	Type    BuffType
+	Type    StatKind
 	Percent int
 	Turns   int
 }
 
-func SumBuffPercent(list []Buff, t BuffType) int {
+func SumBuffPercent(list []Buff, t StatKind) int {
 	total := 0
 	for _, b := range list {
 		if b.Type == t {

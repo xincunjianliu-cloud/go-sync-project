@@ -63,7 +63,7 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 		isDead := actor < partySize && s.game.PlayerHP[actor] <= 0
 		isActive := s.waitingActor == actor && (s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu || s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
 		isHoldingSize := !isDead && actor < partySize && s.returnDelayTimer[actor] > 0
-		isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == 2))
+		isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == cmdWait))
 		ready := !isDead && s.isActorReady(actor)
 		if isEnemyActor(actor) && s.enemyIsActing && enemySlotFromActor(actor) == s.actingEnemySlot {
 			ready = true
@@ -105,7 +105,7 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 			isActive := s.waitingActor == actor && (s.battlePhase == phasePlayerMenu || s.battlePhase == phaseSkillMenu || s.battlePhase == phaseItemMenu || s.battlePhase == phaseItemTarget)
 			isHoldingPosition := !isDead && actor < partySize && s.returnDelayTimer[actor] > 0
 			isHoldingSize := isHoldingPosition
-			isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == 2))
+			isMyselfWaiting := !isDead && ((actor < partySize && (s.waitStance[actor] || s.waitCancelHold[actor] > 0)) || (isActive && s.commandIndex == cmdWait))
 			currentIconSize = float64(iconSize)
 			if (isActive || isHoldingSize) && !isMyselfWaiting {
 				currentIconSize = float64(iconSize) * 1.5
@@ -211,16 +211,11 @@ func (s *BattleScene) statusBarAlpha() float64 {
 
 func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 
-	winY := statusBarY
 	alpha := s.statusBarAlpha()
 	for i := 0; i < partySize; i++ {
-		xPos := statusStartX + float64(i)*(statusBlockW+statusBlockGap)
+		sx, sy := partyNamePosition(i)
 
-		sx := xPos
-		sy := winY
-		barX := sx
-
-		s.drawPartyName(screen, i, xPos, winY, alpha)
+		s.drawPartyName(screen, i, sx, sy, alpha)
 
 		isDead := s.game.PlayerHP[i] <= 0
 		valueColor := uiColorText
@@ -228,66 +223,41 @@ func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 			valueColor = uiColorDead
 		}
 
-		maxHP := s.game.PlayerMaxHP[i]
-		hpRatio := 0.0
-		if maxHP > 0 {
-			hpRatio = float64(s.game.PlayerHP[i]) / float64(maxHP)
-		}
-		if hpRatio > 1.0 {
-			hpRatio = 1.0
-		}
+		drawStatusBox(screen, s.game, sx, sy,
+			s.game.PlayerHP[i], s.game.PlayerMaxHP[i],
+			s.game.PlayerMP[i], s.game.PlayerMaxMP[i],
+			alpha, valueColor, isDead)
 
-		drawStatusValue(screen, sx+statusValueOffsetX, sy+statusHPTextY, s.game.PlayerHP[i], maxHP,
-			s.game.FontFace(statusValueFontSizeLarge), s.game.FontFace(statusValueFontSizeSmall), alpha, valueColor)
+	}
+}
 
-		if isDead {
-			drawSlantedStatusBar(screen, barX, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
-				scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
-				scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
-				scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
-		} else {
-			drawSlantedStatusBar(screen, barX, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
-				scaleAlpha(color.RGBA{75, 171, 120, 255}, alpha),
-				scaleAlpha(color.RGBA{20, 50, 30, 255}, alpha),
-				scaleAlpha(color.RGBA{41, 94, 66, 255}, alpha))
-		}
+// statIconOrder is the fixed left-to-right order the battle HUD's per-stat
+// icons are drawn in next to a party member's name: physical attack, magic
+// attack, physical defense, magic defense, luck.
+var statIconOrder = [...]StatKind{StatAtk, StatMat, StatDef, StatMdf, StatLuk}
 
-		maxMP := s.game.PlayerMaxMP[i]
-		mpRatio := 0.0
-		if maxMP > 0 {
-			mpRatio = float64(s.game.PlayerMP[i]) / float64(maxMP)
+// drawPartyStatIcons draws one icon per stat currently buffed or debuffed for
+// party member i, packed left-to-right starting at (x, y) in statIconOrder.
+// A stat with both a buff and a debuff active nets the two percentages and
+// shows a single icon for whichever direction still wins, so at most one
+// icon is drawn per stat: StatIconUpImgs[stat] (blue) when the net is
+// positive, StatIconDownImgs[stat] (red) when negative, nothing when they
+// cancel out exactly.
+func (s *BattleScene) drawPartyStatIcons(screen *ebiten.Image, i int, x, y, alpha float64) {
+	for _, stat := range statIconOrder {
+		net := SumBuffPercent(s.PlayerBuffs[i], stat) - SumDebuffPercent(s.PlayerDebuffs[i], stat)
+		if net == 0 {
+			continue
 		}
-		if mpRatio > 1.0 {
-			mpRatio = 1.0
+		img := s.game.StatIconDownImgs[stat]
+		if net > 0 {
+			img = s.game.StatIconUpImgs[stat]
 		}
-
-		drawStatusValue(screen, sx+statusValueOffsetX, sy+statusMPTextY, s.game.PlayerMP[i], maxMP,
-			s.game.FontFace(statusValueFontSizeLarge), s.game.FontFace(statusValueFontSizeSmall), alpha, valueColor)
-
-		if isDead {
-			drawSlantedStatusBar(screen, barX, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
-				scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
-				scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
-				scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
-		} else {
-			drawSlantedStatusBar(screen, barX, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
-				scaleAlpha(color.RGBA{75, 105, 171, 255}, alpha),
-				scaleAlpha(color.RGBA{20, 30, 55, 255}, alpha),
-				scaleAlpha(color.RGBA{41, 58, 94, 255}, alpha))
-		}
-
-		if len(s.PlayerDebuffs[i]) > 0 {
-			debuffOp := &text.DrawOptions{}
-			debuffOp.GeoM.Translate(sx, sy-12)
-			debuffOp.ColorScale.ScaleWithColor(color.RGBA{255, 120, 120, uint8(255 * alpha)})
-			text.Draw(screen, fmt.Sprintf("弱体x%d", len(s.PlayerDebuffs[i])), s.game.FontFace(11), debuffOp)
-		}
-		if len(s.PlayerBuffs[i]) > 0 {
-			buffOp := &text.DrawOptions{}
-			buffOp.GeoM.Translate(sx, sy-24)
-			buffOp.ColorScale.ScaleWithColor(color.RGBA{120, 200, 255, uint8(255 * alpha)})
-			text.Draw(screen, fmt.Sprintf("強化x%d", len(s.PlayerBuffs[i])), s.game.FontFace(11), buffOp)
-		}
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(x, y+statIconOffsetY)
+		op.ColorScale.ScaleAlpha(float32(alpha))
+		screen.DrawImage(img, op)
+		x += float64(img.Bounds().Dx()) + statIconGapX
 	}
 }
 
@@ -363,18 +333,15 @@ func (s *BattleScene) drawCommandMenu(screen *ebiten.Image) {
 
 	for i, pos := range positions {
 		icon := s.game.CommandIcons[i]
+		if s.commandIndex == i && s.game.CommandIconsSelected[i] != nil {
+			icon = s.game.CommandIconsSelected[i]
+		}
 
 		iw := icon.Bounds().Dx()
 		ih := icon.Bounds().Dy()
 
 		op := &ebiten.DrawImageOptions{}
-
-		scale := 1.0
-		if s.commandIndex == i {
-			scale = 1.3
-		}
-		op.GeoM.Scale(scale, scale)
-		op.GeoM.Translate(pos[0]-float64(iw)*scale/2, pos[1]-float64(ih)*scale/2)
+		op.GeoM.Translate(pos[0]-float64(iw)/2, pos[1]-float64(ih)/2)
 
 		if s.commandIndex != i {
 			op.ColorScale.Scale(0.6, 0.6, 0.6, 1.0)
@@ -398,6 +365,9 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 	skillListArrowGap := text.Advance("▶ ", skillListFace)
 
 	for i, sk := range skills {
+		if !s.game.IsSkillUnlocked(p, i) {
+			continue
+		}
 		curLv := s.game.PlayerSkillLv[p][i]
 		if curLv < 1 {
 			curLv = 1
@@ -504,14 +474,14 @@ func (s *BattleScene) drawBattleMessage(screen *ebiten.Image) {
 
 func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
 	if s.battlePhase == phaseBattleEnd && !s.isWon && s.battleLogTimer <= 0 {
-		winX, winY, winW, winH := 380.0, 235.0, 200.0, 70.0
+		winX, winY, winW, winH := 380.0, 235.0, 220.0, 80.0
 		ebitenutil.DrawRect(screen, winX, winY, winW, winH, color.RGBA{40, 10, 10, 220})
 		ebitenutil.DrawRect(screen, winX, winY, winW, 1, uiColorDanger)
 		ebitenutil.DrawRect(screen, winX, winY+winH, winW, 1, uiColorDanger)
 		ebitenutil.DrawRect(screen, winX, winY, 1, winH, uiColorDanger)
 		ebitenutil.DrawRect(screen, winX+winW, winY, 1, winH, uiColorDanger)
 
-		gameOverFace := s.game.FontFace(15)
+		gameOverFace := s.game.FontFace(18)
 		gameOverArrowGap := text.Advance("▶ ", gameOverFace)
 
 		retryCol := uiColorText
@@ -519,27 +489,27 @@ func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
 		if retrySelected {
 			retryCol = uiColorSelect
 			arrowOp1 := &text.DrawOptions{}
-			arrowOp1.GeoM.Translate(winX+24, winY+18)
+			arrowOp1.GeoM.Translate(winX+24, winY+22)
 			arrowOp1.ColorScale.ScaleWithColor(retryCol)
 			text.Draw(screen, "▶", gameOverFace, arrowOp1)
 		}
 		op1 := &text.DrawOptions{}
-		op1.GeoM.Translate(winX+24+gameOverArrowGap, winY+18)
+		op1.GeoM.Translate(winX+24+gameOverArrowGap, winY+22)
 		op1.ColorScale.ScaleWithColor(retryCol)
-		text.Draw(screen, "Retry Game", gameOverFace, op1)
+		text.Draw(screen, "リトライ", gameOverFace, op1)
 
 		titleCol := uiColorText
 		titleSelected := s.gameOverIdx == 1
 		if titleSelected {
 			titleCol = uiColorSelect
 			arrowOp2 := &text.DrawOptions{}
-			arrowOp2.GeoM.Translate(winX+24, winY+42)
+			arrowOp2.GeoM.Translate(winX+24, winY+50)
 			arrowOp2.ColorScale.ScaleWithColor(titleCol)
 			text.Draw(screen, "▶", gameOverFace, arrowOp2)
 		}
 		op2 := &text.DrawOptions{}
-		op2.GeoM.Translate(winX+24+gameOverArrowGap, winY+42)
+		op2.GeoM.Translate(winX+24+gameOverArrowGap, winY+50)
 		op2.ColorScale.ScaleWithColor(titleCol)
-		text.Draw(screen, "Title Screen", gameOverFace, op2)
+		text.Draw(screen, "タイトルへ戻る", gameOverFace, op2)
 	}
 }

@@ -219,8 +219,19 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 			alpha = uint8(255 * fade)
 		}
 
+		// Hit numbers punch upward once and settle back down (a single
+		// hump, no repeated bouncing); heals keep the classic float-up-
+		// and-fade motion (handled in Update).
+		drawY := pop.Y
+		if !pop.IsHeal {
+			const wobbleDecay = 9.0
+			wobbleAmp := math.Abs(pop.Vy) * 0.16
+			t := wobbleDecay * pop.Timer
+			drawY -= wobbleAmp * t * math.Exp(1.0-t)
+		}
+
 		msg := fmt.Sprintf("%d", pop.Value)
-		numScale := 2.2
+		numFontSize := 52.0
 		mainColor := color.RGBA{255, 255, 255, alpha}
 		switch {
 		case pop.IsMiss:
@@ -229,35 +240,42 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 		case pop.IsHeal:
 			mainColor = color.RGBA{140, 255, 160, alpha}
 		case pop.IsCrit:
-			numScale = 2.6
+			numFontSize = 62.0
 			mainColor = color.RGBA{255, 130, 40, alpha}
 		}
+		numFace := s.game.FontFace(numFontSize)
 
-		for _, offset := range [][2]float64{{-1.2, 0}, {1.2, 0}, {0, -1.2}, {0, 1.2}} {
+		for _, offset := range [][2]float64{{-2.0, 0}, {2.0, 0}, {0, -2.0}, {0, 2.0}} {
 			shadowOp := &text.DrawOptions{}
-			shadowOp.GeoM.Scale(numScale, numScale)
-			shadowOp.GeoM.Translate(pop.X+offset[0]+s.shakeX, pop.Y+offset[1]+s.shakeY)
+			shadowOp.PrimaryAlign = text.AlignCenter
+			shadowOp.SecondaryAlign = text.AlignCenter
+			shadowOp.GeoM.Translate(pop.X+offset[0]+s.shakeX, drawY+offset[1]+s.shakeY)
 			shadowOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, alpha})
-			text.Draw(screen, msg, s.game.FontFace(16), shadowOp)
+			text.Draw(screen, msg, numFace, shadowOp)
 		}
 		op := &text.DrawOptions{}
-		op.GeoM.Scale(numScale, numScale)
-		op.GeoM.Translate(pop.X+s.shakeX, pop.Y+s.shakeY)
+		op.PrimaryAlign = text.AlignCenter
+		op.SecondaryAlign = text.AlignCenter
+		op.GeoM.Translate(pop.X+s.shakeX, drawY+s.shakeY)
 		op.ColorScale.ScaleWithColor(mainColor)
-		text.Draw(screen, msg, s.game.FontFace(16), op)
+		text.Draw(screen, msg, numFace, op)
 
 		if pop.IsCrit {
+			critFace := s.game.FontFace(24.0)
+			const critLabelGapY = 48.0
 			labelOp := &text.DrawOptions{}
-			labelOp.GeoM.Scale(1.3, 1.3)
-			labelOp.GeoM.Translate(pop.X+1.0+s.shakeX, pop.Y-18.0+s.shakeY)
+			labelOp.PrimaryAlign = text.AlignCenter
+			labelOp.SecondaryAlign = text.AlignCenter
+			labelOp.GeoM.Translate(pop.X+1.0+s.shakeX, drawY-critLabelGapY+s.shakeY)
 			labelOp.ColorScale.ScaleWithColor(color.RGBA{0, 0, 0, alpha})
-			text.Draw(screen, "CRITICAL", s.game.FontFace(16), labelOp)
+			text.Draw(screen, "CRITICAL", critFace, labelOp)
 
 			labelOp2 := &text.DrawOptions{}
-			labelOp2.GeoM.Scale(1.3, 1.3)
-			labelOp2.GeoM.Translate(pop.X+s.shakeX, pop.Y-19.0+s.shakeY)
+			labelOp2.PrimaryAlign = text.AlignCenter
+			labelOp2.SecondaryAlign = text.AlignCenter
+			labelOp2.GeoM.Translate(pop.X+s.shakeX, drawY-critLabelGapY-1.0+s.shakeY)
 			labelOp2.ColorScale.ScaleWithColor(color.RGBA{255, 130, 40, alpha})
-			text.Draw(screen, "CRITICAL", s.game.FontFace(16), labelOp2)
+			text.Draw(screen, "CRITICAL", critFace, labelOp2)
 		}
 	}
 
@@ -321,15 +339,4 @@ func (s *BattleScene) skillLevelDataAtCursor(p, skillIdx int) SkillLevelData {
 		lv = len(levels)
 	}
 	return levels[lv-1]
-}
-
-func (s *BattleScene) currentSkillHint() string {
-	p := s.waitingActor
-	if p >= 0 && p < partySize {
-		data := s.game.CurrentSkillLevelData(p, s.skillIndex)
-		if data.Target == TargetBoth {
-			return "←単体 / 全体→"
-		}
-	}
-	return ""
 }

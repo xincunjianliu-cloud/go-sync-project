@@ -30,24 +30,6 @@ const (
 	bgmVolumeRepeatIntervalTicks = 2
 )
 
-type skillDef struct {
-	name        string
-	implemented bool
-	mpCost      int
-}
-
-var menuSkillDefs = []skillDef{
-	{name: "攻撃", implemented: false, mpCost: 0},
-	{name: "回復", implemented: true, mpCost: mpCostHeal},
-	{name: "もどる", implemented: true, mpCost: 0},
-}
-
-const (
-	skillIdxAttack = 0
-	skillIdxHeal   = 1
-	skillIdxBack   = 2
-)
-
 const defaultBGMVolume = 0.
 const defaultSEVolume = 0.
 const defaultMasterVolume = 1.
@@ -81,7 +63,6 @@ type MenuScene struct {
 	slotThumbs        [maxSaveSlots]*ebiten.Image
 	saveMode          bool
 	saveResultMsg     string
-	saveDoneIndex     int
 	slotDrag          dragScrollState
 	slotScrollBarDrag dragScrollState
 	slotDragAccum     float64
@@ -558,6 +539,7 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.Keys = d.Keys
 	m.game.RaisedLevers = d.RaisedLevers
 	m.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
+	m.game.SeenEvents = d.SeenEvents
 	m.game.BlockPositions = d.BlockPositions
 	m.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 

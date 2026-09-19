@@ -133,6 +133,16 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		a = append(a, deferredAssetAssign{path, func(g *Game, img *ebiten.Image) { g.CommandIcons[i] = img }})
 	}
 
+	commandIconSelectedFiles := [4]string{
+		"assets/images/battle/アタック_選択.png",
+		"assets/images/battle/スキル_選択.png",
+		"assets/images/battle/待機_選択.png",
+		"assets/images/battle/逃げる_選択.png",
+	}
+	for i, path := range commandIconSelectedFiles {
+		a = append(a, deferredAssetAssign{path, func(g *Game, img *ebiten.Image) { g.CommandIconsSelected[i] = img }})
+	}
+
 	for i := 0; i < 4; i++ {
 		a = append(a, deferredAssetAssign{fmt.Sprintf("assets/images/battle/timeline_p%d.png", i+1), func(g *Game, img *ebiten.Image) { g.TimelineIcons[i] = img }})
 	}
@@ -151,6 +161,18 @@ func deferredAssetAssignments() []deferredAssetAssign {
 
 	for i := 0; i < 4; i++ {
 		a = append(a, deferredAssetAssign{fmt.Sprintf("assets/images/battle/battle_bg_boss_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.BossBgImgs[i] = img }})
+	}
+
+	// statIconFileTags gives the assets/images/battle/stat_<tag>_{up,down}.png
+	// filename fragment for each StatKind (StatAtk, StatMat, StatDef,
+	// StatMdf, StatLuk in that order).
+	statIconFileTags := [5]string{"atk", "mat", "def", "mdf", "luk"}
+	for i, tag := range statIconFileTags {
+		stat := i
+		a = append(a,
+			deferredAssetAssign{fmt.Sprintf("assets/images/battle/stat_%s_up.png", tag), func(g *Game, img *ebiten.Image) { g.StatIconUpImgs[stat] = img }},
+			deferredAssetAssign{fmt.Sprintf("assets/images/battle/stat_%s_down.png", tag), func(g *Game, img *ebiten.Image) { g.StatIconDownImgs[stat] = img }},
+		)
 	}
 
 	a = append(a,

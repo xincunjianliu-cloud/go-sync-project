@@ -153,21 +153,21 @@ func (s *BattleScene) applyItemToTargetInBattle(def ItemDef, target int) bool {
 	}
 
 	if hpHealed > 0 {
-		s.damagePops = append(s.damagePops, DamagePop{
+		s.spawnDamagePop(DamagePop{
 			Value:  hpHealed,
-			X:      s.partyScreenX[target],
-			Y:      s.partyScreenY[target] - 30.0,
-			Vy:     -80.0,
+			X:      s.partyScreenX[target] + spriteFrameW/2,
+			Y:      s.partyScreenY[target] - partyDamagePopOffsetY,
+			Vy:     -45.0,
 			Timer:  0.0,
 			IsHeal: true,
 		})
 	}
 	if mpHealed > 0 {
-		s.damagePops = append(s.damagePops, DamagePop{
+		s.spawnDamagePop(DamagePop{
 			Value:  mpHealed,
-			X:      s.partyScreenX[target] - 10.0,
-			Y:      s.partyScreenY[target] - 45.0,
-			Vy:     -80.0,
+			X:      s.partyScreenX[target] + spriteFrameW/2,
+			Y:      s.partyScreenY[target] - partyDamagePopOffsetY - 15.0,
+			Vy:     -45.0,
 			Timer:  -0.1,
 			IsHeal: true,
 		})

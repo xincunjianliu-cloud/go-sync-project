@@ -76,15 +76,9 @@ const (
 
 const (
 	cmdNormalAttack = iota
-	cmdWait
 	cmdSkill
+	cmdWait
 	cmdFlee
-)
-
-const (
-	mpCostHeal    = 5
-	mpCostHealAll = 3
-	mpCostPower   = 8
 )
 
 const (
@@ -102,17 +96,32 @@ const (
 	cmdPanelH = 120.0
 	hintY     = 524.0
 
-	statusBarY         = 432.0
+	// partyNameBaseX/Y is the party member's name draw position (i=0). Every
+	// other status-block element is positioned relative to this point via
+	// partyNamePosition(i) in battle_draw_panels.go.
+	partyNameBaseX = 40.0
+	partyNameBaseY = 432.0
+
 	statusBlockW       = 135.0
 	statusBarH         = 5.5
 	statusBarSlant     = 8.0
 	statusBlockGap     = 42.0
-	statusStartX       = 30.0
-	statusHPTextY      = 21.0
-	statusHPBarY       = 40.0
-	statusMPTextY      = 51.0
-	statusMPBarY       = 70.0
+	statusHPTextY      = 25.0
+	statusHPBarY       = 44.0
+	statusMPTextY      = 55.0
+	statusMPBarY       = 74.0
 	statusValueOffsetX = 10.0
+
+	// statIconGap/OffsetX/OffsetY position the per-stat up/down icons drawn
+	// to the right of a party member's name (see drawPartyStatIcons in
+	// battle_draw_hud.go); icons are drawn at their native PNG size
+	// (assets/images/battle/stat_up.png and stat_down.png), never scaled.
+	// statIconOffsetX is a single fixed offset used for every party member
+	// (not measured from each member's actual name width); statIconGapX is
+	// the separate, independently-tunable gap between consecutive icons.
+	statIconGapX    = 0.0
+	statIconOffsetX = 50.0
+	statIconOffsetY = -2.0
 
 	// statusValueFontSizeLarge/Small size the current/max numbers drawn by
 	// drawStatusValue in both the battle HUD and the menu party list, so
@@ -152,6 +161,14 @@ const (
 	spriteFrameW = 64
 	spriteFrameH = 96
 )
+
+// damagePopHeadOffsetRatio positions damage/heal popups a fraction of the
+// target's sprite height above its top edge, so the popup lands at roughly
+// the same spot on the head regardless of how tall that particular sprite
+// (party member or enemy) is.
+const damagePopHeadOffsetRatio = 0.08
+
+const partyDamagePopOffsetY = spriteFrameH * damagePopHeadOffsetRatio
 
 const (
 	poseWalk           = 11
@@ -240,8 +257,6 @@ const (
 	introHorizToVertWait = 0.01
 )
 
-const trackW = 920.0
-
 const (
 	gaugeMaxStage = 5
 	gaugePointCap = 8
@@ -327,11 +342,12 @@ const (
 	resultLevelUpOffsetX = 4.0
 	resultLevelUpOffsetY = 12.0
 
-	resultNameFontSize     = 15.0
-	resultExpCurFontSize   = 15.0
-	resultExpMaxFontSize   = 13.0
-	resultExpLabelFontSize = 15.0
-	resultLevelUpFontSize  = 15.0
+	resultNameFontSize        = 15.0
+	resultExpCurFontSize      = 15.0
+	resultExpMaxFontSize      = 13.0
+	resultExpLabelFontSize    = 15.0
+	resultLevelUpFontSize     = 15.0
+	resultSkillUnlockFontSize = 18.0
 
 	resultHintX        = 24.0
 	resultHintYFromBtm = 20.0
@@ -342,6 +358,7 @@ var resultBarFillColor = color.RGBA{255, 200, 130, 255}
 var resultBarBgColor = color.RGBA{30, 30, 40, 255}
 var resultPanelBgColor = color.RGBA{0, 0, 0, 200}
 var resultLevelUpColor = color.RGBA{255, 255, 100, 255}
+var resultSkillUnlockColor = color.RGBA{150, 220, 255, 255}
 var resultItemsDividerColor = color.RGBA{255, 255, 255, 255}
 
 var actorColors = [partySize + 1]color.RGBA{
@@ -477,7 +494,8 @@ type BattleScene struct {
 	clearDialogs   []EventCommand
 	clearDialogIdx int
 
-	isLevelUp [partySize]bool
+	isLevelUp        [partySize]bool
+	resultStartLevel [partySize]int
 
 	pendingPlayerHits  []pendingPlayerHit
 	pendingPlayerHits2 []pendingPlayerHit
@@ -542,6 +560,10 @@ type BattleScene struct {
 
 	PlayerDebuffs [partySize][]Debuff
 	PlayerBuffs   [partySize][]Buff
+
+	// debugStatIconTest tracks whether applyDebugCheats' Shift+B test
+	// buffs/debuffs are currently applied, so pressing it again clears them.
+	debugStatIconTest bool
 
 	selectedSkillTarget SkillTarget
 
@@ -676,11 +698,16 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 		s.preBattlePlayerMP[i] = game.PlayerMP[i]
 	}
 
+	headStartSpeeds := make([]int, partySize+len(s.enemies))
 	for i := 0; i < partySize; i++ {
-		s.atbGauge[i] = atbHeadStart(game.PlayerSpd[i])
+		headStartSpeeds[i] = game.PlayerSpd[i]
 	}
 	for i := range s.enemies {
-		s.atbGauge[s.enemyActorIndex(i)] = atbHeadStart(int(s.enemies[i].Speed))
+		headStartSpeeds[s.enemyActorIndex(i)] = int(s.enemies[i].Speed)
+	}
+	headStarts := atbHeadStarts(headStartSpeeds)
+	for i, pos := range headStarts {
+		s.atbGauge[i] = pos
 	}
 
 	if evType == lastBossEventType {

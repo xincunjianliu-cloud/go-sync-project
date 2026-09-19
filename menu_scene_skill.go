@@ -49,6 +49,33 @@ func (m *MenuScene) isSkillLevelCellHeld(rowIndex, lv int) bool {
 	return false
 }
 
+func (m *MenuScene) isSkillRowUnlocked(skillIdx int) bool {
+	return m.game.IsSkillUnlocked(m.skillCharIndex, skillIdx)
+}
+
+// nextUnlockedSkillIndex moves from a skill row by dir (+1/-1), wrapping
+// around, and skips over rows for skills that aren't unlocked yet so the
+// cursor can never land on a hidden skill.
+func (m *MenuScene) nextUnlockedSkillIndex(from, dir, n int) int {
+	idx := from
+	for i := 0; i < n; i++ {
+		idx = (idx + dir + n) % n
+		if m.isSkillRowUnlocked(idx) {
+			return idx
+		}
+	}
+	return from
+}
+
+func (m *MenuScene) firstUnlockedSkillIndex(charIdx int, skills []SkillDef) int {
+	for i := range skills {
+		if m.game.IsSkillUnlocked(charIdx, i) {
+			return i
+		}
+	}
+	return 0
+}
+
 func (m *MenuScene) reachableSkillLevel(charIdx, skillIdx int) int {
 	skills := m.game.CharacterSkills(charIdx)
 	if skillIdx < 0 || skillIdx >= len(skills) {
@@ -108,8 +135,8 @@ func (m *MenuScene) enterSkillCharacter(idx int) {
 
 	skills := m.game.CharacterSkills(m.skillCharIndex)
 	m.skillSubIndex = m.game.rememberedIndex(m.game.LastSkillSubIndex)
-	if m.skillSubIndex < 0 || m.skillSubIndex >= len(skills) {
-		m.skillSubIndex = 0
+	if m.skillSubIndex < 0 || m.skillSubIndex >= len(skills) || !m.game.IsSkillUnlocked(m.skillCharIndex, m.skillSubIndex) {
+		m.skillSubIndex = m.firstUnlockedSkillIndex(m.skillCharIndex, skills)
 	}
 	curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 	if curLv < 1 {
@@ -156,46 +183,6 @@ func (m *MenuScene) upgradeBlocked(skillIdx int) bool {
 	return !m.game.CanUpgradeSkill(m.skillCharIndex, skillIdx)
 }
 
-func (m *MenuScene) skillUsable(skillIdx int) bool {
-	if skillIdx < 0 || skillIdx >= len(menuSkillDefs) {
-		return false
-	}
-	def := menuSkillDefs[skillIdx]
-	if !def.implemented {
-		return false
-	}
-	if def.mpCost > 0 && m.game.PlayerMP[m.skillCharIndex] < def.mpCost {
-		return false
-	}
-	return true
-}
-
-func (m *MenuScene) skillDisableReason(skillIdx int) string {
-	if skillIdx < 0 || skillIdx >= len(menuSkillDefs) {
-		return ""
-	}
-	def := menuSkillDefs[skillIdx]
-	if !def.implemented {
-		return ""
-	}
-	if def.mpCost > 0 && m.game.PlayerMP[m.skillCharIndex] < def.mpCost {
-		return "MP不足"
-	}
-	return ""
-}
-
-func (m *MenuScene) nextEnabledSkillIndex(from, dir int) int {
-	n := len(menuSkillDefs)
-	idx := from
-	for i := 0; i < n; i++ {
-		idx = (idx + dir + n) % n
-		if m.skillUsable(idx) {
-			return idx
-		}
-	}
-	return from
-}
-
 func (m *MenuScene) updateSkillSub() {
 	if idx, ok := m.hitTestPartyRows(); ok {
 		if idx != m.skillCharIndex {
@@ -225,7 +212,7 @@ func (m *MenuScene) updateSkillSub() {
 	if m.skillLevelSelecting {
 		tappedLvConfirm := false
 		levelAreaTapped := false
-		if rowT, lvT, ok := m.hitTestAnySkillLevelCell(skills); ok {
+		if rowT, lvT, ok := m.hitTestAnySkillLevelCell(skills); ok && m.isSkillRowUnlocked(rowT) {
 			levelAreaTapped = true
 			rowReachable := m.reachableSkillLevel(m.skillCharIndex, rowT)
 			if lvT > rowReachable {
@@ -247,7 +234,7 @@ func (m *MenuScene) updateSkillSub() {
 			}
 			tappedLvConfirm = tapSelectOrConfirm(lvT, true, &m.skillLevelCursor, m.game.Audio)
 			m.game.LastSkillLevelCursor = m.skillLevelCursor
-		} else if rowT, ok := m.hitTestSkillNameRows(n); ok {
+		} else if rowT, ok := m.hitTestSkillNameRows(n); ok && m.isSkillRowUnlocked(rowT) {
 			levelAreaTapped = true
 			if rowT != m.skillSubIndex {
 				m.skillSubIndex = rowT
@@ -284,9 +271,9 @@ func (m *MenuScene) updateSkillSub() {
 		}
 		if up, down := isMenuUpRepeat(), isMenuDownRepeat(); up || down {
 			if up {
-				m.skillSubIndex = (m.skillSubIndex - 1 + n) % n
+				m.skillSubIndex = m.nextUnlockedSkillIndex(m.skillSubIndex, -1, n)
 			} else {
-				m.skillSubIndex = (m.skillSubIndex + 1) % n
+				m.skillSubIndex = m.nextUnlockedSkillIndex(m.skillSubIndex, 1, n)
 			}
 			newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 			if newCurLv < 1 {
@@ -368,7 +355,7 @@ func (m *MenuScene) updateSkillSub() {
 		return
 	}
 
-	if rowT, lvT, ok := m.hitTestAnySkillLevelCell(skills); ok {
+	if rowT, lvT, ok := m.hitTestAnySkillLevelCell(skills); ok && m.isSkillRowUnlocked(rowT) {
 		rowReachable := m.reachableSkillLevel(m.skillCharIndex, rowT)
 		if lvT > rowReachable {
 			lvT = rowReachable
@@ -386,12 +373,15 @@ func (m *MenuScene) updateSkillSub() {
 
 	prevIndex := m.skillSubIndex
 	if isMenuDownRepeat() {
-		m.skillSubIndex = (m.skillSubIndex + 1) % n
+		m.skillSubIndex = m.nextUnlockedSkillIndex(m.skillSubIndex, 1, n)
 	}
 	if isMenuUpRepeat() {
-		m.skillSubIndex = (m.skillSubIndex - 1 + n) % n
+		m.skillSubIndex = m.nextUnlockedSkillIndex(m.skillSubIndex, -1, n)
 	}
 	tappedIdx, tappedOk := m.hitTestSkillNameRows(n)
+	if tappedOk && !m.isSkillRowUnlocked(tappedIdx) {
+		tappedOk = false
+	}
 	tapConfirmed := tapSelectOrConfirm(tappedIdx, tappedOk, &m.skillSubIndex, m.game.Audio)
 	if m.skillSubIndex != prevIndex {
 		newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
@@ -503,53 +493,5 @@ func (m *MenuScene) updateHealTarget() {
 				m.game.PlayerHP[target] = m.game.PlayerMaxHP[target]
 			}
 		}
-
-		if m.game.PlayerMP[caster] < cost {
-			m.pendingSkill = 0
-			m.menuState = menuStateSkillSub
-		}
-		return
-	}
-
-	if m.game.PlayerHP[caster] <= 0 || m.game.PlayerMP[caster] < mpCostHeal {
-		m.game.Audio.PlaySEByKey("error")
-		m.menuState = menuStateSkillSub
-		return
-	}
-
-	if m.healTargetIndex == 4 {
-		if m.game.PlayerMP[caster] < mpCostHealAll {
-			m.game.Audio.PlaySEByKey("error")
-			m.menuState = menuStateSkillSub
-			return
-		}
-		m.game.Audio.PlaySEByKey("heal")
-		m.game.PlayerMP[caster] -= mpCostHealAll
-		for i := 0; i < 4; i++ {
-			if m.game.PlayerHP[i] > 0 {
-				heal := m.game.PlayerMaxHP[i] / 4
-				m.game.PlayerHP[i] += heal
-				if m.game.PlayerHP[i] > m.game.PlayerMaxHP[i] {
-					m.game.PlayerHP[i] = m.game.PlayerMaxHP[i]
-				}
-			}
-		}
-	} else {
-		target := m.healTargetIndex
-		if m.game.PlayerHP[target] <= 0 {
-			m.game.Audio.PlaySEByKey("error")
-			return
-		}
-		m.game.Audio.PlaySEByKey("heal")
-		m.game.PlayerMP[caster] -= mpCostHeal
-		heal := m.game.PlayerMaxHP[target] / 2
-		m.game.PlayerHP[target] += heal
-		if m.game.PlayerHP[target] > m.game.PlayerMaxHP[target] {
-			m.game.PlayerHP[target] = m.game.PlayerMaxHP[target]
-		}
-	}
-
-	if m.game.PlayerMP[caster] < mpCostHeal {
-		m.menuState = menuStateSkillSub
 	}
 }

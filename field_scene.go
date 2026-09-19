@@ -19,6 +19,14 @@ const (
 	fadeTimeBossOut   = 1.5
 )
 
+// 雑魚敵エンカウント時、戦闘シーンへ切り替わる直前にフィールド画面を
+// 静止画として捉え、カメラが回転しながら敵へ迫っていくような演出を行う。
+const (
+	encounterEffectDuration = 0.5
+	encounterEffectZoomEnd  = 2.4
+	encounterEffectSpin     = math.Pi / 5.0
+)
+
 type TiledMap struct {
 	Width      int             `json:"width"`
 	Height     int             `json:"height"`
@@ -50,6 +58,7 @@ type TiledLayer struct {
 }
 
 type TiledObject struct {
+	ID         int             `json:"id"`
 	X          float64         `json:"x"`
 	Y          float64         `json:"y"`
 	Width      float64         `json:"width"`
@@ -120,12 +129,19 @@ func dialoguePagesFromText(text string) []EventCommand {
 	return cmds
 }
 
-func resolveEventDialogue(text string) ([]EventCommand, map[string]int, string) {
-	if id, ok := strings.CutPrefix(text, "event_story_"); ok {
-		if d, found := GetStoryDialogue(id); found {
+// resolveEventDialogue は会話イベントの表示内容を解決する。seenがtrue
+// (=このオブジェクトと過去に一度会話済み)の場合、まず個別に用意された
+// 2回目以降用のセリフ(event_story_系なら"<id>_repeat"、直書きテキスト系なら
+// repeatText プロパティ)を探し、無ければ通常時のセリフにフォールバックする。
+func resolveEventDialogue(text string, repeatText string, seen bool) ([]EventCommand, map[string]int, string) {
+	if id, ok := strings.CutPrefix(text, storyTextPrefix); ok {
+		if d, found := GetStoryDialogue(id, seen); found {
 			return d.Commands, d.SpeakerSlots, d.BGM
 		}
 		return []EventCommand{{Speaker: "", Text: "……"}}, nil, ""
+	}
+	if seen && repeatText != "" {
+		return dialoguePagesFromText(repeatText), nil, ""
 	}
 	return dialoguePagesFromText(text), nil, ""
 }
@@ -142,7 +158,9 @@ func (s *FieldScene) applyCutsceneMessage() {
 		s.msgBGM = bd.BGM
 		return
 	}
-	s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(s.cutsceneMessage)
+	// トリガー型の演出は一度発火したら二度と発火しない(呼び出し元でSeenEvents
+	// により再発火自体をブロックしている)ので、2回目以降セリフの分岐は不要。
+	s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(s.cutsceneMessage, "", false)
 }
 
 type EnemyField struct {
@@ -196,6 +214,11 @@ type FieldScene struct {
 	walkCooldown       float64
 	safetyDistance     float64
 	encounterWeight    float64
+
+	encounterEffectActive bool
+	encounterEffectTimer  float64
+	encounterSnapshot     *ebiten.Image
+	pendingBattleScene    *BattleScene
 	isCutscene         bool
 	cutsceneMessage    string
 	cutsceneHasBossID  bool
@@ -247,6 +270,7 @@ type FieldScene struct {
 	wallFadeActive bool
 	wallFadeKey    string
 	wallFadeAlpha  float64
+	wallAnimTick   int
 
 	isDarknessActive bool
 	darknessRadius   float64
@@ -369,8 +393,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			isFixture := strings.HasPrefix(p["text"], "event_chest_") || p["text"] == "event_lever"
-			if p["type"] != "event" || !isFixture {
+			if !isChestObj(p) && !isLeverObj(p) {
 				continue
 			}
 			collisionRects = append(collisionRects, CollisionRect{
@@ -389,7 +412,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_block" {
+			if !isBlockObj(p) {
 				continue
 			}
 			id := p["id"]
@@ -409,13 +432,11 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		spawnY = 320
 	}
 
-	var targetTileImg *ebiten.Image
-	if strings.Contains(mapPath, "School") {
-		targetTileImg = game.Tilesets["rouka"]
-	} else if strings.Contains(mapPath, "dungeon") || strings.Contains(mapPath, "ダンジョン") {
-		targetTileImg = game.Tilesets["dungeon"]
-	} else {
-		targetTileImg = game.Tilesets["default"]
+	targetTileImg := game.Tilesets["default"]
+	if def, ok := mapDefFor(mapPath); ok {
+		if img, ok := game.Tilesets[def.TilesetKey]; ok {
+			targetTileImg = img
+		}
 	}
 
 	playerCfg, playerSheet, err := LoadFieldPlayerConfig("assets/field_player.json")
@@ -463,7 +484,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	}
 	scene.mapBGM = mapBGM
 
-	if autoHealMaps[mapPath] {
+	if def, ok := mapDefFor(mapPath); ok && def.AutoHeal {
 		scene.healParty()
 		if game.SeenAutoHealMapIntro == nil {
 			game.SeenAutoHealMapIntro = make(map[string]bool)
@@ -486,20 +507,12 @@ func (s *FieldScene) desiredBGM(transitionDuration float64) (string, float64, bo
 
 var globalActiveFieldInstanceForSave *FieldScene
 
-var autoHealMaps = map[string]bool{
-	"assets/maps/ダンジョンA.tmj": true,
-}
-
 const autoHealIntroMessage = "ダンジョンに入ると自動的に回復します"
 const autoHealIntroMessageDuration = 2.5
 
 func locationNameFromMap(mapPath string) string {
-	names := map[string]string{
-		"assets/maps/School_Map_1.tmj": "理科室",
-		"assets/maps/ダンジョンA.tmj":       "ダンジョンA",
-	}
-	if name, ok := names[mapPath]; ok {
-		return name
+	if def, ok := mapDefFor(mapPath); ok {
+		return def.DisplayName
 	}
 	return mapPath
 }
@@ -564,6 +577,7 @@ func SaveGame(slot int, mapPath string, x, y float64, hp [4]int) error {
 		Keys:                 g.Keys,
 		RaisedLevers:         g.RaisedLevers,
 		SeenAutoHealMapIntro: g.SeenAutoHealMapIntro,
+		SeenEvents:           g.SeenEvents,
 		BlockPositions:       g.BlockPositions,
 		UnlockedBlockDoors:   g.UnlockedBlockDoors,
 	}
@@ -623,7 +637,15 @@ func (s *FieldScene) healParty() {
 	}
 }
 
+// chestKey はマップ内のオブジェクト1つを一意に識別するキーを返す。
+// TiledのIDはレベル調整でオブジェクトを動かしても変わらない安定した
+// 識別子なので、あればそれを使う。ID未設定(0)のときだけ従来通り座標に
+// フォールバックする(コード内で手動組み立てしたTiledObject向けの保険で、
+// Tiledで実際に配置したオブジェクトは常にID>0を持つ)。
 func chestKey(mapPath string, obj TiledObject) string {
+	if obj.ID != 0 {
+		return fmt.Sprintf("%s|id%d", mapPath, obj.ID)
+	}
 	return fmt.Sprintf("%s|%.1f_%.1f", mapPath, obj.X, obj.Y)
 }
 

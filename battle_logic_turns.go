@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand"
+	"sort"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -122,14 +123,45 @@ const (
 // adds. Skill uses instead add their own SkillLevelData.GaugePoint.
 const normalAttackGaugePoint = 1
 
-// atbHeadStart determines the timeline position (0-100) an actor starts
-// battle at, based on their Spd stat only. It is not used for the
-// return position after subsequent actions.
-func atbHeadStart(spd int) float64 {
-	if spd <= 0 {
+// atbHeadStartSpacing is the minimum gap, in the same 0-100 units as
+// atbGauge, between two adjacent head-start icons so they don't overlap
+// on the timeline.
+func atbHeadStartSpacing() float64 {
+	trackLen := goalAnchorLayout.X - timelineStartX
+	if trackLen <= 0 {
 		return 0
 	}
-	return float64(spd) / 2.0
+	return iconSize / trackLen * atbMax
+}
+
+// atbHeadStarts determines the timeline positions (0-100) every actor
+// starts battle at, based on their Spd stat. It is not used for the
+// return position after subsequent actions.
+//
+// Actors are ranked by speed ascending; the slowest starts at position 0,
+// and each faster actor is placed exactly atbHeadStartSpacing further
+// along than the previous one. This keeps speed ordering intact while
+// guaranteeing icons never overlap, even when actual speed values are
+// close together.
+func atbHeadStarts(speeds []int) []float64 {
+	positions := make([]float64, len(speeds))
+	order := make([]int, len(speeds))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		return speeds[order[a]] < speeds[order[b]]
+	})
+
+	spacing := atbHeadStartSpacing()
+	pos := 0.0
+	for rank, idx := range order {
+		if rank > 0 {
+			pos += spacing
+		}
+		positions[idx] = clampAtbPosition(pos)
+	}
+	return positions
 }
 
 func clampAtbPosition(pos float64) float64 {
@@ -258,19 +290,19 @@ func hitTestCommandMenu(game *Game) (int, bool) {
 
 func (s *BattleScene) updatePlayerMenu() Scene {
 	if isMenuUpPressed() {
-		s.commandIndex = 0
+		s.commandIndex = cmdNormalAttack
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuLeftPressed() {
-		s.commandIndex = 1
+		s.commandIndex = cmdSkill
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuRightPressed() {
-		s.commandIndex = 2
+		s.commandIndex = cmdWait
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownPressed() {
-		s.commandIndex = 3
+		s.commandIndex = cmdFlee
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 	tappedIdx, tappedOk := hitTestCommandMenu(s.game)
@@ -328,7 +360,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		return nil
 	}
 
-	if s.commandIndex == 2 {
+	if s.commandIndex == cmdWait {
 		if !s.hasFullPartyForSynergy() {
 			s.game.Audio.PlaySEByKey("error")
 			return nil
@@ -343,16 +375,16 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	s.lastCommandIndex[p] = s.commandIndex
 
 	switch s.commandIndex {
-	case 0:
+	case cmdNormalAttack:
 		s.pendingSkill = 0
 		s.targetIndex = s.firstAliveEnemySlot()
 		s.battlePhase = phaseTargetSelect
 		return nil
-	case 1:
+	case cmdSkill:
 		skills := s.game.CharacterSkills(p)
 		s.skillIndex = s.lastSkillIndex[p]
-		if s.skillIndex < 0 || s.skillIndex >= len(skills) {
-			s.skillIndex = 0
+		if s.skillIndex < 0 || s.skillIndex >= len(skills) || !s.game.IsSkillUnlocked(p, s.skillIndex) {
+			s.skillIndex = s.firstUnlockedSkillIndex(p, skills)
 		}
 		for i := range s.skillLevelCursors[p] {
 			if s.skillLevelCursors[p][i] < 1 {
@@ -366,7 +398,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.skillMenuOpenTimer = 0.1
 		s.battlePhase = phaseSkillMenu
 		return nil
-	case 2:
+	case cmdWait:
 		s.waitStance[p] = true
 		s.atbGauge[p] = atbMax
 		alreadyInOrder := false
@@ -385,7 +417,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 			s.tryStartNextActor()
 		}
 		return nil
-	case 3:
+	case cmdFlee:
 		if rand.Intn(100) >= s.fleeSuccessRate() {
 			s.resetPlayerGaugeTo(p, fleeFailReturnPosition)
 			s.waitingActor = -1
@@ -416,12 +448,12 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	menuLen := len(skills)
 
 	if isMenuDownPressed() {
-		s.skillIndex = (s.skillIndex + 1) % menuLen
+		s.skillIndex = s.nextUnlockedSkillIndex(p, s.skillIndex, 1, menuLen)
 		s.lastSkillIndex[p] = s.skillIndex
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuUpPressed() {
-		s.skillIndex = (s.skillIndex - 1 + menuLen) % menuLen
+		s.skillIndex = s.nextUnlockedSkillIndex(p, s.skillIndex, -1, menuLen)
 		s.lastSkillIndex[p] = s.skillIndex
 		s.game.Audio.PlaySEByKey("cursor")
 	}
@@ -430,6 +462,9 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	tappedIdx, tappedOk := -1, false
 	if !arrowTapped {
 		tappedIdx, tappedOk = s.hitTestBattleSubRows(menuLen)
+		if tappedOk && !s.game.IsSkillUnlocked(p, tappedIdx) {
+			tappedOk = false
+		}
 	}
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skillIndex, s.game.Audio)
 	if tappedOk {

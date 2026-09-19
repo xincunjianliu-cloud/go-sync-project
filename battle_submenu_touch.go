@@ -102,6 +102,9 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 	}
 	face := s.game.FontFace(15)
 	for i, sk := range skills {
+		if !s.game.IsSkillUnlocked(p, i) {
+			continue
+		}
 		curLv := s.game.PlayerSkillLv[p][i]
 		if curLv < 1 {
 			curLv = 1

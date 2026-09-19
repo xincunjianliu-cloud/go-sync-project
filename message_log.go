@@ -18,8 +18,6 @@ const (
 	logEntryGap  = 35.0
 	logTextLineH = 20.0
 
-	logFallbackImageHeight = 110.0
-
 	logImageStartX = 200.0
 	logImageStartY = 30.0
 

@@ -14,6 +14,72 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 	if s == nil {
 		return
 	}
+
+	if s.encounterEffectActive {
+		s.drawEncounterEffect(screen)
+		return
+	}
+
+	s.drawWorld(screen)
+
+	if s.isMsgActive {
+		s.msg.DrawChara(screen, s.game.CharaImgs)
+	}
+
+	if s.isMsgActive && s.msgIndex >= 0 && s.msgIndex < len(s.msgTexts) {
+		s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game, 20)
+	}
+
+	if s.isMsgActive {
+		drawMessageControlPanel(screen, s.game, s.autoMode, s.msgSkipHoldElapsed, endingSkipHoldSeconds)
+	}
+
+	if s.nearExamineEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
+		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ 調べる")
+	}
+
+	if s.nearDoorEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
+		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ 進む")
+	}
+
+	if s.isPushingBlock && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
+		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ はなす")
+	}
+
+	if s.cseFadeAlpha > 0 {
+		ebitenutil.DrawRect(screen, 0, 0,
+			float64(gameWidth), float64(gameHeight),
+			scaleAlpha(color.RGBA{0, 0, 0, 255}, s.cseFadeAlpha))
+	}
+
+	if s.isChoiceActive {
+		camX, camY := s.cameraPosition()
+		s.drawChoiceUI(screen, camX+s.screenShakeX, camY+s.screenShakeY)
+	}
+
+	if s.isItemGetActive {
+		s.drawItemGetPopup(screen)
+		if !s.itemGetAutoCloseOnly {
+			drawBackButton(screen, s.game)
+		}
+	}
+
+	if s.isLogActive {
+		drawMessageLog(screen, s.game, s.msgLog, s.logScrollOffset, s.logCursorIndex)
+		drawBackButton(screen, s.game)
+	}
+
+	showTouchPad := !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive && !s.isLogActive && !s.wallFadeActive
+	if s.game.MobileMode {
+		showActionButton := !s.isMsgActive && !s.isItemGetActive && !s.wallFadeActive
+		s.drawTouchControls(screen, showTouchPad, showActionButton)
+	}
+	if showTouchPad {
+		drawHamburgerMenuButton(screen, s.game)
+	}
+}
+
+func (s *FieldScene) drawWorld(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{30, 30, 30, 255})
 	camX, camY := s.cameraPosition()
 	camX += s.screenShakeX
@@ -27,36 +93,112 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 		}
 	}
 
-	for _, layer := range s.tileMap.Layers {
-		if layer.Type != "tilelayer" {
+	// events/playerレイヤーの位置はTiled側のレイヤー順で決まる。マップ制作者が
+	// レイヤーパネルで並べ替えるだけで、装飾タイルと設置物・プレイヤーの
+	// 前後関係を変更できるようにするため、タイル描画ループの中で
+	// これらのレイヤーに到達したタイミングで対応する内容を描画する。
+	eventsLayerIdx, playerLayerIdx := -1, -1
+	for i, layer := range s.tileMap.Layers {
+		if layer.Type != "objectgroup" {
 			continue
 		}
-
-		for i, id := range layer.Data {
-			if id == 0 {
-				continue
-			}
-			tx := (i % s.tileMap.Width) * s.tileMap.TileWidth
-			ty := (i / s.tileMap.Width) * s.tileMap.TileHeight
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(tx)+camX, float64(ty)+camY)
-			tileID := id - 1
-
-			sx := (tileID % tilesetCols) * s.tileMap.TileWidth
-			sy := (tileID / tilesetCols) * s.tileMap.TileHeight
-			rect := image.Rect(sx, sy, sx+s.tileMap.TileWidth, sy+s.tileMap.TileHeight)
-
-			screen.DrawImage(s.mapTileImg.SubImage(rect).(*ebiten.Image), op)
+		if eventsLayerIdx == -1 && strings.HasPrefix(layer.Name, "events") {
+			eventsLayerIdx = i
+		}
+		if layer.Name == "player" {
+			playerLayerIdx = i
 		}
 	}
 
+	eventsDrawn, playerDrawn := false, false
+	for i, layer := range s.tileMap.Layers {
+		if layer.Type == "tilelayer" {
+			s.drawTileLayer(screen, layer, camX, camY, tilesetCols)
+		}
+		if i == eventsLayerIdx {
+			s.drawMapEvents(screen, camX, camY)
+			eventsDrawn = true
+		}
+		if i == playerLayerIdx {
+			s.drawEnemiesAndPlayer(screen, camX, camY)
+			playerDrawn = true
+		}
+	}
+	if !eventsDrawn {
+		s.drawMapEvents(screen, camX, camY)
+	}
+	if !playerDrawn {
+		s.drawEnemiesAndPlayer(screen, camX, camY)
+	}
+
+	s.drawDarkness(screen, camX, camY)
+}
+
+// drawEncounterEffect は雑魚敵エンカウント発生時、startEncounterEffectで
+// 捕えたフィールドの静止画をカメラが回転しながらズームインしていくように
+// 描画する。プレイヤーは画面中央に固定されているため、画面中心を軸に
+// 回転・拡大するだけで「カメラが回り込みながら迫る」演出になる。
+func (s *FieldScene) drawEncounterEffect(screen *ebiten.Image) {
+	screen.Fill(color.RGBA{0, 0, 0, 255})
+	if s.encounterSnapshot == nil {
+		return
+	}
+
+	t := s.encounterEffectTimer / encounterEffectDuration
+	if t > 1 {
+		t = 1
+	}
+	eased := t * t // 徐々に加速しながら迫ってくる感じにするための ease-in
+
+	scale := 1.0 + eased*(encounterEffectZoomEnd-1.0)
+	rotation := eased * encounterEffectSpin
+
+	w := s.encounterSnapshot.Bounds().Dx()
+	h := s.encounterSnapshot.Bounds().Dy()
+
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
+	op.GeoM.Rotate(rotation)
+	op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(float64(gameWidth)/2, float64(gameHeight)/2)
+	op.Filter = ebiten.FilterLinear
+	screen.DrawImage(s.encounterSnapshot, op)
+
+	if t > 0.6 {
+		darken := (t - 0.6) / 0.4
+		ebitenutil.DrawRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, uint8(220 * darken)})
+	}
+}
+
+func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX, camY float64, tilesetCols int) {
+	for i, id := range layer.Data {
+		if id == 0 {
+			continue
+		}
+		tx := (i % s.tileMap.Width) * s.tileMap.TileWidth
+		ty := (i / s.tileMap.Width) * s.tileMap.TileHeight
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(tx)+camX, float64(ty)+camY)
+		tileID := id - 1
+
+		sx := (tileID % tilesetCols) * s.tileMap.TileWidth
+		sy := (tileID / tilesetCols) * s.tileMap.TileHeight
+		rect := image.Rect(sx, sy, sx+s.tileMap.TileWidth, sy+s.tileMap.TileHeight)
+
+		screen.DrawImage(s.mapTileImg.SubImage(rect).(*ebiten.Image), op)
+	}
+}
+
+func (s *FieldScene) drawMapEvents(screen *ebiten.Image, camX, camY float64) {
 	s.drawChests(screen, camX, camY)
 	s.drawLockedWalls(screen, camX, camY)
 	s.drawLevers(screen, camX, camY)
 	s.drawBlockSpots(screen, camX, camY)
 	s.drawBlocks(screen, camX, camY)
 	s.drawBlockDoors(screen, camX, camY)
+}
 
+func (s *FieldScene) drawEnemiesAndPlayer(screen *ebiten.Image, camX, camY float64) {
 	for _, e := range s.enemies {
 		if idx, ok := bossIndexFromEnemyType(e.Type); ok {
 			bossFrame := int((ebiten.Tick() / 20) % 2)
@@ -93,63 +235,6 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 
 	rect := image.Rect(sx, sy, sx+fw, sy+fh)
 	screen.DrawImage(s.game.SpriteSheet.SubImage(rect).(*ebiten.Image), op)
-
-	s.drawDarkness(screen, camX, camY)
-
-	if s.isMsgActive {
-		s.msg.DrawChara(screen, s.game.CharaImgs)
-	}
-
-	if s.isMsgActive && s.msgIndex >= 0 && s.msgIndex < len(s.msgTexts) {
-		s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game, 20)
-	}
-
-	if s.isMsgActive {
-		drawMessageControlPanel(screen, s.game, s.autoMode, s.msgSkipHoldElapsed, endingSkipHoldSeconds)
-	}
-
-	if s.nearExamineEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
-		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ 調べる")
-	}
-
-	if s.nearDoorEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
-		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ 進む")
-	}
-
-	if s.isPushingBlock && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
-		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ はなす")
-	}
-
-	if s.cseFadeAlpha > 0 {
-		ebitenutil.DrawRect(screen, 0, 0,
-			float64(gameWidth), float64(gameHeight),
-			scaleAlpha(color.RGBA{0, 0, 0, 255}, s.cseFadeAlpha))
-	}
-
-	if s.isChoiceActive {
-		s.drawChoiceUI(screen, camX, camY)
-	}
-
-	if s.isItemGetActive {
-		s.drawItemGetPopup(screen)
-		if !s.itemGetAutoCloseOnly {
-			drawBackButton(screen, s.game)
-		}
-	}
-
-	if s.isLogActive {
-		drawMessageLog(screen, s.game, s.msgLog, s.logScrollOffset, s.logCursorIndex)
-		drawBackButton(screen, s.game)
-	}
-
-	showTouchPad := !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive && !s.isLogActive && !s.wallFadeActive
-	if s.game.MobileMode {
-		showActionButton := !s.isMsgActive && !s.isItemGetActive && !s.wallFadeActive
-		s.drawTouchControls(screen, showTouchPad, showActionButton)
-	}
-	if showTouchPad {
-		drawHamburgerMenuButton(screen, s.game)
-	}
 }
 
 func (s *FieldScene) drawChests(screen *ebiten.Image, camX, camY float64) {
@@ -161,10 +246,7 @@ func (s *FieldScene) drawChests(screen *ebiten.Image, camX, camY float64) {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" {
-				continue
-			}
-			if !strings.HasPrefix(p["text"], "event_chest_") {
+			if !isChestObj(p) {
 				continue
 			}
 
@@ -174,7 +256,7 @@ func (s *FieldScene) drawChests(screen *ebiten.Image, camX, camY float64) {
 			}
 
 			chestImg := s.game.ChestImg
-			if strings.HasPrefix(p["text"], "event_chest_key_") && s.game.KeyChestImg != nil {
+			if isKeyChestObj(p) && s.game.KeyChestImg != nil {
 				chestImg = s.game.KeyChestImg
 			}
 
@@ -188,6 +270,13 @@ func (s *FieldScene) drawChests(screen *ebiten.Image, camX, camY float64) {
 	}
 }
 
+// lockedWallFrameCount/lockedWallTicksPerFrame は施錠された壁(レバー式を除く)の
+// アニメーション設定。常に揺らめいて見えるよう、開錠前は無条件で再生し続ける。
+const (
+	lockedWallFrameCount    = 4
+	lockedWallTicksPerFrame = 8
+)
+
 func (s *FieldScene) drawLockedWalls(screen *ebiten.Image, camX, camY float64) {
 	for _, layer := range s.tileMap.Layers {
 		if !strings.HasPrefix(layer.Name, "events") {
@@ -195,11 +284,11 @@ func (s *FieldScene) drawLockedWalls(screen *ebiten.Image, camX, camY float64) {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_wall" {
+			if !isWallObj(p) {
 				continue
 			}
 
-			isLeverWall := p["lever"] != ""
+			isLeverWall := isLeverControlledWallObj(p)
 			open := s.wallIsOpen(obj)
 			if !isLeverWall && open {
 				continue
@@ -221,6 +310,9 @@ func (s *FieldScene) drawLockedWalls(screen *ebiten.Image, camX, camY float64) {
 				if open {
 					frame = 1
 				}
+			} else {
+				frameW /= lockedWallFrameCount
+				frame = (s.wallAnimTick / lockedWallTicksPerFrame) % lockedWallFrameCount
 			}
 			if frameW <= 0 || frameH <= 0 {
 				continue
@@ -261,7 +353,7 @@ func (s *FieldScene) drawLevers(screen *ebiten.Image, camX, camY float64) {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_lever" {
+			if !isLeverObj(p) {
 				continue
 			}
 
@@ -297,7 +389,7 @@ func (s *FieldScene) drawBlockSpots(screen *ebiten.Image, camX, camY float64) {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_blockspot" {
+			if !isBlockSpotObj(p) {
 				continue
 			}
 
@@ -349,7 +441,7 @@ func (s *FieldScene) drawBlockDoors(screen *ebiten.Image, camX, camY float64) {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_blockdoor" {
+			if !isBlockDoorObj(p) {
 				continue
 			}
 			if s.blockDoorIsOpen(obj) {

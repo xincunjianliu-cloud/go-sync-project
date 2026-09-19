@@ -27,7 +27,7 @@ func computeWallKeyGroups(maps []TiledMap) map[string][]string {
 			}
 			for _, obj := range layer.Objects {
 				p := objProps(obj)
-				if p["type"] != "event" || p["text"] != "event_wall" {
+				if !isWallObj(p) {
 					continue
 				}
 				names := splitKeyNames(p["keys"])

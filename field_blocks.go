@@ -152,7 +152,7 @@ func (s *FieldScene) findBlockSpot(spotID string) (TiledObject, bool) {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] == "event" && p["text"] == "event_blockspot" && p["id"] == spotID {
+			if isBlockSpotObj(p) && p["id"] == spotID {
 				return obj, true
 			}
 		}
@@ -190,7 +190,7 @@ func (s *FieldScene) spotBelongsToOpenDoor(spotID string) bool {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_blockdoor" || !s.blockDoorIsOpen(obj) {
+			if !isBlockDoorObj(p) || !s.blockDoorIsOpen(obj) {
 				continue
 			}
 			for _, id := range splitKeyNames(p["spots"]) {
@@ -212,7 +212,7 @@ func (s *FieldScene) blockIsLocked(b *FieldBlock) bool {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_blockspot" {
+			if !isBlockSpotObj(p) {
 				continue
 			}
 			if !blockOnSpot(b, obj) {
@@ -233,7 +233,7 @@ func (s *FieldScene) updateBlockDoors() {
 		}
 		for _, obj := range layer.Objects {
 			p := objProps(obj)
-			if p["type"] != "event" || p["text"] != "event_blockdoor" {
+			if !isBlockDoorObj(p) {
 				continue
 			}
 			if s.blockDoorIsOpen(obj) {

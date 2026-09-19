@@ -440,12 +440,6 @@ var menuOptionDescriptions = map[int]string{
 	optionIdxReset:        "設定をすべて初期値に戻します",
 }
 
-var menuSkillDescriptions = map[int]string{
-	skillIdxAttack: "攻撃スキルを発動します（現在は未実装です）",
-	skillIdxHeal:   "対象のHPを回復します",
-	skillIdxBack:   "キャラクター選択に戻ります",
-}
-
 const messageSpeedPreviewText = "メッセージはこの速度で表示されます"
 
 func (m *MenuScene) previewRevealCount() int {

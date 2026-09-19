@@ -6,7 +6,6 @@ import (
 	"math/rand"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
@@ -56,17 +55,6 @@ func (s *BattleScene) allAttackGaugeCost() int {
 
 func (s *BattleScene) canUseRewind(actor int) bool {
 	return actor >= 0 && actor < partySize && !s.rewindUsed && s.gaugeStage >= gaugeMaxStage-1
-}
-
-func (s *BattleScene) gaugeFillRatio() float64 {
-	ratio := float64(s.gaugePoint) / float64(gaugePoolMax)
-	if ratio < 0 {
-		ratio = 0
-	}
-	if ratio > 1 {
-		ratio = 1
-	}
-	return ratio
 }
 
 func (s *BattleScene) consumeAllGaugePoints() {
@@ -144,18 +132,6 @@ func glowFrameForLevel(level int, timer float64) int {
 	}
 	sub := int(t/0.15) % count
 	return start + sub
-}
-
-func fitTextForWidth(face text.Face, txt string, maxWidth float64) string {
-	runes := []rune(txt)
-	for len(runes) > 0 {
-		w, _ := text.Measure(string(runes), face, 0)
-		if w <= maxWidth {
-			return string(runes)
-		}
-		runes = runes[:len(runes)-1]
-	}
-	return ""
 }
 
 var goalAnchorLayout = struct {
@@ -326,15 +302,15 @@ func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool)
 
 func (s *BattleScene) effectiveAtk(actor int) int {
 	base := s.game.PlayerAtk[actor]
-	down := SumDebuffPercent(s.PlayerDebuffs[actor], DebuffAtkDown)
-	up := SumBuffPercent(s.PlayerBuffs[actor], BuffAtkUp)
+	down := SumDebuffPercent(s.PlayerDebuffs[actor], StatAtk)
+	up := SumBuffPercent(s.PlayerBuffs[actor], StatAtk)
 	return int(float64(base) * (1.0 + float64(up)/100.0 - float64(down)/100.0))
 }
 
 func (s *BattleScene) effectiveMagicAtk(actor int) int {
 	base := s.game.PlayerMagicAtk[actor]
-	down := SumDebuffPercent(s.PlayerDebuffs[actor], DebuffAtkDown)
-	up := SumBuffPercent(s.PlayerBuffs[actor], BuffAtkUp)
+	down := SumDebuffPercent(s.PlayerDebuffs[actor], StatAtk)
+	up := SumBuffPercent(s.PlayerBuffs[actor], StatAtk)
 	return int(float64(base) * (1.0 + float64(up)/100.0 - float64(down)/100.0))
 }
 
@@ -344,13 +320,13 @@ func (s *BattleScene) effectiveEnemyDef(slot int, magic bool) int {
 	}
 	e := &s.enemies[slot]
 	var base int
-	var t DebuffType
+	var t StatKind
 	if magic {
 		base = e.MagicDef
-		t = DebuffMagicDefDown
+		t = StatMdf
 	} else {
 		base = e.Def
-		t = DebuffDefDown
+		t = StatDef
 	}
 	down := SumDebuffPercent(e.Debuffs, t)
 	return int(float64(base) * (1.0 - float64(down)/100.0))
@@ -402,8 +378,8 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 				}
 			}
 		case EffectDebuffDefBoth:
-			d1 := Debuff{Type: DebuffDefDown, Percent: e.Percent, Turns: e.Turns}
-			d2 := Debuff{Type: DebuffMagicDefDown, Percent: e.Percent, Turns: e.Turns}
+			d1 := Debuff{Type: StatDef, Percent: e.Percent, Turns: e.Turns}
+			d2 := Debuff{Type: StatMdf, Percent: e.Percent, Turns: e.Turns}
 			if targetIsEnemy {
 				if targetIdx < 0 || targetIdx >= len(s.enemies) {
 					continue
@@ -418,7 +394,7 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 				percent = e.PercentAll
 			}
 			if !targetIsEnemy && targetIdx >= 0 && targetIdx < partySize {
-				s.PlayerBuffs[targetIdx] = append(s.PlayerBuffs[targetIdx], Buff{Type: BuffAtkUp, Percent: percent, Turns: e.Turns})
+				s.PlayerBuffs[targetIdx] = append(s.PlayerBuffs[targetIdx], Buff{Type: StatAtk, Percent: percent, Turns: e.Turns})
 			}
 		default:
 			d := Debuff{Type: mapEffectToDebuff(e.Type), Percent: e.Percent, Turns: e.Turns}
