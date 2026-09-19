@@ -112,7 +112,11 @@ func (s *TitleScene) Update(dt float64) Scene {
 			s.game.ChangeSceneWithFade(field, fadeTimeNewGame)
 			return s
 
-		} else if s.menuIndex == 1 && s.hasSaveFile {
+		} else if s.menuIndex == 1 {
+			if !s.hasSaveFile {
+				s.game.Audio.PlaySEByKey("error")
+				return s
+			}
 			if !s.game.heavyAssetsReady || s.game.heavyAssetsErr != nil {
 				s.game.Audio.PlaySEByKey("error")
 				return s

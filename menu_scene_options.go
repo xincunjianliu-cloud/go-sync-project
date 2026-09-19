@@ -19,14 +19,6 @@ func isVolumeOptionRow(idx int) bool {
 	return idx == optionIdxBGM || idx == optionIdxSE || idx == optionIdxMaster
 }
 
-// isValueToggleRow は画面モード/メッセージ速度/カーソル記憶のように、
-// 確定操作で値そのものが切り替わる行かどうかを返す。これらの行は、
-// ラベルや値の文字部分をタップしても選択されるだけにして、値の変更は
-// ◀▶矢印のタップか確定キー（Enter/Z等）でのみ行えるようにする。
-func isValueToggleRow(idx int) bool {
-	return idx == optionIdxDisplayMode || idx == optionIdxMessageSpeed || idx == optionIdxCursorMemory
-}
-
 func optionRowPositions() (masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY float64) {
 	masterBarY = volumePanelY
 	bgmBarY = masterBarY + volumeRowGapY
@@ -144,29 +136,33 @@ func (m *MenuScene) updateOption() {
 	}
 	tappedIdx, tappedOk := m.hitTestOptionList()
 	tapConfirm := tapSelectOrConfirm(tappedIdx, tappedOk, &m.optionIndex, m.game.Audio)
-	if tapConfirm && isValueToggleRow(tappedIdx) {
-		// 矢印以外(ラベルや値の文字)のタップは選択のみ。値の切り替えは
-		// 矢印タップ(hitTestOptionArrowsで別途処理済み)か確定キーのみで行う。
-		tapConfirm = false
-	}
 
 	if isVolumeOptionRow(m.optionIndex) {
 		m.updateVolumeKeys()
 	} else {
 		m.finishVolumeInput()
 		if isMenuRightPressed() {
-			m.changeOptionValue(m.optionIndex, +1)
-			m.game.Audio.PlaySEByKey("cursor")
+			if m.changeOptionValue(m.optionIndex, +1) {
+				m.game.Audio.PlaySEByKey("cursor")
+			} else {
+				m.game.Audio.PlaySEByKey("error")
+			}
 		}
 		if isMenuLeftPressed() {
-			m.changeOptionValue(m.optionIndex, -1)
-			m.game.Audio.PlaySEByKey("cursor")
+			if m.changeOptionValue(m.optionIndex, -1) {
+				m.game.Audio.PlaySEByKey("cursor")
+			} else {
+				m.game.Audio.PlaySEByKey("error")
+			}
 		}
 	}
 
 	if isConfirmKeyPressed() || tapConfirm {
-		m.game.Audio.PlaySEByKey("decide")
-		m.activateOption(m.optionIndex)
+		// 値の変更は矢印(キー/タップ)とボリュームのドラッグのみで行う。
+		// 確定キーは「リセット」以外のどの行でも値を変えない。
+		if m.activateOption(m.optionIndex) {
+			m.game.Audio.PlaySEByKey("decide")
+		}
 		return
 	}
 
@@ -200,42 +196,45 @@ func (m *MenuScene) hitTestOptionArrows() (int, int, bool) {
 	return 0, 0, false
 }
 
-func (m *MenuScene) changeOptionValue(idx, dir int) {
+// changeOptionValue は画面サイズ/メッセージ速度/カーソル記憶の値をdir方向に
+// 1段階変える。値が実際に変化した場合はtrueを返す。メッセージ速度は上限・
+// 下限で止まり(ループしない)、これは確定キーでの変更(activateOption)とも
+// 挙動を揃えるためのもの。
+func (m *MenuScene) changeOptionValue(idx, dir int) bool {
 	switch idx {
 	case optionIdxDisplayMode:
 		m.toggleDisplayMode()
+		return true
 	case optionIdxMessageSpeed:
 		next := m.game.MessageSpeed + dir
 		if next < 0 || next > 2 {
-			return
+			return false
 		}
 		m.game.MessageSpeed = next
 		m.previewTicks = 0
 		m.persistSettings()
+		return true
 	case optionIdxCursorMemory:
 		m.game.RememberCursor = !m.game.RememberCursor
 		m.persistSettings()
+		return true
 	}
+	return false
 }
 
-func (m *MenuScene) activateOption(idx int) {
-	switch idx {
-	case optionIdxBGM, optionIdxSE, optionIdxMaster:
-	case optionIdxDisplayMode:
-		m.toggleDisplayMode()
-	case optionIdxMessageSpeed:
-		m.game.MessageSpeed = (m.game.MessageSpeed + 1) % 3
-		m.previewTicks = 0
-		m.persistSettings()
-	case optionIdxCursorMemory:
-		m.game.RememberCursor = !m.game.RememberCursor
-		m.persistSettings()
-	case optionIdxReset:
-		m.finishVolumeInput()
-		m.confirmIndex = 1
-		m.menuState = menuStateOptionResetConfirm
-		lockDialogInput(&m.inputLockTicks)
+// activateOption は確定キー(Enter/Z等)でoptionIndexの行を確定した時の処理。
+// 値の変更は矢印(キー/タップ)とボリュームのドラッグのみで行うため、確定キーで
+// 実際に何かが起こるのは「リセット」だけ。戻り値はSE切り替え(decide/無音)の
+// 判定に使われる。
+func (m *MenuScene) activateOption(idx int) bool {
+	if idx != optionIdxReset {
+		return false
 	}
+	m.finishVolumeInput()
+	m.confirmIndex = 1
+	m.menuState = menuStateOptionResetConfirm
+	lockDialogInput(&m.inputLockTicks)
+	return true
 }
 
 func (m *MenuScene) toggleDisplayMode() {

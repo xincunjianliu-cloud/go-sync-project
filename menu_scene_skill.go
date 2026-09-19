@@ -134,16 +134,12 @@ func (m *MenuScene) trySkillLevelConfirm(skills []SkillDef, skillIdx, lv int) {
 	switch {
 	case !data.IsHeal:
 		m.game.Audio.PlaySEByKey("error")
-		m.showNotice("このスキルはメニューからは使えません（戦闘中に使用します）")
 	case !m.game.IsSkillUnlocked(caster, skillIdx):
 		m.game.Audio.PlaySEByKey("error")
-		m.showNotice("このスキルはまだ解放されていません")
 	case m.game.PlayerHP[caster] <= 0:
 		m.game.Audio.PlaySEByKey("error")
-		m.showNotice(PlayerNames[caster] + "は戦闘不能のためスキルを使えません")
 	case m.game.PlayerMP[caster] < data.MPCost:
 		m.game.Audio.PlaySEByKey("error")
-		m.showNotice(fmt.Sprintf("MPが足りません（必要MP:%d）", data.MPCost))
 	default:
 		m.game.Audio.PlaySEByKey("decide")
 		m.pendingSkill = skillIdx + 1
@@ -156,18 +152,8 @@ func (m *MenuScene) trySkillLevelConfirm(skills []SkillDef, skillIdx, lv int) {
 	}
 }
 
-func (m *MenuScene) upgradeBlocked(skillIdx int) (blocked bool, reason string) {
-	if m.game.CanUpgradeSkill(m.skillCharIndex, skillIdx) {
-		return false, ""
-	}
-	curLv := m.game.PlayerSkillLv[m.skillCharIndex][skillIdx]
-	if curLv < 1 {
-		curLv = 1
-	}
-	if cost := SkillUpgradeCost(curLv); cost > 0 && m.game.PlayerSP[m.skillCharIndex] < cost {
-		return true, ""
-	}
-	return true, "これ以上強化できません"
+func (m *MenuScene) upgradeBlocked(skillIdx int) bool {
+	return !m.game.CanUpgradeSkill(m.skillCharIndex, skillIdx)
 }
 
 func (m *MenuScene) skillUsable(skillIdx int) bool {
@@ -332,8 +318,11 @@ func (m *MenuScene) updateSkillSub() {
 			if dg > reachable {
 				dg = reachable
 			}
-			m.skillLevelCursor = dg
-			m.game.LastSkillLevelCursor = m.skillLevelCursor
+			if dg != m.skillLevelCursor {
+				m.skillLevelCursor = dg
+				m.game.LastSkillLevelCursor = m.skillLevelCursor
+				m.game.Audio.PlaySEByKey("cursor")
+			}
 		}
 		skillIdx := m.skillSubIndex
 		lv := m.skillLevelCursor
@@ -346,10 +335,10 @@ func (m *MenuScene) updateSkillSub() {
 			return
 		}
 
-		if blocked, reason := m.upgradeBlocked(m.skillSubIndex); blocked {
+		if m.upgradeBlocked(m.skillSubIndex) {
 			m.upgradeProgress = 0
-			if reason != "" && (isConfirmKeyPressed() || tappedLvConfirm) {
-				m.showNotice(reason)
+			if isConfirmKeyPressed() || tappedLvConfirm {
+				m.game.Audio.PlaySEByKey("error")
 			}
 			return
 		}
@@ -461,8 +450,6 @@ func (m *MenuScene) updateHealTarget() {
 		}
 		return
 	}
-	m.game.Audio.PlaySEByKey("decide")
-
 	caster := m.skillCharIndex
 
 	if m.pendingSkill > 0 {
@@ -476,10 +463,18 @@ func (m *MenuScene) updateHealTarget() {
 		cost := data.MPCost
 
 		if m.game.PlayerHP[caster] <= 0 || m.game.PlayerMP[caster] < cost {
+			m.game.Audio.PlaySEByKey("error")
 			m.pendingSkill = 0
 			m.menuState = menuStateSkillSub
 			return
 		}
+
+		if m.healTargetIndex != partySize && m.game.PlayerHP[m.healTargetIndex] <= 0 {
+			m.game.Audio.PlaySEByKey("error")
+			return
+		}
+
+		m.game.Audio.PlaySEByKey("heal")
 
 		if m.healTargetIndex == partySize {
 			m.game.PlayerMP[caster] -= cost
@@ -498,9 +493,6 @@ func (m *MenuScene) updateHealTarget() {
 			}
 		} else {
 			target := m.healTargetIndex
-			if m.game.PlayerHP[target] <= 0 {
-				return
-			}
 			m.game.PlayerMP[caster] -= cost
 			healAmount := int(float64(m.game.PlayerMagicAtk[caster]) * float64(data.PowerSingle) / 100.0 * 10)
 			if healAmount < 1 {
@@ -520,15 +512,18 @@ func (m *MenuScene) updateHealTarget() {
 	}
 
 	if m.game.PlayerHP[caster] <= 0 || m.game.PlayerMP[caster] < mpCostHeal {
+		m.game.Audio.PlaySEByKey("error")
 		m.menuState = menuStateSkillSub
 		return
 	}
 
 	if m.healTargetIndex == 4 {
 		if m.game.PlayerMP[caster] < mpCostHealAll {
+			m.game.Audio.PlaySEByKey("error")
 			m.menuState = menuStateSkillSub
 			return
 		}
+		m.game.Audio.PlaySEByKey("heal")
 		m.game.PlayerMP[caster] -= mpCostHealAll
 		for i := 0; i < 4; i++ {
 			if m.game.PlayerHP[i] > 0 {
@@ -542,8 +537,10 @@ func (m *MenuScene) updateHealTarget() {
 	} else {
 		target := m.healTargetIndex
 		if m.game.PlayerHP[target] <= 0 {
+			m.game.Audio.PlaySEByKey("error")
 			return
 		}
+		m.game.Audio.PlaySEByKey("heal")
 		m.game.PlayerMP[caster] -= mpCostHeal
 		heal := m.game.PlayerMaxHP[target] / 2
 		m.game.PlayerHP[target] += heal

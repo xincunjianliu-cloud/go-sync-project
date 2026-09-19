@@ -301,6 +301,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 			s.executeRewind(p)
 			return nil
 		}
+		s.game.Audio.PlaySEByKey("error")
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyI) || itemConfirm {
@@ -311,6 +312,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 			s.battlePhase = phaseItemMenu
 			return nil
 		}
+		s.game.Audio.PlaySEByKey("error")
 	}
 
 	confirm := isConfirmKeyPressed() || tapped
@@ -324,6 +326,17 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.battlePhase = phaseATB
 		s.waitingActor = -1
 		return nil
+	}
+
+	if s.commandIndex == 2 {
+		if !s.hasFullPartyForSynergy() {
+			s.game.Audio.PlaySEByKey("error")
+			return nil
+		}
+		if !s.canUseSynergy() {
+			s.game.Audio.PlaySEByKey("error")
+			return nil
+		}
 	}
 
 	s.game.Audio.PlaySEByKey("decide")
@@ -354,16 +367,6 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.battlePhase = phaseSkillMenu
 		return nil
 	case 2:
-		if !s.hasFullPartyForSynergy() {
-			s.battleLog = "4人そろっていないため待機できない"
-			s.battleLogTimer = 1.5
-			return nil
-		}
-		if !s.canUseSynergy() {
-			s.battleLog = "ゲージポイントが足りない"
-			s.battleLogTimer = 1.5
-			return nil
-		}
 		s.waitStance[p] = true
 		s.atbGauge[p] = atbMax
 		alreadyInOrder := false

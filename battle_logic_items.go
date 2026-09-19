@@ -119,6 +119,7 @@ func (s *BattleScene) updateItemTargetSelect() {
 	} else {
 		target := s.itemTargetIndex
 		if !def.Revive && s.game.PlayerHP[target] <= 0 {
+			s.game.Audio.PlaySEByKey("error")
 			return
 		}
 		if s.applyItemToTargetInBattle(def, target) {
@@ -127,6 +128,7 @@ func (s *BattleScene) updateItemTargetSelect() {
 	}
 
 	if !used {
+		s.game.Audio.PlaySEByKey("error")
 		return
 	}
 

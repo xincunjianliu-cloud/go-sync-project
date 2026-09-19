@@ -767,6 +767,7 @@ func (s *FieldScene) pullLever(obj TiledObject) {
 
 	s.nearExamineEvent = false
 	if objProps(obj)["oneway"] == "true" && s.game.RaisedLevers[id] {
+		s.game.Audio.PlaySEByKey("error")
 		return
 	}
 	s.game.RaisedLevers[id] = !s.game.RaisedLevers[id]

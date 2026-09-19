@@ -93,8 +93,7 @@ func (s *BattleScene) tryWaitSynergy() bool {
 	}
 
 	if !s.canUseSynergy() {
-		s.battleLog = "ゲージが足りない！"
-		s.battleLogTimer = battleLogDuration
+		s.game.Audio.PlaySEByKey("error")
 		for i := 0; i < partySize; i++ {
 			s.waitStance[i] = false
 		}
@@ -628,7 +627,7 @@ func (s *BattleScene) updateHealTargetSelect() {
 			s.game.Audio.PlaySEByKey("error")
 			return
 		}
-		s.game.Audio.PlaySEByKey("decide")
+		s.game.Audio.PlaySEByKey("heal")
 		s.startCast(p)
 		s.game.PlayerMP[p] -= cost
 		healAmount := s.rollSkillHeal(p, skillIdx, lv, true)
@@ -673,13 +672,14 @@ func (s *BattleScene) updateHealTargetSelect() {
 	} else {
 		target := s.healTargetIndex
 		if s.game.PlayerHP[target] <= 0 {
+			s.game.Audio.PlaySEByKey("error")
 			return
 		}
 		if s.game.PlayerMP[p] < cost {
 			s.game.Audio.PlaySEByKey("error")
 			return
 		}
-		s.game.Audio.PlaySEByKey("decide")
+		s.game.Audio.PlaySEByKey("heal")
 		s.startCast(p)
 		s.game.PlayerMP[p] -= cost
 		healAmount := s.rollSkillHeal(p, skillIdx, lv, false)

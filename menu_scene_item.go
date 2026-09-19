@@ -49,7 +49,6 @@ func (m *MenuScene) updateItemList() {
 	if len(items) == 0 {
 		if isConfirmKeyPressed() {
 			m.game.Audio.PlaySEByKey("error")
-			m.showNotice("メニューから使えるアイテムを持っていません")
 		}
 		if unrelatedTapOutsideRects(menuMainContentRect()) {
 			m.game.Audio.PlaySEByKey("cancel")
@@ -173,14 +172,12 @@ func (m *MenuScene) updateItemTarget() {
 		}
 		if !used {
 			m.game.Audio.PlaySEByKey("error")
-			m.showNotice("使っても効果がありません")
 			return
 		}
 	} else {
 		target := m.itemTargetIndex
 		if _, _, ok := applyItemEffect(m.game, def, target); !ok {
 			m.game.Audio.PlaySEByKey("error")
-			m.showNotice(itemNoEffectReason(m.game, def, target))
 			return
 		}
 	}
@@ -194,16 +191,4 @@ func (m *MenuScene) updateItemTarget() {
 		m.clampItemListIndex(len(m.usableFieldItems()))
 		m.menuState = menuStateItemList
 	}
-}
-
-func itemNoEffectReason(g *Game, def ItemDef, target int) string {
-	name := PlayerNames[target]
-	dead := g.PlayerHP[target] <= 0
-	switch {
-	case dead && !def.Revive:
-		return name + "は戦闘不能のため効果がありません"
-	case !dead && def.Revive:
-		return name + "は戦闘不能ではありません"
-	}
-	return name + "に使っても効果がありません"
 }

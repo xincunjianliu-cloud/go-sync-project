@@ -129,6 +129,11 @@ func (m *MenuScene) Update(dt float64) Scene {
 
 	if !m.isModalMenuState() && m.menuState != menuStateMain {
 		if idx, ok := m.hitTestMainCommandList(); ok {
+			if idx != m.menuIndex {
+				m.game.Audio.PlaySEByKey("cursor")
+			}
+			m.menuIndex = idx
+			m.game.LastMenuIndex = m.menuIndex
 			m.game.Audio.PlaySEByKey("decide")
 			m.enterCommand(idx)
 			if m.nextScene != nil {
@@ -449,7 +454,6 @@ func (m *MenuScene) updateSlot() {
 	if m.saveMode {
 		if _, ok := m.backScene.(*FieldScene); !ok {
 			m.game.Audio.PlaySEByKey("error")
-			m.showNotice("ここではセーブできません")
 			return
 		}
 		m.game.Audio.PlaySEByKey("decide")
@@ -461,7 +465,6 @@ func (m *MenuScene) updateSlot() {
 		d := m.slotData[m.slotIndex]
 		if d == nil {
 			m.game.Audio.PlaySEByKey("error")
-			m.showNotice("このスロットにはセーブデータがありません")
 			return
 		}
 		m.game.Audio.PlaySEByKey("decide")
@@ -527,9 +530,9 @@ func (m *MenuScene) updateLoadConfirm() {
 
 	d := m.slotData[m.pendingSlot-1]
 	if d == nil {
+		m.game.Audio.PlaySEByKey("error")
 		m.resetSlotDrag()
 		m.menuState = menuStateLoadSlot
-		m.showNotice("このスロットにはセーブデータがありません")
 		return
 	}
 	m.game.TotalPlayTime = d.PlayTime
@@ -560,9 +563,9 @@ func (m *MenuScene) updateLoadConfirm() {
 
 	field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
 	if err != nil {
+		m.game.Audio.PlaySEByKey("error")
 		m.resetSlotDrag()
 		m.menuState = menuStateLoadSlot
-		m.showNotice("ロードに失敗しました")
 		return
 	}
 	m.game.ChangeSceneWithFade(field, fadeTimeContinue)
