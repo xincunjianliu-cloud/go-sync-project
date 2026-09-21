@@ -309,10 +309,11 @@ func (s *BattleScene) applyEnemyPendingHits() {
 
 	if s.pendingEnemySkillName != "" {
 		s.battleLog = s.pendingEnemySkillName
+		s.battleLogTimer = skillActionLogDuration
 	} else {
-		s.battleLog = s.enemies[s.actingEnemySlot].Name + "の攻撃"
+		s.battleLog = ""
+		s.battleLogTimer = silentActionLogDuration
 	}
-	s.battleLogTimer = enemyActionDuration
 	s.enemyActionWaitTimer = enemyActionDuration
 
 	s.waitingActor = -1
@@ -436,7 +437,24 @@ func (s *BattleScene) exitBattleToField() {
 			}
 		}
 	}
+	if !s.game.SeenSkillUpgradeTutorial && partyHasEnoughSPToUpgrade(s.game) {
+		s.game.SeenSkillUpgradeTutorial = true
+		field.skillUpgradeTutorialActive = true
+	}
 	s.game.ChangeSceneWithFade(field, 0.5)
+}
+
+// partyHasEnoughSPToUpgrade reports whether any party member has reached the
+// SP cost of the first skill upgrade (SkillUpgradeCost(1) == 100), i.e.
+// whether skill enhancement in the menu has just become possible.
+func partyHasEnoughSPToUpgrade(game *Game) bool {
+	cost := SkillUpgradeCost(1)
+	for i := 0; i < partySize; i++ {
+		if game.PlayerSP[i] >= cost {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *BattleScene) enemyTargetsForAttack(isAll bool) []int {
@@ -590,8 +608,8 @@ func (s *BattleScene) updateTargetSelect() {
 		s.pendingPlayerHits2 = nil
 		s.pendingDamage2Scheduled = false
 	}
-	s.battleLog = "通常攻撃"
-	s.battleLogTimer = battleLogDuration
+	s.battleLog = ""
+	s.battleLogTimer = silentActionLogDuration
 
 	s.addGaugePoint(normalAttackGaugePoint)
 

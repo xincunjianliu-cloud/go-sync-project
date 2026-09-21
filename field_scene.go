@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,14 @@ type TiledMap struct {
 	TileHeight int             `json:"tileheight"`
 	Layers     []TiledLayer    `json:"layers"`
 	Properties []TiledProperty `json:"properties"`
+	Tilesets   []TiledTileset  `json:"tilesets"`
+}
+
+// TiledTileset はTiledが.tmjに埋め込むタイルセット定義のうち、画像パスの
+// 解決に使うフィールドだけを取り出したもの。複数タイルセットの合成には
+// 対応しておらず、常に先頭の1件(Tilesets[0])だけを使用する。
+type TiledTileset struct {
+	Image string `json:"image"`
 }
 
 // mapBGMKey はマップ全体のカスタムプロパティ"bgm"の値を返す。
@@ -48,6 +57,67 @@ func (m TiledMap) mapBGMKey() (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// mapDisplayName はマップ全体のカスタムプロパティ"displayname"の値を返す。
+// (セーブスロットやミニマップに表示する地名。省略時はマップファイルの
+// パスがそのまま表示名として使われる)
+func (m TiledMap) mapDisplayName() (string, bool) {
+	for _, p := range m.Properties {
+		if strings.EqualFold(p.Name, "displayname") {
+			if s, ok := p.Value.(string); ok && s != "" {
+				return s, true
+			}
+		}
+	}
+	return "", false
+}
+
+// mapAutoHeal はマップ全体のカスタムプロパティ"autoheal"(bool)の値を返す。
+// trueにすると、このマップに入った瞬間にパーティが全回復する
+// (ダンジョンの入り口などに使う想定)。省略時はfalse。
+func (m TiledMap) mapAutoHeal() bool {
+	for _, p := range m.Properties {
+		if strings.EqualFold(p.Name, "autoheal") {
+			if b, ok := p.Value.(bool); ok {
+				return b
+			}
+		}
+	}
+	return false
+}
+
+var tilesetImageCache = map[string]*ebiten.Image{}
+
+// resolveTilesetImagePath はTiledが.tmjに書き出す、マップファイルからの
+// 相対パス(例: "../images/field/Foo.png")を、assets/maps/を基準にした
+// リポジトリ内の実パスに変換する。
+func resolveTilesetImagePath(image string) string {
+	image = strings.ReplaceAll(image, "\\", "/")
+	return path.Clean(path.Join("assets/maps", image))
+}
+
+// mapTilesetImage は.tmj自身が指すタイルセット画像(Tilesets[0].Image)を
+// 読み込む。新しいマップを追加したり、既存マップのタイルセット画像を
+// 別のPNGに差し替えたりしても、Tiled側でその画像を指定するだけで
+// 自動的に反映される(コード側に画像を個別登録する必要はない)。
+// 同じ画像を複数マップが使い回す場合は2回目以降キャッシュから返す。
+func mapTilesetImage(tmap TiledMap) (*ebiten.Image, error) {
+	if len(tmap.Tilesets) == 0 || tmap.Tilesets[0].Image == "" {
+		return nil, fmt.Errorf("マップにタイルセットが設定されていません")
+	}
+	imgPath := resolveTilesetImagePath(tmap.Tilesets[0].Image)
+
+	if img, ok := tilesetImageCache[imgPath]; ok {
+		return img, nil
+	}
+
+	img, err := loadAssetImage(imgPath)
+	if err != nil {
+		return nil, err
+	}
+	tilesetImageCache[imgPath] = img
+	return img, nil
 }
 
 type TiledLayer struct {
@@ -133,34 +203,40 @@ func dialoguePagesFromText(text string) []EventCommand {
 // (=このオブジェクトと過去に一度会話済み)の場合、まず個別に用意された
 // 2回目以降用のセリフ(event_story_系なら"<id>_repeat"、直書きテキスト系なら
 // repeatText プロパティ)を探し、無ければ通常時のセリフにフォールバックする。
-func resolveEventDialogue(text string, repeatText string, seen bool) ([]EventCommand, map[string]int, string) {
+func resolveEventDialogue(text string, repeatText string, seen bool) BossDialogue {
 	if id, ok := strings.CutPrefix(text, storyTextPrefix); ok {
 		if d, found := GetStoryDialogue(id, seen); found {
-			return d.Commands, d.SpeakerSlots, d.BGM
+			return d
 		}
-		return []EventCommand{{Speaker: "", Text: "……"}}, nil, ""
+		return BossDialogue{Commands: []EventCommand{{Speaker: "", Text: "……"}}}
 	}
 	if seen && repeatText != "" {
-		return dialoguePagesFromText(repeatText), nil, ""
+		return BossDialogue{Commands: dialoguePagesFromText(repeatText)}
 	}
-	return dialoguePagesFromText(text), nil, ""
+	return BossDialogue{Commands: dialoguePagesFromText(text)}
+}
+
+func (s *FieldScene) applyDialogue(bd BossDialogue) {
+	s.msgTexts = bd.Commands
+	s.msgBGM = bd.BGM
+	s.msg.SpeakerSides = bd.SpeakerSides
+	s.msgBackground = bd.Background
 }
 
 func (s *FieldScene) applyCutsceneMessage() {
 	if s.cutsceneHasBossID {
 		bd := GetEventCommands(s.cutsceneMessage, s.game)
 		bossType := strings.TrimPrefix(s.cutsceneMessage, "event_")
-		s.msgTexts = append(bd.Commands, EventCommand{
+		bd.Commands = append(bd.Commands, EventCommand{
 			Speaker: "SYSTEM_COMMAND",
 			Text:    "START_BATTLE_" + bossType,
 		})
-		s.msg.SpeakerToSlot = bd.SpeakerSlots
-		s.msgBGM = bd.BGM
+		s.applyDialogue(bd)
 		return
 	}
 	// トリガー型の演出は一度発火したら二度と発火しない(呼び出し元でSeenEvents
 	// により再発火自体をブロックしている)ので、2回目以降セリフの分岐は不要。
-	s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(s.cutsceneMessage, "", false)
+	s.applyDialogue(resolveEventDialogue(s.cutsceneMessage, "", false))
 }
 
 type EnemyField struct {
@@ -197,6 +273,7 @@ type FieldScene struct {
 	currentMap         string
 	mapBGM             string
 	msgBGM             string
+	msgBackground      string
 	msgTexts           []EventCommand
 	msgIndex           int
 	isMsgActive        bool
@@ -219,16 +296,17 @@ type FieldScene struct {
 	encounterEffectTimer  float64
 	encounterSnapshot     *ebiten.Image
 	pendingBattleScene    *BattleScene
-	isCutscene         bool
-	cutsceneMessage    string
-	cutsceneHasBossID  bool
-	cutsceneRoute      []MoveStep
-	routeIndex         int
-	currentStepDist    float64
-	justDefeatedBoss   int
-	msg                MessageSystem
+	isCutscene            bool
+	cutsceneMessage       string
+	cutsceneHasBossID     bool
+	cutsceneRoute         []MoveStep
+	routeIndex            int
+	currentStepDist       float64
+	justDefeatedBoss      int
+	msg                   MessageSystem
 
-	pendingAutoHealMessage bool
+	pendingAutoHealMessage     bool
+	skillUpgradeTutorialActive bool
 
 	touchStickActive   bool
 	touchStickDX       float64
@@ -433,10 +511,12 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	}
 
 	targetTileImg := game.Tilesets["default"]
-	if def, ok := mapDefFor(mapPath); ok {
-		if img, ok := game.Tilesets[def.TilesetKey]; ok {
-			targetTileImg = img
+	if len(tmap.Tilesets) > 0 && tmap.Tilesets[0].Image != "" {
+		img, err := mapTilesetImage(tmap)
+		if err != nil {
+			return nil, fmt.Errorf("タイルセット画像の読み込みに失敗しました(%s): %w", mapPath, err)
 		}
+		targetTileImg = img
 	}
 
 	playerCfg, playerSheet, err := LoadFieldPlayerConfig("assets/field_player.json")
@@ -484,7 +564,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	}
 	scene.mapBGM = mapBGM
 
-	if def, ok := mapDefFor(mapPath); ok && def.AutoHeal {
+	if tmap.mapAutoHeal() {
 		scene.healParty()
 		if game.SeenAutoHealMapIntro == nil {
 			game.SeenAutoHealMapIntro = make(map[string]bool)
@@ -510,9 +590,20 @@ var globalActiveFieldInstanceForSave *FieldScene
 const autoHealIntroMessage = "ダンジョンに入ると自動的に回復します"
 const autoHealIntroMessageDuration = 2.5
 
+// locationNameFromMap はセーブデータに記録する地名を返す。マップ全体の
+// カスタムプロパティ"displayname"があればそれを使い、無ければマップの
+// パスをそのまま表示名として使う。
 func locationNameFromMap(mapPath string) string {
-	if def, ok := mapDefFor(mapPath); ok {
-		return def.DisplayName
+	data, err := loadAssetBytesCached(mapPath)
+	if err != nil {
+		return mapPath
+	}
+	var tmap TiledMap
+	if err := json.Unmarshal(data, &tmap); err != nil {
+		return mapPath
+	}
+	if name, ok := tmap.mapDisplayName(); ok {
+		return name
 	}
 	return mapPath
 }
@@ -547,39 +638,43 @@ func SaveGame(slot int, mapPath string, x, y float64, hp [4]int) error {
 	g := globalActiveFieldInstanceForSave.game
 
 	data := SaveData{
-		SlotID:               slot,
-		LocationName:         locationNameFromMap(mapPath),
-		CurrentMap:           mapPath,
-		PlayerX:              x,
-		PlayerY:              y,
-		PlayerDir:            globalActiveFieldInstanceForSave.dir,
-		PlayerHP:             hp,
-		PlayerMaxHP:          g.PlayerMaxHP,
-		PlayerMP:             g.PlayerMP,
-		PlayerMaxMP:          g.PlayerMaxMP,
-		PlayerAtk:            g.PlayerAtk,
-		PlayerMagicAtk:       g.PlayerMagicAtk,
-		PlayerDef:            g.PlayerDef,
-		PlayerMagicDef:       g.PlayerMagicDef,
-		PlayerSpd:            g.PlayerSpd,
-		PlayerLuck:           g.PlayerLuck,
-		PlayerSP:             g.PlayerSP,
-		PlayerSkillLv:        g.PlayerSkillLv,
-		BossDefeatedFlags:    g.BossDefeatedFlags,
-		PlayerLv:             g.PlayerLv,
-		PlayerEXP:            g.PlayerEXP,
-		PlayerNextEXP:        g.PlayerNextEXP,
-		PlayTime:             g.TotalPlayTime,
-		SavedAt:              time.Now().Format("2006/01/02"),
-		Inventory:            g.Inventory,
-		OpenedChests:         g.OpenedChests,
-		UnlockedWalls:        g.UnlockedWalls,
-		Keys:                 g.Keys,
-		RaisedLevers:         g.RaisedLevers,
-		SeenAutoHealMapIntro: g.SeenAutoHealMapIntro,
-		SeenEvents:           g.SeenEvents,
-		BlockPositions:       g.BlockPositions,
-		UnlockedBlockDoors:   g.UnlockedBlockDoors,
+		SlotID:                   slot,
+		LocationName:             locationNameFromMap(mapPath),
+		CurrentMap:               mapPath,
+		PlayerX:                  x,
+		PlayerY:                  y,
+		PlayerDir:                globalActiveFieldInstanceForSave.dir,
+		PlayerHP:                 hp,
+		PlayerMaxHP:              g.PlayerMaxHP,
+		PlayerMP:                 g.PlayerMP,
+		PlayerMaxMP:              g.PlayerMaxMP,
+		PlayerAtk:                g.PlayerAtk,
+		PlayerMagicAtk:           g.PlayerMagicAtk,
+		PlayerDef:                g.PlayerDef,
+		PlayerMagicDef:           g.PlayerMagicDef,
+		PlayerSpd:                g.PlayerSpd,
+		PlayerLuck:               g.PlayerLuck,
+		PlayerSP:                 g.PlayerSP,
+		PlayerSkillLv:            g.PlayerSkillLv,
+		BossDefeatedFlags:        g.BossDefeatedFlags,
+		PlayerLv:                 g.PlayerLv,
+		PlayerEXP:                g.PlayerEXP,
+		PlayerNextEXP:            g.PlayerNextEXP,
+		PlayTime:                 g.TotalPlayTime,
+		SavedAt:                  time.Now().Format("2006/01/02"),
+		Inventory:                g.Inventory,
+		OpenedChests:             g.OpenedChests,
+		UnlockedWalls:            g.UnlockedWalls,
+		Keys:                     g.Keys,
+		RaisedLevers:             g.RaisedLevers,
+		SeenAutoHealMapIntro:     g.SeenAutoHealMapIntro,
+		SeenEvents:               g.SeenEvents,
+		SeenBattleTutorial:       g.SeenBattleTutorial,
+		SeenGaugeTutorial:        g.SeenGaugeTutorial,
+		SeenSkillLevelTutorial:   g.SeenSkillLevelTutorial,
+		SeenSkillUpgradeTutorial: g.SeenSkillUpgradeTutorial,
+		BlockPositions:           g.BlockPositions,
+		UnlockedBlockDoors:       g.UnlockedBlockDoors,
 	}
 
 	file, err := json.MarshalIndent(data, "", "  ")

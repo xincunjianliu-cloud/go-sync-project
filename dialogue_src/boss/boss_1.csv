@@ -1,0 +1,12 @@
+phase,speaker,text,bgm
+battle,player1,あれが噂のボスか...油断するなよ！,talk_tense
+battle,boss1,貴様...ここまで来るとはな,
+battle,player1,あれが噂のボスか...油断するなよ！,
+battle,boss1,貴様...ここまで来るとはな,
+battle,player1,あれが噂のボスか...油断するなよ！,
+battle,boss1,貴様...ここまで来るとはな,
+battle,player1,あれが噂のボスか...油断するなよ！,
+battle,boss1,貴様...ここまで来るとはな,
+battle,player1,覚悟しろ、ここで倒す！,
+clear,boss1,馬鹿な...この俺が...,talk_peaceful
+clear,player1,これで一つ、片付いたな,

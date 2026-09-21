@@ -292,7 +292,7 @@ func scaleAlpha(c color.RGBA, factor float64) color.RGBA {
 	return c
 }
 
-func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceLarge, faceSmall *text.GoTextFace, alpha float64, textColorBase color.RGBA) {
+func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceLarge, faceSmall text.Face, alpha float64, textColorBase color.RGBA) {
 	curStr := strconv.Itoa(current)
 	restStr := fmt.Sprintf(" / %d", max)
 
@@ -322,7 +322,7 @@ func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceL
 	text.Draw(screen, restStr, faceSmall, restOp)
 }
 
-func drawBattleOutlinedText(screen *ebiten.Image, x, y float64, value string, face *text.GoTextFace, textColor color.RGBA, alpha float64) {
+func drawBattleOutlinedText(screen *ebiten.Image, x, y float64, value string, face text.Face, textColor color.RGBA, alpha float64) {
 	for _, offset := range [][2]float64{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 		shadowOp := &text.DrawOptions{}
 		shadowOp.GeoM.Translate(x+offset[0], y+offset[1])
@@ -447,11 +447,13 @@ func partyNamePosition(i int) (float64, float64) {
 	return partyNameBaseX + float64(i)*(statusBlockW+statusBlockGap), partyNameBaseY
 }
 
-// 以下はすべて、名前の描画位置（baseX/baseY = partyNamePosition の戻り値）
-// を基準にした個別オフセット。partyNameOffsetX/Y は常に0だが、名前だけを
-// 動かしたい場合の調整用に残してある。バトルとメニュー（menu_draw.go）の
-// 両方で共通の基準として直接参照する。プレート画像やカーソル演出などの
-// 見た目は画面ごとに別で構わないが、名前の位置だけはここを唯一の基準にする。
+// Everything below is an individual offset relative to the name's draw
+// position (baseX/baseY = partyNamePosition's return value).
+// partyNameOffsetX/Y are always 0, but are kept here in case just the name
+// needs to be nudged. Both battle and menu (menu_draw.go) reference these
+// same constants directly as a shared basis. Visuals like plate images or
+// cursor effects can differ per screen, but the name's position alone must
+// always use this as its single source of truth.
 const (
 	partyNameOffsetX = 0.0
 	partyNameOffsetY = 0.0

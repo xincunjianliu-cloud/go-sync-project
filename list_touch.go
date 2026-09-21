@@ -226,7 +226,7 @@ func (d *dragScrollState) stepContinuousScroll(moveAmt float64, pos *float64, mi
 	}
 }
 
-func centeredTextRect(centerX, y float64, label string, face *text.GoTextFace, height float64) tapRect {
+func centeredTextRect(centerX, y float64, label string, face text.Face, height float64) tapRect {
 	w := text.Advance(label, face)
 	return tapRect{x: centerX - w/2 - 10, y: y - 4, w: w + 20, h: height}
 }

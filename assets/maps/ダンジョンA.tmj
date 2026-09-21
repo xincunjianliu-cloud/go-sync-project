@@ -1195,6 +1195,16 @@
          "name":"bgm",
          "type":"string",
          "value":"field2"
+        },
+        {
+         "name":"displayname",
+         "type":"string",
+         "value":"ダンジョンA"
+        },
+        {
+         "name":"autoheal",
+         "type":"bool",
+         "value":true
         }],
  "renderorder":"right-down",
  "tiledversion":"1.12.1",

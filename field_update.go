@@ -62,10 +62,27 @@ func (s *FieldScene) moveLogCursor(delta int) {
 	}
 }
 
+// applyFieldDebugCheats mirrors BattleScene.applyDebugCheats (Shift+key,
+// gated by debugModeEnabled) for the one field-scene tutorial, so it can be
+// checked without grinding 100 SP and winning a battle first.
+func (s *FieldScene) applyFieldDebugCheats() {
+	if !debugModeEnabled {
+		return
+	}
+	if !ebiten.IsKeyPressed(ebiten.KeyShift) {
+		return
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyU) {
+		s.skillUpgradeTutorialActive = true
+	}
+}
+
 func (s *FieldScene) Update(dt float64) Scene {
 	if s == nil {
 		return s
 	}
+
+	s.applyFieldDebugCheats()
 
 	if s.encounterEffectActive {
 		s.encounterEffectTimer += dt
@@ -145,11 +162,13 @@ func (s *FieldScene) Update(dt float64) Scene {
 	}
 
 	currentSpeaker := ""
+	currentExpression := 0
 	if s.isMsgActive && s.msgIndex < len(s.msgTexts) {
 		currentSpeaker = s.msgTexts[s.msgIndex].Speaker
+		currentExpression = s.msgTexts[s.msgIndex].Expression
 		s.msg.Speed = s.game.MessageSpeedTicks()
 		s.msg.Tick()
-		s.msg.UpdateCharaAnim(currentSpeaker, s.game.CharaImgs)
+		s.msg.UpdateCharaAnim(currentSpeaker, currentExpression)
 	}
 	if s.isChoiceActive {
 		if isMenuUpPressed() || isMenuDownPressed() {
@@ -194,11 +213,16 @@ func (s *FieldScene) Update(dt float64) Scene {
 		return s
 	}
 
+	if s.skillUpgradeTutorialActive {
+		if isConfirmKeyPressed() || len(justPressedTouchPoints()) > 0 {
+			s.game.Audio.PlaySEByKey("decide")
+			s.skillUpgradeTutorialActive = false
+		}
+		return s
+	}
+
 	if s.justDefeatedBoss > 0 {
-		cd := bossClearDialogues[s.justDefeatedBoss]
-		s.msgTexts = cd.Commands
-		s.msg.SpeakerToSlot = cd.SpeakerSlots
-		s.msgBGM = cd.BGM
+		s.applyDialogue(bossClearDialogues[s.justDefeatedBoss])
 		s.msgIndex = 0
 		s.beginMessage()
 		s.justDefeatedBoss = 0
@@ -443,14 +467,13 @@ func (s *FieldScene) Update(dt float64) Scene {
 					} else if evText != "" {
 						key := chestKey(s.currentMap, obj)
 						seen := s.game.SeenEvents[key]
-						s.msgTexts, s.msg.SpeakerToSlot, s.msgBGM = resolveEventDialogue(evText, p["repeattext"], seen)
+						s.applyDialogue(resolveEventDialogue(evText, p["repeattext"], seen))
 						if s.game.SeenEvents == nil {
 							s.game.SeenEvents = make(map[string]bool)
 						}
 						s.game.SeenEvents[key] = true
 					} else {
-						s.msgTexts = []EventCommand{{Speaker: "", Text: "調べるとなにかあるかもしれない"}}
-						s.msgBGM = ""
+						s.applyDialogue(BossDialogue{Commands: []EventCommand{{Speaker: "", Text: "調べるとなにかあるかもしれない"}}})
 					}
 
 					s.msgIndex = 0
@@ -1048,6 +1071,12 @@ func (s *FieldScene) triggerDoorWarp() Scene {
 // BGMを切り替える。指定がなければ、歩行中に流れていたBGMをそのまま継続する
 // (会話のたびに毎回曲が途切れるのを避けるため)。
 func (s *FieldScene) beginMessage() {
+	if len(s.msgTexts) == 0 {
+		// 中身の無い会話(全行が空テキストでfilterEmptyCommandsに落とされた
+		// プレースホルダー等)。メッセージ欄を開いてもmsgTexts[0]に何も無く
+		// 進行できなくなるので、そもそも開かない。
+		return
+	}
 	s.msg.Reset()
 	s.isMsgActive = true
 	s.msg.Start()
@@ -1063,6 +1092,7 @@ func (s *FieldScene) endMessage() {
 	s.msgTexts = nil
 	s.msgIndex = 0
 	s.msgBGM = ""
+	s.msgBackground = ""
 	s.autoMode = false
 	s.autoWaitElapsed = 0
 	s.nearExamineEvent = false

@@ -43,6 +43,8 @@ type charaState struct {
 	targetX float64
 	light   float32
 	spawned bool
+	speaker string
+	expr    int
 }
 
 type MessageSystem struct {
@@ -54,9 +56,16 @@ type MessageSystem struct {
 	WindowImg   *ebiten.Image
 	WindowAlpha float32
 
-	SpeakerToSlot map[string]int
+	// SpeakerSides は話者ごとの左(0)/右(1)固定指定(任意、BossDialogue.
+	// SpeakerSidesをそのまま渡す)。指定の無い話者は自動割り当てになる。
+	SpeakerSides map[string]int
 
-	slots [2]charaState
+	// slots は画面に立ち絵を出す左右2枠。SpeakerSidesで指定が無い話者は
+	// 喋るたびに自動で割り当てられる。lastActiveSlot は直近に喋っていた
+	// 枠で、新しい話者が現れたときにどちらの枠を差し替えるかの判定に
+	// 使う(直近の相手はなるべく残す)。
+	slots          [2]charaState
+	lastActiveSlot int
 }
 
 func (m *MessageSystem) speed() int {
@@ -85,26 +94,42 @@ func (m *MessageSystem) SkipToEnd(cmd EventCommand) {
 	m.msgStart = m.ticks - len(runes)*m.speed()
 }
 
-func (m *MessageSystem) UpdateCharaAnim(currentSpeaker string, charaImgs map[string]*ebiten.Image) {
-	if m.SpeakerToSlot == nil {
-		return
-	}
-
+func (m *MessageSystem) UpdateCharaAnim(currentSpeaker string, currentExpression int) {
 	activeSlot := -1
 	if currentSpeaker != "" && currentSpeaker != "SYSTEM_COMMAND" {
-		if slot, ok := m.SpeakerToSlot[currentSpeaker]; ok {
-			activeSlot = slot
-			if !m.slots[slot].spawned {
-				if slot == 0 {
-					m.slots[slot].x = charaOutsideX
-					m.slots[slot].targetX = charaInsideX
-				} else {
-					m.slots[slot].x = charaRightOutsideX
-					m.slots[slot].targetX = charaRightInsideX
-				}
-				m.slots[slot].spawned = true
+		slot := -1
+		for i := range m.slots {
+			if m.slots[i].spawned && m.slots[i].speaker == currentSpeaker {
+				slot = i
+				break
 			}
 		}
+		if slot == -1 {
+			if side, ok := m.SpeakerSides[currentSpeaker]; ok && side >= 0 && side < len(m.slots) {
+				// 明示的に左右が指定されている話者は必ずその枠に入る
+				// (同じ側を指定された者同士だけがその枠の中で入れ替わる)。
+				slot = side
+			} else {
+				// 指定が無い話者: 直近に喋っていない方の枠を差し替える
+				// (直近の相手はなるべく画面に残す)
+				slot = 0
+				if m.lastActiveSlot == 0 {
+					slot = 1
+				}
+			}
+			m.slots[slot] = charaState{speaker: currentSpeaker}
+			if slot == 0 {
+				m.slots[slot].x = charaOutsideX
+				m.slots[slot].targetX = charaInsideX
+			} else {
+				m.slots[slot].x = charaRightOutsideX
+				m.slots[slot].targetX = charaRightInsideX
+			}
+			m.slots[slot].spawned = true
+		}
+		m.slots[slot].expr = currentExpression
+		activeSlot = slot
+		m.lastActiveSlot = slot
 	}
 
 	for i := range m.slots {
@@ -132,17 +157,16 @@ func (m *MessageSystem) UpdateCharaAnim(currentSpeaker string, charaImgs map[str
 	}
 }
 
-func (m *MessageSystem) DrawChara(screen *ebiten.Image, charaImgs map[string]*ebiten.Image) {
-	if m.SpeakerToSlot == nil {
-		return
-	}
-
-	for speaker, slot := range m.SpeakerToSlot {
+func (m *MessageSystem) DrawChara(screen *ebiten.Image, g *Game) {
+	for slot := range m.slots {
 		s := &m.slots[slot]
 		if !s.spawned {
 			continue
 		}
-		img := charaImgs[speaker]
+		img := g.GetCharaImage(s.speaker, s.expr)
+		if img == nil {
+			continue
+		}
 
 		charaY := 0.0
 		imgW := float64(img.Bounds().Dx())
@@ -206,7 +230,7 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, si
 
 	if count >= len(runes) && len(runes) > 0 {
 		if (m.ticks/30)%2 == 0 {
-			arrowFace := &text.GoTextFace{Source: fontFace.Source, Size: msgArrowFontSize}
+			arrowFace := g.FontFace(msgArrowFontSize)
 			arrowOp := &text.DrawOptions{}
 			arrowX := float64(gameWidth) * msgArrowXRatio
 			arrowY := float64(gameHeight) * msgArrowYRatio
@@ -220,4 +244,5 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, si
 func (m *MessageSystem) Reset() {
 	m.slots[0] = charaState{}
 	m.slots[1] = charaState{}
+	m.lastActiveSlot = -1
 }

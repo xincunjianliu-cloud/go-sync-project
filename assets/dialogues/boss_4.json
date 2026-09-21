@@ -1,18 +1,37 @@
 {
   "battle": {
     "commands": [
-      { "speaker": "boss4", "text": "" }
+      {
+        "speaker": "player1",
+        "text": "あれが噂のボスか...油断するなよ！"
+      },
+      {
+        "speaker": "boss1",
+        "text": "貴様...ここまで来るとはな",
+        "expression": 2
+      },
+      {
+        "speaker": "player1",
+        "text": "覚悟しろ、ここで倒す！"
+      }
     ],
+    "bgm": "talk_tense",
     "speakerSlots": {
-      "boss4": 1
+      "boss1": 1,
+      "player1": 0
     }
   },
   "clear": {
     "commands": [
-      { "speaker": "boss4", "text": "" }
+      {
+        "speaker": "boss1",
+        "text": "馬鹿な...この俺が..."
+      },
+      {
+        "speaker": "player1",
+        "text": "これで一つ、片付いたな"
+      }
     ],
-    "speakerSlots": {
-      "boss4": 1
-    }
+    "bgm": "talk_peaceful"
   }
 }

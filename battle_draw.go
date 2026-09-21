@@ -36,6 +36,10 @@ func (s *BattleScene) Draw(screen *ebiten.Image) {
 	} else {
 		s.drawUI(screen)
 	}
+
+	if s.tutorialActive {
+		s.drawBattleTutorial(screen)
+	}
 }
 
 func (s *BattleScene) drawBackground(screen *ebiten.Image) {
@@ -96,66 +100,80 @@ func (s *BattleScene) drawEnemyHeader(screen *ebiten.Image) {
 	}
 }
 
+// partySpriteSrcRect computes the current sprite sheet and the sub-rect of
+// the frame currently being displayed for party member i. Shared by drawing
+// and by pixel-accurate touch hit-testing so both always agree on which
+// frame is on screen.
+func (s *BattleScene) partySpriteSrcRect(i int) (spriteSheet *ebiten.Image, srcRect image.Rectangle, ok bool) {
+	spriteSheet = s.game.PlayerAttackSprites[i]
+	if spriteSheet == nil {
+		return nil, image.Rectangle{}, false
+	}
+
+	pose := s.playerPose[i]
+	row, rowOk := poseRow[pose]
+	if !rowOk {
+		row = 0
+		pose = poseIdle
+	}
+
+	var frame int
+
+	switch pose {
+	case poseAttack:
+		frame = frameFromProgress(s.attackPhaseTimer/0.45, poseAttack)
+	case poseChargeApproach:
+		frame = frameFromProgress(s.attackPhaseTimer/0.20, poseChargeApproach)
+	case poseChargeAttack:
+		frame = frameFromProgress((s.attackPhaseTimer-0.20)/0.45, poseChargeAttack)
+	case poseFireCast:
+		frame = frameFromProgress(s.attackPhaseTimer/0.30, poseFireCast)
+	case poseReady:
+		frame = 0
+	case poseReadyGlow:
+		frame = glowFrameForLevel(s.skillGlowLevel, s.playerAnimTimer[i])
+	case poseWalk:
+		frame = spriteFrame(pose, s.playerAnimTimer[i])
+	case poseHealCast:
+		if i != s.healingCaster || s.healingAnimTimer[i] <= 0 {
+			pose = poseIdle
+			row = poseRow[poseIdle]
+			frame = spriteFrame(poseIdle, s.playerAnimTimer[i])
+		} else {
+			dur := 1.5
+			elapsed := dur - s.healingAnimTimer[i]
+			frame = frameFromProgress(elapsed/dur, poseHealCast)
+		}
+	default:
+		frame = spriteFrame(pose, s.playerAnimTimer[i])
+	}
+
+	srcX := frame * spriteFrameW
+	srcY := row * spriteFrameH
+	srcRect = image.Rect(srcX, srcY, srcX+spriteFrameW, srcY+spriteFrameH)
+
+	if srcRect.Max.X > spriteSheet.Bounds().Dx() ||
+		srcRect.Max.Y > spriteSheet.Bounds().Dy() {
+		srcRect = image.Rect(0, 0, spriteFrameW, spriteFrameH)
+	}
+
+	return spriteSheet, srcRect, true
+}
+
 func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 	for i := 0; i < partySize; i++ {
-		spriteSheet := s.game.PlayerAttackSprites[i]
-		if spriteSheet == nil {
+		spriteSheet, srcRect, ok := s.partySpriteSrcRect(i)
+		if !ok {
 			continue
 		}
-
 		pose := s.playerPose[i]
-		row, ok := poseRow[pose]
-		if !ok {
-			row = 0
-			pose = poseIdle
-		}
-
-		var frame int
-
-		switch pose {
-		case poseAttack:
-			frame = frameFromProgress(s.attackPhaseTimer/0.45, poseAttack)
-		case poseChargeApproach:
-			frame = frameFromProgress(s.attackPhaseTimer/0.20, poseChargeApproach)
-		case poseChargeAttack:
-			frame = frameFromProgress((s.attackPhaseTimer-0.20)/0.45, poseChargeAttack)
-		case poseFireCast:
-			frame = frameFromProgress(s.attackPhaseTimer/0.30, poseFireCast)
-		case poseReady:
-			frame = 0
-		case poseReadyGlow:
-			frame = glowFrameForLevel(s.skillGlowLevel, s.playerAnimTimer[i])
-		case poseWalk:
-			frame = spriteFrame(pose, s.playerAnimTimer[i])
-		case poseHealCast:
-			if i != s.healingCaster || s.healingAnimTimer[i] <= 0 {
-				pose = poseIdle
-				row = poseRow[poseIdle]
-				frame = spriteFrame(poseIdle, s.playerAnimTimer[i])
-			} else {
-				dur := 1.5
-				elapsed := dur - s.healingAnimTimer[i]
-				frame = frameFromProgress(elapsed/dur, poseHealCast)
-			}
-		default:
-			frame = spriteFrame(pose, s.playerAnimTimer[i])
-		}
-
-		srcX := frame * spriteFrameW
-		srcY := row * spriteFrameH
-		srcRect := image.Rect(srcX, srcY, srcX+spriteFrameW, srcY+spriteFrameH)
-
-		if srcRect.Max.X > spriteSheet.Bounds().Dx() ||
-			srcRect.Max.Y > spriteSheet.Bounds().Dy() {
-			srcRect = image.Rect(0, 0, spriteFrameW, spriteFrameH)
-		}
 
 		frameImg := spriteSheet.SubImage(srcRect).(*ebiten.Image)
 
 		op := &ebiten.DrawImageOptions{}
 		baseX := 640.0
 		baseY := 142.0
-		centerX := baseX + float64(i)*20.0
+		centerX := baseX + float64(i)*32.0
 		centerY := baseY + float64(i)*52.0
 
 		centerX += s.readySlideX[i]
@@ -289,7 +307,7 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 	case phaseSkillMenu:
 		s.drawCommandMenu(screen)
 		s.drawSkillSubMenu(screen)
-		s.drawBottomDescription(screen, s.currentSkillDescription(), "")
+		s.drawBottomDescription(screen, s.currentSkillDescription(), s.skillLevelHint())
 	case phaseTargetSelect:
 		s.drawTargetSelectUI(screen)
 		targetDesc, targetHint := s.targetSelectDescriptionAndHint()

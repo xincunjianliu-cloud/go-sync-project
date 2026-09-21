@@ -76,7 +76,7 @@ func (s *BattleScene) hitTestBattleSubRows(rowCount int) (int, bool) {
 	return hitTestTapRects(rects)
 }
 
-func (s *BattleScene) skillLevelArrowRects(row, lv int, face *text.GoTextFace) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
+func (s *BattleScene) skillLevelArrowRects(row, lv int, face text.Face) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
 	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
 	textY = windowY + battleSubLabelOffsetY + float64(row)*battleSubRowHeight
 
@@ -227,40 +227,99 @@ func partyPortraitHitOrder() [partySize]int {
 	return order
 }
 
-func (s *BattleScene) hitTestHealTargets() (int, bool) {
-	order := partyPortraitHitOrder()
-	rects := make([]tapRect, 0, partySize+1)
-	for _, i := range order {
-		rects = append(rects, s.partyPortraitRect(i))
+// partyPortraitRowSpan scans frame-local row ly of party member i's current
+// sprite frame and returns the leftmost/rightmost frame-local X holding a
+// non-transparent pixel. ok is false if the row has no visible pixels.
+func (s *BattleScene) partyPortraitRowSpan(i, ly int) (minX, maxX int, ok bool) {
+	spriteSheet, srcRect, srcOk := s.partySpriteSrcRect(i)
+	if !srcOk || ly < 0 || ly >= spriteFrameH {
+		return 0, 0, false
 	}
-	rects = append(rects, s.allTargetRowRect())
-	idx, ok := hitTestTapRects(rects)
+	minX, maxX = -1, -1
+	for x := 0; x < spriteFrameW; x++ {
+		_, _, _, a := spriteSheet.At(srcRect.Min.X+x, srcRect.Min.Y+ly).RGBA()
+		if a > 0 {
+			if minX == -1 {
+				minX = x
+			}
+			maxX = x
+		}
+	}
+	return minX, maxX, minX != -1
+}
+
+// partyPortraitPixelHit reports whether tap point p lands within party member
+// i's visible silhouette on its currently displayed sprite frame. This is
+// used (ahead of the padded bounding-box test) so that overlapping portraits
+// in the diagonal party layout resolve to whichever character's visible art
+// was actually tapped, not just whichever bounding box happens to be on top.
+//
+// Rather than requiring the exact tapped pixel to be opaque, it checks
+// whether the tap falls between the leftmost and rightmost drawn pixels on
+// that row. This keeps clicks working in small internal gaps in the art
+// (e.g. the transparent space between a character's legs) while still
+// excluding the empty margin outside the actual silhouette.
+func (s *BattleScene) partyPortraitPixelHit(i int, p touchPoint) bool {
+	lx := int(p.x - s.partyScreenX[i])
+	ly := int(p.y - s.partyScreenY[i])
+	if lx < 0 || ly < 0 || lx >= spriteFrameW || ly >= spriteFrameH {
+		return false
+	}
+	minX, maxX, ok := s.partyPortraitRowSpan(i, ly)
 	if !ok {
-		return -1, false
+		return false
 	}
-	if idx == partySize {
-		return partySize, true
-	}
-	return order[idx], true
+	return lx >= minX && lx <= maxX
+}
+
+func (s *BattleScene) hitTestHealTargets() (int, bool) {
+	return s.hitTestPartyTargets(true)
 }
 
 func (s *BattleScene) hitTestItemTargets(allowAll bool) (int, bool) {
+	return s.hitTestPartyTargets(allowAll)
+}
+
+// hitTestPartyTargets resolves a tap/click against the party portraits. It
+// first checks pixel-accurate hits front-to-back (so a rear character's
+// visible feet win over a front character's mostly-transparent padding at
+// that same point). Touch input then falls back to the padded bounding
+// boxes for forgiving taps in the empty margin around a sprite; a mouse
+// cursor is precise enough that clicks only register on the drawn art.
+func (s *BattleScene) hitTestPartyTargets(allowAll bool) (int, bool) {
 	order := partyPortraitHitOrder()
-	rects := make([]tapRect, 0, partySize+1)
+	touches, mouse := justPressedTouchAndMousePoints()
+
+	for _, p := range touches {
+		if i, ok := s.hitTestPartyTargetPoint(p, order, true, allowAll); ok {
+			return i, true
+		}
+	}
+	for _, p := range mouse {
+		if i, ok := s.hitTestPartyTargetPoint(p, order, false, allowAll); ok {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func (s *BattleScene) hitTestPartyTargetPoint(p touchPoint, order [partySize]int, allowPadded, allowAll bool) (int, bool) {
 	for _, i := range order {
-		rects = append(rects, s.partyPortraitRect(i))
+		if s.partyPortraitPixelHit(i, p) {
+			return i, true
+		}
 	}
-	if allowAll {
-		rects = append(rects, s.allTargetRowRect())
+	if allowPadded {
+		for _, i := range order {
+			if s.partyPortraitRect(i).contains(p) {
+				return i, true
+			}
+		}
 	}
-	idx, ok := hitTestTapRects(rects)
-	if !ok {
-		return -1, false
-	}
-	if idx == partySize {
+	if allowAll && s.allTargetRowRect().contains(p) {
 		return partySize, true
 	}
-	return order[idx], true
+	return -1, false
 }
 
 func (s *BattleScene) partyPortraitRect(i int) tapRect {
@@ -362,31 +421,109 @@ func (s *BattleScene) currentAttackIsAllTarget() bool {
 	}
 }
 
+// enemyPortraitRowSpan scans image-local row ly of the enemy in slot and
+// returns the leftmost/rightmost image-local X holding a non-transparent
+// pixel. ok is false if the row has no visible pixels.
+func (s *BattleScene) enemyPortraitRowSpan(slot, ly int) (minX, maxX int, ok bool) {
+	if slot < 0 || slot >= len(s.enemies) {
+		return 0, 0, false
+	}
+	e := &s.enemies[slot]
+	if e.Image == nil || e.HP <= 0 {
+		return 0, 0, false
+	}
+	b := e.Image.Bounds()
+	if ly < 0 || ly >= b.Dy() {
+		return 0, 0, false
+	}
+	minX, maxX = -1, -1
+	for x := 0; x < b.Dx(); x++ {
+		_, _, _, a := e.Image.At(b.Min.X+x, b.Min.Y+ly).RGBA()
+		if a > 0 {
+			if minX == -1 {
+				minX = x
+			}
+			maxX = x
+		}
+	}
+	return minX, maxX, minX != -1
+}
+
+// enemyPortraitPixelHit mirrors partyPortraitPixelHit for enemies: it reports
+// whether tap point p falls within the enemy's visible silhouette on that
+// row (leftmost to rightmost drawn pixel), rather than requiring the exact
+// tapped pixel to be opaque, so small internal gaps in the art don't create
+// unclickable holes.
+func (s *BattleScene) enemyPortraitPixelHit(slot int, p touchPoint) bool {
+	if slot < 0 || slot >= len(s.enemies) {
+		return false
+	}
+	e := &s.enemies[slot]
+	if e.Image == nil || e.HP <= 0 {
+		return false
+	}
+	x, y, w, h := s.enemyDrawRect(slot)
+	lx := p.x - x
+	ly := p.y - y
+	if lx < 0 || ly < 0 || lx >= w || ly >= h {
+		return false
+	}
+	minX, maxX, ok := s.enemyPortraitRowSpan(slot, int(ly))
+	if !ok {
+		return false
+	}
+	return int(lx) >= minX && int(lx) <= maxX
+}
+
+// hitTestEnemyTarget resolves a tap/click against the enemies, using the same
+// two-tier approach as hitTestPartyTargets: pixel-accurate hits first, then
+// (for touch only) a forgiving bounding-box fallback. Mouse clicks only
+// register on the drawn art.
 func (s *BattleScene) hitTestEnemyTarget() (int, bool) {
 	alive := s.aliveEnemyIndices()
 	forcedAll := s.currentTargetIsForcedAll()
-	rects := make([]tapRect, 0, len(alive)+1)
-	slots := make([]int, 0, len(alive)+1)
+	touches, mouse := justPressedTouchAndMousePoints()
+
+	for _, p := range touches {
+		if slot, ok := s.hitTestEnemyTargetPoint(p, alive, forcedAll, true); ok {
+			return slot, true
+		}
+	}
+	for _, p := range mouse {
+		if slot, ok := s.hitTestEnemyTargetPoint(p, alive, forcedAll, false); ok {
+			return slot, true
+		}
+	}
+	return -1, false
+}
+
+func (s *BattleScene) hitTestEnemyTargetPoint(p touchPoint, alive []int, forcedAll, allowPadded bool) (int, bool) {
+	slotFor := func(i int) int {
+		if forcedAll {
+			return maxEnemies
+		}
+		return i
+	}
+
 	for idx := len(alive) - 1; idx >= 0; idx-- {
 		i := alive[idx]
-		r, ok := s.enemyTargetRect(i)
-		if !ok {
-			continue
-		}
-		rects = append(rects, r)
-		if forcedAll {
-			slots = append(slots, maxEnemies)
-		} else {
-			slots = append(slots, i)
+		if s.enemyPortraitPixelHit(i, p) {
+			return slotFor(i), true
 		}
 	}
-	if s.currentTargetAllowsAll() {
-		rects = append(rects, s.enemyAllTargetRowRect())
-		slots = append(slots, maxEnemies)
+
+	if allowPadded {
+		for idx := len(alive) - 1; idx >= 0; idx-- {
+			i := alive[idx]
+			if r, ok := s.enemyTargetRect(i); ok && r.contains(p) {
+				return slotFor(i), true
+			}
+		}
 	}
-	idx, ok := hitTestTapRects(rects)
-	if !ok {
-		return -1, false
+
+	if s.currentTargetAllowsAll() && s.enemyAllTargetRowRect().contains(p) {
+		return maxEnemies, true
 	}
-	return slots[idx], true
+
+	return -1, false
 }

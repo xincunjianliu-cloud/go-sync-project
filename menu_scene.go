@@ -540,6 +540,10 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.RaisedLevers = d.RaisedLevers
 	m.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
 	m.game.SeenEvents = d.SeenEvents
+	m.game.SeenBattleTutorial = d.SeenBattleTutorial
+	m.game.SeenGaugeTutorial = d.SeenGaugeTutorial
+	m.game.SeenSkillLevelTutorial = d.SeenSkillLevelTutorial
+	m.game.SeenSkillUpgradeTutorial = d.SeenSkillUpgradeTutorial
 	m.game.BlockPositions = d.BlockPositions
 	m.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 

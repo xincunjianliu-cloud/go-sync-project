@@ -1,0 +1,14 @@
+{
+  "spreadsheetId": "1aub7VlR9L0Ow0_dWPhFyBDtPQ1IEo1jve_WQIb3mIXY",
+  "sources": [
+    { "name": "opening", "gid": "0" },
+    { "name": "chapter1", "gid": "1666857203" },
+    { "name": "chapter2", "gid": "2039100008" },
+    { "name": "chapter3", "gid": "2004205723" },
+    { "name": "chapter4", "gid": "575078651" },
+    { "name": "boss_1", "gid": "139013535", "kind": "boss" },
+    { "name": "boss_2", "gid": "1076772966", "kind": "boss" },
+    { "name": "boss_3", "gid": "1713790356", "kind": "boss" },
+    { "name": "boss_4", "gid": "1635933284", "kind": "boss" }
+  ]
+}

@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+// startMapPath はニューゲーム開始時に立つマップであり、マップ自動探索
+// (BuildObjectiveAndMapIndex)の起点でもある。ここから"targetmap"を
+// たどれないマップは目的地・ドア接続・鍵グループの対象にならない。
+const startMapPath = "assets/maps/School_Map_1.tmj"
+
 type ObjectiveLocation struct {
 	MapPath string
 	X, Y    float64
@@ -66,14 +71,31 @@ type mapDoor struct {
 
 var mapConnectionGraph = map[string][]mapDoor{}
 
-var allMapPaths = allRegisteredMapPaths()
+// allMapPaths はゲーム内に存在する全マップのパス一覧。ハードコードされた
+// 一覧ではなく、BuildObjectiveAndMapIndexがstartMapPathから"targetmap"
+// プロパティ(ワープ・ドア)をたどって到達できるマップを自動的に集めた結果。
+// 新しいマップを追加するときは、既存のどこかのマップから"targetmap"で
+// リンクしさえすれば、ここにも自動的に加わる(コード側の登録は不要)。
+var allMapPaths []string
 
 func BuildObjectiveAndMapIndex() error {
 	objectiveLocationIndex = map[string]ObjectiveLocation{}
 	mapConnectionGraph = map[string][]mapDoor{}
 	objectiveDefs = nil
+	allMapPaths = nil
 
-	for _, mapPath := range allMapPaths {
+	visited := map[string]bool{}
+	queue := []string{startMapPath}
+
+	for len(queue) > 0 {
+		mapPath := queue[0]
+		queue = queue[1:]
+		if visited[mapPath] {
+			continue
+		}
+		visited[mapPath] = true
+		allMapPaths = append(allMapPaths, mapPath)
+
 		data, err := loadAssetBytes(mapPath)
 		if err != nil {
 			return fmt.Errorf("マップ読み込み失敗 %s: %w", mapPath, err)
@@ -116,6 +138,9 @@ func BuildObjectiveAndMapIndex() error {
 						DoorX:   obj.X,
 						DoorY:   obj.Y,
 					})
+					if !visited[targetMap] {
+						queue = append(queue, targetMap)
+					}
 				}
 			}
 		}

@@ -20,10 +20,18 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	s.drawWorld(screen)
+	if s.isMsgActive && s.msgBackground != "" {
+		if bg := s.game.GetBackgroundImage(s.msgBackground); bg != nil {
+			screen.DrawImage(bg, nil)
+		} else {
+			screen.Fill(color.RGBA{0, 0, 0, 255})
+		}
+	} else {
+		s.drawWorld(screen)
+	}
 
 	if s.isMsgActive {
-		s.msg.DrawChara(screen, s.game.CharaImgs)
+		s.msg.DrawChara(screen, s.game)
 	}
 
 	if s.isMsgActive && s.msgIndex >= 0 && s.msgIndex < len(s.msgTexts) {
@@ -69,13 +77,17 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 		drawBackButton(screen, s.game)
 	}
 
-	showTouchPad := !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive && !s.isLogActive && !s.wallFadeActive
+	showTouchPad := !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive && !s.isLogActive && !s.wallFadeActive && !s.skillUpgradeTutorialActive
 	if s.game.MobileMode {
-		showActionButton := !s.isMsgActive && !s.isItemGetActive && !s.wallFadeActive
+		showActionButton := !s.isMsgActive && !s.isItemGetActive && !s.wallFadeActive && !s.skillUpgradeTutorialActive
 		s.drawTouchControls(screen, showTouchPad, showActionButton)
 	}
 	if showTouchPad {
 		drawHamburgerMenuButton(screen, s.game)
+	}
+
+	if s.skillUpgradeTutorialActive {
+		s.drawSkillUpgradeTutorial(screen)
 	}
 }
 
@@ -341,8 +353,13 @@ func (s *FieldScene) drawLeverWalls(screen *ebiten.Image, camX, camY float64) {
 			}
 
 			img := s.game.LeverWallOpenImg
+			imgs := s.game.LeverWallOpenImgs
 			if isLeverWallVisualOnly(p) {
 				img = s.game.LeverWallOpenDecoImg
+				imgs = s.game.LeverWallOpenDecoImgs
+			}
+			if key := leverWallImageKey(p); key != "" && imgs[key] != nil {
+				img = imgs[key]
 			}
 			if img == nil {
 				continue
@@ -554,13 +571,14 @@ func (s *FieldScene) drawPromptWithIcon(screen *ebiten.Image, icon *ebiten.Image
 }
 
 const (
-	enemyBaseX = 240.0
+	enemyBaseX = 200.0
 	partyBaseY = 142.0
 
-	partyLikeSpacingX = 20.0
 	partyLikeSpacingY = 52.0
 
-	enemyCenterRefX = enemyBaseX + float64(maxEnemies-1)/2.0*partyLikeSpacingX
+	enemyZigzagSpacingX = 30.0
+
+	enemyCenterRefX = enemyBaseX
 	enemyCenterRefY = partyBaseY + float64(maxEnemies-1)/2.0*partyLikeSpacingY + spriteFrameH
 )
 
@@ -573,10 +591,24 @@ func (s *BattleScene) enemyDrawRect(slot int) (x, y, w, h float64) {
 	w = float64(img.Bounds().Dx())
 	h = float64(img.Bounds().Dy())
 
-	offset := float64(slot) - float64(n-1)/2.0
-	x = enemyCenterRefX + offset*partyLikeSpacingX
-	groundY := enemyCenterRefY + offset*partyLikeSpacingY
+	var groundY float64
+	if n == 1 && strings.HasPrefix(s.enemyType, "boss_") {
+		// ボス単体の時は縦位置を一番下の味方の足元に合わせる。
+		groundY = partyBaseY + float64(partySize-1)*partyLikeSpacingY + spriteFrameH
+	} else {
+		// Vertical position still follows the party's diagonal spacing reference.
+		offsetY := float64(slot) - float64(n-1)/2.0
+		groundY = enemyCenterRefY + offsetY*partyLikeSpacingY
+	}
 	y = groundY - h
+
+	// Horizontal position alternates left/right to form a zigzag row.
+	xOffset := enemyZigzagSpacingX
+	if slot%2 == 1 {
+		xOffset = -xOffset
+	}
+	x = enemyCenterRefX + xOffset
+
 	return x, y, w, h
 }
 

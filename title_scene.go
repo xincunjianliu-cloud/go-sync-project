@@ -105,10 +105,13 @@ func (s *TitleScene) Update(dt float64) Scene {
 			}
 			s.game.Audio.PlaySEByKey("decide")
 			s.game.ResetForNewGame()
-			field, err := NewRoomScene(s.game, "assets/maps/School_Map_1.tmj", 0, 0, "start_point", 0)
+			field, err := NewRoomScene(s.game, startMapPath, 0, 0, "start_point", 0)
 			if err != nil {
 				return s
 			}
+			field.applyDialogue(resolveEventDialogue(storyTextPrefix+"opening", "", false))
+			field.msgIndex = 0
+			field.beginMessage()
 			s.game.ChangeSceneWithFade(field, fadeTimeNewGame)
 			return s
 
@@ -205,15 +208,19 @@ type SaveData struct {
 	PlayTime          float64   `json:"play_time"`
 	SavedAt           string    `json:"saved_at"`
 
-	Inventory            []InventorySlot       `json:"inventory"`
-	OpenedChests         map[string]bool       `json:"opened_chests"`
-	UnlockedWalls        map[string]bool       `json:"unlocked_walls"`
-	Keys                 map[string]int        `json:"keys"`
-	RaisedLevers         map[string]bool       `json:"raised_levers"`
-	SeenAutoHealMapIntro map[string]bool       `json:"seen_auto_heal_map_intro"`
-	SeenEvents           map[string]bool       `json:"seen_events"`
-	BlockPositions       map[string][2]float64 `json:"block_positions"`
-	UnlockedBlockDoors   map[string]bool       `json:"unlocked_block_doors"`
+	Inventory                []InventorySlot       `json:"inventory"`
+	OpenedChests             map[string]bool       `json:"opened_chests"`
+	UnlockedWalls            map[string]bool       `json:"unlocked_walls"`
+	Keys                     map[string]int        `json:"keys"`
+	RaisedLevers             map[string]bool       `json:"raised_levers"`
+	SeenAutoHealMapIntro     map[string]bool       `json:"seen_auto_heal_map_intro"`
+	SeenEvents               map[string]bool       `json:"seen_events"`
+	SeenBattleTutorial       bool                  `json:"seen_battle_tutorial"`
+	SeenGaugeTutorial        bool                  `json:"seen_gauge_tutorial"`
+	SeenSkillLevelTutorial   bool                  `json:"seen_skill_level_tutorial"`
+	SeenSkillUpgradeTutorial bool                  `json:"seen_skill_upgrade_tutorial"`
+	BlockPositions           map[string][2]float64 `json:"block_positions"`
+	UnlockedBlockDoors       map[string]bool       `json:"unlocked_block_doors"`
 }
 
 func saveFilePath(slot int) string {
@@ -377,6 +384,10 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.RaisedLevers = d.RaisedLevers
 		s.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
 		s.game.SeenEvents = d.SeenEvents
+		s.game.SeenBattleTutorial = d.SeenBattleTutorial
+		s.game.SeenGaugeTutorial = d.SeenGaugeTutorial
+		s.game.SeenSkillLevelTutorial = d.SeenSkillLevelTutorial
+		s.game.SeenSkillUpgradeTutorial = d.SeenSkillUpgradeTutorial
 		s.game.BlockPositions = d.BlockPositions
 		s.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 

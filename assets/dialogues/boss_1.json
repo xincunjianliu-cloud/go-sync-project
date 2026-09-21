@@ -1,35 +1,37 @@
 {
   "battle": {
-    "bgm": "talk_tense",
     "commands": [
-      { "speaker": "player1", "text": "あれが噂のボスか...油断するなよ！" },
-      { "speaker": "boss1", "text": "貴様...ここまで来るとはな" },
-        { "speaker": "player1", "text": "あれが噂のボスか...油断するなよ！" },
-      { "speaker": "boss1", "text": "貴様...ここまで来るとはな" },
-        { "speaker": "player1", "text": "あれが噂のボスか...油断するなよ！" },
-      { "speaker": "boss1", "text": "貴様...ここまで来るとはな" },
-        { "speaker": "player1", "text": "あれが噂のボスか...油断するなよ！" },
-      { "speaker": "boss1", "text": "貴様...ここまで来るとはな" },
-        { "speaker": "player1", "text": "あれが噂のボスか...油断するなよ！" },
-      { "speaker": "boss1", "text": "貴様...ここまで来るとはな" },
-      { "speaker": "player1", "text": "覚悟しろ、ここで倒す！" }
-      
+      {
+        "speaker": "player1",
+        "text": "あれが噂のボスか...油断するなよ！"
+      },
+      {
+        "speaker": "boss1",
+        "text": "貴様...ここまで来るとはな",
+        "expression": 2
+      },
+      {
+        "speaker": "player1",
+        "text": "覚悟しろ、ここで倒す！"
+      }
     ],
+    "bgm": "talk_tense",
     "speakerSlots": {
-      "player1": 0,
-      "boss1": 1
+      "boss1": 1,
+      "player1": 0
     }
   },
   "clear": {
-    "bgm": "talk_peaceful",
     "commands": [
-      { "speaker": "boss1", "text": "馬鹿な...この俺が..." },
-      { "speaker": "player1", "text": "これで一つ、片付いたな" },
-      { "speaker": "SYSTEM_COMMAND", "text": "START_ENDING" }
+      {
+        "speaker": "boss1",
+        "text": "馬鹿な...この俺が..."
+      },
+      {
+        "speaker": "player1",
+        "text": "これで一つ、片付いたな"
+      }
     ],
-    "speakerSlots": {
-      "player1": 0,
-      "boss1": 1
-    }
+    "bgm": "talk_peaceful"
   }
 }

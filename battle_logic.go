@@ -117,8 +117,6 @@ func (s *BattleScene) applyDebugCheats() {
 	case inpututil.IsKeyJustPressed(ebiten.Key6):
 		s.gaugePoint = gaugePoolMax
 		s.recomputeGaugeStage()
-		s.battleLog = "ゲージが満タンになった！"
-		s.battleLogTimer = battleLogDuration
 
 	case inpututil.IsKeyJustPressed(ebiten.Key7):
 		for i := 0; i < partySize; i++ {
@@ -182,6 +180,32 @@ func (s *BattleScene) applyDebugCheats() {
 			s.debugStatIconTest = true
 			s.battleLog = "ステータスアイコンのテスト表示（デバッグ）"
 		}
+		s.battleLogTimer = battleLogDuration
+
+	case inpututil.IsKeyJustPressed(ebiten.KeyT):
+		s.tutorialKind = battleTutorialKindBasics
+		s.tutorialPage = 0
+		s.tutorialActive = true
+
+	case inpututil.IsKeyJustPressed(ebiten.KeyG):
+		s.tutorialKind = battleTutorialKindGauge
+		s.tutorialPage = 0
+		s.tutorialActive = true
+
+	case inpututil.IsKeyJustPressed(ebiten.KeyK):
+		for i := 0; i < partySize; i++ {
+			skills := s.game.CharacterSkills(i)
+			for j, sk := range skills {
+				if j >= len(s.game.PlayerSkillLv[i]) {
+					continue
+				}
+				if len(sk.Levels) > 1 {
+					s.game.PlayerSkillLv[i][j] = 2
+				}
+			}
+		}
+		s.skillLevelHintActive = true
+		s.battleLog = "スキルLvヒントを再表示（デバッグ）"
 		s.battleLogTimer = battleLogDuration
 	}
 }
@@ -277,6 +301,17 @@ func (s *BattleScene) Update(dt float64) Scene {
 			if s.introPhaseTimer >= introATBWait {
 				s.introActive = false
 				s.introProgress = 1.0
+			}
+		}
+		return s
+	}
+
+	if s.tutorialActive {
+		if isResultAdvancePressed() {
+			s.game.Audio.PlaySEByKey("decide")
+			s.tutorialPage++
+			if s.tutorialPage >= battleTutorialPageCountFor(s.tutorialKind) {
+				s.tutorialActive = false
 			}
 		}
 		return s

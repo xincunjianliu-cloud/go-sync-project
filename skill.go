@@ -63,6 +63,11 @@ type SkillDef struct {
 	UnlockLevel int
 }
 
+// Each character's skill slice must be kept sorted by ascending UnlockLevel.
+// The skill list and battle skill menu draw rows by array index and skip
+// locked skills, relying on locked skills always being a trailing suffix
+// (never a gap in the middle) so the visible rows stay packed from the top.
+
 var characterSkillSets = [4][]SkillDef{
 	HeroSkills,
 	HeroSkills,
@@ -120,39 +125,6 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectDebuffPhysicalDef, Percent: 10, Turns: 3},
 				},
-				ReturnPosition: 5,
-				GaugePoint:     2,
-			},
-		},
-	},
-	{
-		Name:        "全体攻撃",
-		UnlockLevel: 2,
-		Levels: []SkillLevelData{
-			{
-				Description:    "全体にダメージを与える",
-				Target:         TargetAll,
-				Element:        ElemMagicNone,
-				PowerAll:       80,
-				MPCost:         7,
-				ReturnPosition: 5,
-				GaugePoint:     2,
-			},
-			{
-				Description:    "全体にダメージを与える",
-				Target:         TargetAll,
-				Element:        ElemMagicNone,
-				PowerAll:       100,
-				MPCost:         9,
-				ReturnPosition: 5,
-				GaugePoint:     2,
-			},
-			{
-				Description:    "全体にダメージを与える",
-				Target:         TargetAll,
-				Element:        ElemMagicNone,
-				PowerAll:       140,
-				MPCost:         13,
 				ReturnPosition: 5,
 				GaugePoint:     2,
 			},
@@ -281,6 +253,39 @@ var HeroSkills = []SkillDef{
 				Effects: []SkillEffect{
 					{Type: EffectBuffAtkUp, Percent: 30, PercentAll: 15, Turns: 3},
 				},
+				ReturnPosition: 5,
+				GaugePoint:     2,
+			},
+		},
+	},
+	{
+		Name:        "全体攻撃",
+		UnlockLevel: 2,
+		Levels: []SkillLevelData{
+			{
+				Description:    "全体にダメージを与える",
+				Target:         TargetAll,
+				Element:        ElemMagicNone,
+				PowerAll:       80,
+				MPCost:         7,
+				ReturnPosition: 5,
+				GaugePoint:     2,
+			},
+			{
+				Description:    "全体にダメージを与える",
+				Target:         TargetAll,
+				Element:        ElemMagicNone,
+				PowerAll:       100,
+				MPCost:         9,
+				ReturnPosition: 5,
+				GaugePoint:     2,
+			},
+			{
+				Description:    "全体にダメージを与える",
+				Target:         TargetAll,
+				Element:        ElemMagicNone,
+				PowerAll:       140,
+				MPCost:         13,
 				ReturnPosition: 5,
 				GaugePoint:     2,
 			},

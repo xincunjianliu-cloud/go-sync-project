@@ -68,6 +68,13 @@ func isLeverObj(p map[string]string) bool {
 	return p["type"] == evTypeEvent && p["text"] == evTextLever
 }
 
+// leverWallImageKey は壁オブジェクトの"img"プロパティを返す。空文字なら
+// 場所ごとの絵の指定なしとして扱い、デフォルトの
+// LeverWallOpenImg/LeverWallOpenDecoImgを使う(game.goのコメント参照)。
+func leverWallImageKey(p map[string]string) string {
+	return p["img"]
+}
+
 func isBlockObj(p map[string]string) bool {
 	return p["type"] == evTypeEvent && p["text"] == evTextBlock
 }

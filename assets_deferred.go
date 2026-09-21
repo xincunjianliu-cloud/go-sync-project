@@ -94,9 +94,10 @@ func (g *Game) pumpHeavyAssets() {
 // deferredAssetAssignments はバックグラウンドで読み込む画像の一覧と、
 // 読み込み後にGameのどのフィールドへ入れるかを返す。
 func deferredAssetAssignments() []deferredAssetAssign {
+	// 各マップ自身のタイルセット画像は.tmjの"tilesets"欄からmapTilesetImageが
+	// 都度読み込むため、ここでの事前登録は不要。"default"は、万一マップに
+	// タイルセットが設定されていない場合のフォールバック用に残しておく。
 	a := []deferredAssetAssign{
-		{"assets/images/field/Tile_set_School_Set.png", func(g *Game, img *ebiten.Image) { g.Tilesets["rouka"] = img }},
-		{"assets/images/field/Tile_set_School_Set (12).png", func(g *Game, img *ebiten.Image) { g.Tilesets["dungeon"] = img }},
 		{"assets/images/field/Tile_set_School_Set.png", func(g *Game, img *ebiten.Image) { g.Tilesets["default"] = img }},
 		{"assets/images/field/player_walk.png", func(g *Game, img *ebiten.Image) { g.SpriteSheet = img }},
 	}
@@ -124,20 +125,20 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	}
 
 	commandIconFiles := [4]string{
-		"assets/images/battle/アタック.png",
-		"assets/images/battle/スキル.png",
-		"assets/images/battle/待機.png",
-		"assets/images/battle/逃げる.png",
+		"assets/images/battle/attack.png",
+		"assets/images/battle/skill.png",
+		"assets/images/battle/wait.png",
+		"assets/images/battle/flee.png",
 	}
 	for i, path := range commandIconFiles {
 		a = append(a, deferredAssetAssign{path, func(g *Game, img *ebiten.Image) { g.CommandIcons[i] = img }})
 	}
 
 	commandIconSelectedFiles := [4]string{
-		"assets/images/battle/アタック_選択.png",
-		"assets/images/battle/スキル_選択.png",
-		"assets/images/battle/待機_選択.png",
-		"assets/images/battle/逃げる_選択.png",
+		"assets/images/battle/attack_selected.png",
+		"assets/images/battle/skill_selected.png",
+		"assets/images/battle/wait_selected.png",
+		"assets/images/battle/flee_selected.png",
 	}
 	for i, path := range commandIconSelectedFiles {
 		a = append(a, deferredAssetAssign{path, func(g *Game, img *ebiten.Image) { g.CommandIconsSelected[i] = img }})
@@ -151,11 +152,11 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	}
 
 	a = append(a,
-		deferredAssetAssign{"assets/images/battle/タイムライン横.png", func(g *Game, img *ebiten.Image) { g.TimelineBarImg = img }},
-		deferredAssetAssign{"assets/images/battle/ゲージ.png", func(g *Game, img *ebiten.Image) { g.GaugeImg = img }},
-		deferredAssetAssign{"assets/images/battle/ゴール.png", func(g *Game, img *ebiten.Image) { g.GoalImg = img }},
-		deferredAssetAssign{"assets/images/battle/タイムラインバー縦.png", func(g *Game, img *ebiten.Image) { g.TimelineBarVertImg = img }},
-		deferredAssetAssign{"assets/images/battle/スキル拡張.png", func(g *Game, img *ebiten.Image) { g.SkillPanelImg = img }},
+		deferredAssetAssign{"assets/images/battle/timeline_bar.png", func(g *Game, img *ebiten.Image) { g.TimelineBarImg = img }},
+		deferredAssetAssign{"assets/images/battle/gauge.png", func(g *Game, img *ebiten.Image) { g.GaugeImg = img }},
+		deferredAssetAssign{"assets/images/battle/goal.png", func(g *Game, img *ebiten.Image) { g.GoalImg = img }},
+		deferredAssetAssign{"assets/images/battle/timeline_bar_vertical.png", func(g *Game, img *ebiten.Image) { g.TimelineBarVertImg = img }},
+		deferredAssetAssign{"assets/images/battle/skill_panel.png", func(g *Game, img *ebiten.Image) { g.SkillPanelImg = img }},
 		deferredAssetAssign{"assets/images/battle/battle_bg.png", func(g *Game, img *ebiten.Image) { g.BattleBgImg = img }},
 	)
 
@@ -194,11 +195,13 @@ func deferredAssetAssignments() []deferredAssetAssign {
 
 	for i := 0; i < 4; i++ {
 		bossName := BossNames[i]
-		a = append(a, deferredAssetAssign{fmt.Sprintf("assets/images/common/chara_boss%d.png", i+1), func(g *Game, img *ebiten.Image) { g.CharaImgs[bossName] = img }})
+		slug := fmt.Sprintf("boss%d", i+1)
+		a = append(a, deferredAssetAssign{fmt.Sprintf("assets/images/common/chara_%s.png", slug), func(g *Game, img *ebiten.Image) { g.CharaImgs[bossName] = img }})
 	}
 	for i := 0; i < partySize; i++ {
 		playerName := PlayerNames[i]
-		a = append(a, deferredAssetAssign{fmt.Sprintf("assets/images/common/chara_player_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.CharaImgs[playerName] = img }})
+		slug := fmt.Sprintf("player_%d", i+1)
+		a = append(a, deferredAssetAssign{fmt.Sprintf("assets/images/common/chara_%s.png", slug), func(g *Game, img *ebiten.Image) { g.CharaImgs[playerName] = img }})
 	}
 
 	a = append(a,

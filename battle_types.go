@@ -14,16 +14,22 @@ const (
 	atbMax     = 100.0
 )
 
-// lastBossEventType はラスボス(4体目のボス)のイベント種別。ボス4体のうち
-// この1体だけ通常のボス戦BGMではなくラスボス専用BGMを流す。
+// lastBossEventType is the event type for the last boss (the 4th boss).
+// Of the four bosses, only this one plays a dedicated last-boss BGM
+// instead of the normal boss battle BGM.
 const lastBossEventType = "boss_4"
 
-const battleLogDuration = 0.7
+const battleLogDuration = 0.85
 const gameOverMessageDuration = 1.5
 
-const skillActionLogDuration = 1.0
+const skillActionLogDuration = 1.15
 
 const enemyActionDuration = 1.0
+
+// silentActionLogDuration is the delay before the next action starts after
+// an action that shows no log (a normal attack). It's shorter than the
+// delay for actions that do show a log.
+const silentActionLogDuration = 0.35
 
 const enemyWindupDuration = 0.4
 
@@ -577,6 +583,13 @@ type BattleScene struct {
 
 	healingAnimTimer [partySize]float64
 	healingCaster    int
+
+	tutorialActive     bool
+	tutorialKind       int
+	tutorialPage       int
+	tutorialOverlayImg *ebiten.Image
+
+	skillLevelHintActive bool
 }
 
 type DamagePop struct {
@@ -691,6 +704,21 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 		gaugeStage:    0,
 		gaugePoint:    0,
 		healingCaster: -1,
+
+		tutorialKind: nextBattleTutorialKind(game),
+		tutorialPage: 0,
+	}
+	s.tutorialActive = s.tutorialKind != battleTutorialKindNone
+	switch s.tutorialKind {
+	case battleTutorialKindBasics:
+		game.SeenBattleTutorial = true
+	case battleTutorialKindGauge:
+		game.SeenGaugeTutorial = true
+	}
+
+	s.skillLevelHintActive = !game.SeenSkillLevelTutorial && partyHasLeveledSkill(game)
+	if s.skillLevelHintActive {
+		game.SeenSkillLevelTutorial = true
 	}
 
 	for i := 0; i < partySize; i++ {
@@ -723,8 +751,9 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 	return s
 }
 
-// desiredBGM は戦闘BGMを暗転しきった瞬間にハードカットで鳴らす。フェード
-// インさせず一気に切り替わる方が、遭遇の緊張感やボス戦の盛り上がりに合う。
+// desiredBGM plays the battle BGM with a hard cut the instant the screen
+// finishes fading to black. Cutting straight in without a fade-in better
+// matches the tension of the encounter and the excitement of a boss fight.
 func (s *BattleScene) desiredBGM(transitionDuration float64) (string, float64, bool) {
 	return s.bgmPath, 0, true
 }

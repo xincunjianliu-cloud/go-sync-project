@@ -4,6 +4,11 @@
          "name":"bgm",
          "type":"string",
          "value":"field1"
+        },
+        {
+         "name":"displayname",
+         "type":"string",
+         "value":"理科室"
         }],
  "height":100,
  "infinite":false,

@@ -3,20 +3,30 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"path"
 	"strconv"
 	"strings"
 )
 
 type EventCommand struct {
-	Speaker string
-	Text    string
+	Speaker    string
+	Text       string
+	Expression int
 }
 
 type BossDialogue struct {
-	Commands     []EventCommand
-	SpeakerSlots map[string]int
-	BGM          string
+	Commands []EventCommand
+	BGM      string
+	// SpeakerSides is an optional "who stands on which side" hint
+	// (0=left, 1=right). A speaker with no entry here is placed
+	// automatically (see MessageSystem.UpdateCharaAnim).
+	SpeakerSides map[string]int
+	// Background is an optional image key (assets/images/backgrounds/<key>.png)
+	// drawn full-screen in place of the map while this dialogue plays
+	// (e.g. for an opening/visual-novel-style scene). Empty means "just
+	// show the map as usual".
+	Background string
 }
 
 var bossBattleDialogues = map[int]BossDialogue{}
@@ -35,14 +45,27 @@ var storyDialogues = map[string]storyDialogueEntry{}
 type dialogueCommandJSON struct {
 	Speaker string `json:"speaker"`
 	Text    string `json:"text"`
+	// Expression はこのセリフで表示する表情差分のコマ番号(任意)。
+	// 全キャラ共通で 0=通常 1=笑顔 2=怒り 3=驚き の固定割り当て。
+	// その話者のchara_<キャラ>_sheet.pngのうち何番目のコマを使うかを指定する
+	// (シートが用意されていないキャラの場合は無視され、通常の立ち絵を使う)。
+	Expression int `json:"expression"`
 }
 
 type bossDialogueJSON struct {
-	Commands     []dialogueCommandJSON `json:"commands"`
-	SpeakerSlots map[string]int        `json:"speakerSlots"`
+	Commands []dialogueCommandJSON `json:"commands"`
 	// BGM はこの会話中に流すBGMをbgmByKeyのキー名で指定する(任意)。
 	// 省略時はそれまで流れていたBGMをそのまま継続する。
 	BGM string `json:"bgm"`
+	// SpeakerSlots はどの話者を左(0)/右(1)どちらの立ち絵枠に固定するかの
+	// 任意指定。指定が無い話者は「直近喋っていない方の枠」に自動で入る。
+	// 同じ側を2人以上に指定すると、その側の枠だけがその2人の間で
+	// 入れ替わる(もう片方の枠には影響しない)。
+	SpeakerSlots map[string]int `json:"speakerSlots"`
+	// Background はこの会話中にマップの代わりに全画面表示する背景画像の
+	// キー(assets/images/backgrounds/<キー>.png、任意)。省略時は
+	// マップをそのまま表示する。
+	Background string `json:"background"`
 }
 
 type bossDialogueFileJSON struct {
@@ -63,14 +86,17 @@ func buildSpeakerNameMap() map[string]string {
 	return m
 }
 
-func resolveSpeaker(key string) (string, error) {
+// resolveSpeaker はJSON上の話者キーを表示名に変換する。"player1"/"boss1"の
+// ようなキーは既知の名前に変換し、それ以外の文字列はNPCの表示名として
+// そのまま使う(NPCを増やすたびにGoコード側の対応表を増やす必要がないため)。
+func resolveSpeaker(key string) string {
 	if key == "" || key == "SYSTEM_COMMAND" {
-		return key, nil
+		return key
 	}
 	if name, ok := speakerNameMap[key]; ok {
-		return name, nil
+		return name
 	}
-	return "", fmt.Errorf("未知の話者キー: %q", key)
+	return key
 }
 
 func convertBossDialogue(src *bossDialogueJSON) BossDialogue {
@@ -80,23 +106,22 @@ func convertBossDialogue(src *bossDialogueJSON) BossDialogue {
 
 	commands := make([]EventCommand, 0, len(src.Commands))
 	for _, c := range src.Commands {
-		speaker, err := resolveSpeaker(c.Speaker)
-		if err != nil {
-			continue
-		}
-		commands = append(commands, EventCommand{Speaker: speaker, Text: c.Text})
+		commands = append(commands, EventCommand{
+			Speaker:    resolveSpeaker(c.Speaker),
+			Text:       c.Text,
+			Expression: c.Expression,
+		})
 	}
 
-	slots := make(map[string]int, len(src.SpeakerSlots))
-	for key, slot := range src.SpeakerSlots {
-		speaker, err := resolveSpeaker(key)
-		if err != nil {
-			continue
+	var sides map[string]int
+	if len(src.SpeakerSlots) > 0 {
+		sides = make(map[string]int, len(src.SpeakerSlots))
+		for key, side := range src.SpeakerSlots {
+			sides[resolveSpeaker(key)] = side
 		}
-		slots[speaker] = slot
 	}
 
-	return BossDialogue{Commands: commands, SpeakerSlots: slots, BGM: src.BGM}
+	return BossDialogue{Commands: commands, BGM: src.BGM, SpeakerSides: sides, Background: src.Background}
 }
 
 func LoadDialogues(dir string) error {
@@ -127,23 +152,52 @@ type storyDialogueFileJSON struct {
 	Repeat *bossDialogueJSON `json:"repeat"`
 }
 
+// loadStoryDialogues はassets/dialogues/story/以下の会話ファイルを読み込む。
+// 1ファイルに全イベントをまとめず複数ファイルに分けているのは、
+// どこか1箇所のJSON構文ミスがそのファイルだけに影響を留め、他の会話まで
+// 巻き添えで読み込み不能にしないため。どのファイルを読むかは
+// story/_index.json(ファイル名の配列)で管理する。web版はディレクトリの
+// 一覧取得ができない(静的ファイルとしてfetchするだけ)ため、ネイティブ版と
+// 挙動を揃えるためにあえてこの一覧ファイルを使っている。
 func loadStoryDialogues(dir string) {
-	filePath := path.Join(dir, "story.json")
+	storyDir := path.Join(dir, "story")
+	indexPath := path.Join(storyDir, "_index.json")
 
-	data, err := loadAssetBytes(filePath)
+	indexData, err := loadAssetBytes(indexPath)
 	if err != nil {
+		log.Printf("会話ファイル一覧の読み込み失敗 %s: %v", indexPath, err)
 		return
 	}
 
-	var fileJSON map[string]storyDialogueFileJSON
-	if err := json.Unmarshal(data, &fileJSON); err != nil {
+	var files []string
+	if err := json.Unmarshal(indexData, &files); err != nil {
+		log.Printf("会話ファイル一覧の構文エラー %s: %v", indexPath, err)
 		return
 	}
 
-	for id, entry := range fileJSON {
-		storyDialogues[id] = storyDialogueEntry{
-			First:  filterEmptyCommands(convertBossDialogue(entry.First)),
-			Repeat: filterEmptyCommands(convertBossDialogue(entry.Repeat)),
+	for _, file := range files {
+		filePath := path.Join(storyDir, file)
+
+		data, err := loadAssetBytes(filePath)
+		if err != nil {
+			log.Printf("会話ファイルの読み込み失敗 %s: %v", filePath, err)
+			continue
+		}
+
+		var fileJSON map[string]storyDialogueFileJSON
+		if err := json.Unmarshal(data, &fileJSON); err != nil {
+			log.Printf("会話ファイルの構文エラー %s: %v", filePath, err)
+			continue
+		}
+
+		for id, entry := range fileJSON {
+			if _, dup := storyDialogues[id]; dup {
+				log.Printf("会話idが重複しています: %q (%s)", id, filePath)
+			}
+			storyDialogues[id] = storyDialogueEntry{
+				First:  filterEmptyCommands(convertBossDialogue(entry.First)),
+				Repeat: filterEmptyCommands(convertBossDialogue(entry.Repeat)),
+			}
 		}
 	}
 }

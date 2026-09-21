@@ -105,7 +105,25 @@ type Game struct {
 	TimelineBarVertImg *ebiten.Image
 
 	WindowImg *ebiten.Image
+	// CharaImgs は立ち絵画像のキャッシュ。基本形は表示名そのものをキーに
+	// 持ち(プレイヤー・ボスは起動時に先読み済み)、表情差分は
+	// "表示名\x00表情キー" の形でキーを作り、初めて必要になった時点で
+	// GetCharaImage が遅延読み込みしてキャッシュする。
 	CharaImgs map[string]*ebiten.Image
+	// charaSlugs は表示名から立ち絵ファイル名の接頭辞への対応表
+	// (例: ボス1の表示名 -> "boss1")。無い場合は表示名をそのまま
+	// ファイル名として使う(NPCの立ち絵をassets/images/common/に
+	// 置くだけで使えるようにするため)。
+	charaSlugs map[string]string
+	// charaImgMissing は存在しない立ち絵パスを記録し、毎フレーム同じ
+	// 読み込み失敗を繰り返さないようにするためのキャッシュ。
+	charaImgMissing map[string]bool
+
+	// bgImgs はBossDialogue.Backgroundで指定された全画面背景画像の
+	// キャッシュ(assets/images/backgrounds/<キー>.png)。GetBackgroundImage
+	// が初めて必要になった時点で遅延読み込みする。
+	bgImgs       map[string]*ebiten.Image
+	bgImgMissing map[string]bool
 
 	LogEntryImg *ebiten.Image
 
@@ -157,6 +175,18 @@ type Game struct {
 	LeverWallOpenDecoImg *ebiten.Image
 	LeverImg             *ebiten.Image
 
+	// LeverWallOpenImgs/LeverWallOpenDecoImgsは、壁オブジェクトの"img"
+	// プロパティで場所ごとに絵を差し替えたい場合の追加分。キーはプロパティ値と
+	// 同じ名前。該当キーが無ければLeverWallOpenImg/LeverWallOpenDecoImgに
+	// フォールバックする(field_draw.goのdrawLeverWalls参照)。
+	// 新しい見た目を足す手順:
+	//   1. assets/images/field/lever_wall_open_<name>.png
+	//      (見た目だけの壁ならlever_wall_open_deco_<name>.png)を追加
+	//   2. assets_deferred.goのdeferredAssetAssignments()に1行登録
+	//   3. Tiledの壁オブジェクトにimg=<name>プロパティを設定
+	LeverWallOpenImgs     map[string]*ebiten.Image
+	LeverWallOpenDecoImgs map[string]*ebiten.Image
+
 	BlockImg     *ebiten.Image
 	BlockSpotImg *ebiten.Image
 	BlockDoorImg *ebiten.Image
@@ -181,8 +211,12 @@ type Game struct {
 	BlockPositions     map[string][2]float64
 	UnlockedBlockDoors map[string]bool
 
-	SeenAutoHealMapIntro map[string]bool
-	SeenEvents           map[string]bool
+	SeenAutoHealMapIntro     map[string]bool
+	SeenEvents               map[string]bool
+	SeenBattleTutorial       bool
+	SeenGaugeTutorial        bool
+	SeenSkillLevelTutorial   bool
+	SeenSkillUpgradeTutorial bool
 
 	heavyDecoded     chan decodedHeavyAsset
 	heavyAssetsReady bool
@@ -208,8 +242,17 @@ const (
 	FadeIn
 )
 
-func (g *Game) FontFace(size float64) *text.GoTextFace {
-	return &text.GoTextFace{Source: g.fontSource, Size: size}
+func (g *Game) FontFace(size float64) text.Face {
+	if f, ok := multiFaceCache[size]; ok {
+		return f
+	}
+	base := &text.GoTextFace{Source: g.fontSource, Size: size}
+	mf, err := text.NewMultiFace(base, triangleFallbackFace(size))
+	if err != nil {
+		panic(err)
+	}
+	multiFaceCache[size] = mf
+	return mf
 }
 
 func generateLightMaskImage(size int) *ebiten.Image {
@@ -344,6 +387,10 @@ func (g *Game) ResetForNewGame() {
 	g.RaisedLevers = make(map[string]bool)
 	g.SeenAutoHealMapIntro = make(map[string]bool)
 	g.SeenEvents = make(map[string]bool)
+	g.SeenBattleTutorial = false
+	g.SeenGaugeTutorial = false
+	g.SeenSkillLevelTutorial = false
+	g.SeenSkillUpgradeTutorial = false
 	g.BlockPositions = make(map[string][2]float64)
 	g.UnlockedBlockDoors = make(map[string]bool)
 
@@ -361,6 +408,10 @@ func NewGame() *Game {
 	g := &Game{
 		Tilesets:             make(map[string]*ebiten.Image),
 		CharaImgs:            make(map[string]*ebiten.Image),
+		charaSlugs:           buildCharaSlugs(),
+		charaImgMissing:      make(map[string]bool),
+		bgImgs:               make(map[string]*ebiten.Image),
+		bgImgMissing:         make(map[string]bool),
 		OpenedChests:         make(map[string]bool),
 		UnlockedWalls:        make(map[string]bool),
 		Keys:                 make(map[string]int),
@@ -384,6 +435,8 @@ func NewGame() *Game {
 	g.EnemyImgs = make(map[string]*ebiten.Image)
 	g.EnemyIconImgs = make(map[string]*ebiten.Image)
 	g.EnemyIconLargeImgs = make(map[string]*ebiten.Image)
+	g.LeverWallOpenImgs = make(map[string]*ebiten.Image)
+	g.LeverWallOpenDecoImgs = make(map[string]*ebiten.Image)
 
 	g.LightMaskImg = generateLightMaskImage(256)
 
@@ -646,4 +699,94 @@ func (g *Game) updateMouseCursorVisibility(dt float64) {
 		ebiten.SetCursorMode(ebiten.CursorModeHidden)
 		g.cursorHidden = true
 	}
+}
+
+// buildCharaSlugs はボス・プレイヤーの表示名から立ち絵ファイル名の
+// 接頭辞への対応表を作る(例: ボス1の表示名 -> "boss1")。NPCなど
+// この表に無い名前はGetCharaImageが表示名そのものをファイル名として使う。
+func buildCharaSlugs() map[string]string {
+	m := make(map[string]string, len(BossNames)+partySize)
+	for i, name := range BossNames {
+		m[name] = fmt.Sprintf("boss%d", i+1)
+	}
+	for i := 0; i < partySize; i++ {
+		m[PlayerNames[i]] = fmt.Sprintf("player_%d", i+1)
+	}
+	return m
+}
+
+// charaExprSheetFrames はchara_<キャラ>_sheet.pngが横一列に並べて持つ
+// 表情差分のコマ数。全キャラ共通で 0=通常 1=笑顔 2=怒り 3=驚き の固定割り当て。
+const charaExprSheetFrames = 4
+
+// GetCharaImage は話者の表示名と表情番号(0=通常)から立ち絵画像を返す。
+// そのキャラのchara_<キャラ>_sheet.pngが用意されていれば表情差分シートと
+// みなして横charaExprSheetFrames等分し、expression番目のコマを切り出す。
+// シートが無ければ従来どおり単一画像のchara_<キャラ>.pngを使い、
+// (まだ表情差分を作っていないキャラの場合)expressionは無視される。
+// どちらの読み込み結果もキャッシュするので、シーン中は毎フレーム
+// ディスク(埋め込みアセット)を読みにいかない。
+func (g *Game) GetCharaImage(speaker string, expression int) *ebiten.Image {
+	if speaker == "" {
+		return nil
+	}
+	slug, ok := g.charaSlugs[speaker]
+	if !ok {
+		slug = speaker
+	}
+
+	sheetPath := fmt.Sprintf("assets/images/common/chara_%s_sheet.png", slug)
+	if sheet := g.lookupCharaAsset(speaker+"#sheet", sheetPath); sheet != nil {
+		idx := expression
+		if idx < 0 || idx >= charaExprSheetFrames {
+			idx = 0
+		}
+		frameW := sheet.Bounds().Dx() / charaExprSheetFrames
+		rect := image.Rect(idx*frameW, 0, (idx+1)*frameW, sheet.Bounds().Dy())
+		return sheet.SubImage(rect).(*ebiten.Image)
+	}
+
+	basePath := fmt.Sprintf("assets/images/common/chara_%s.png", slug)
+	return g.lookupCharaAsset(speaker, basePath)
+}
+
+func (g *Game) lookupCharaAsset(key, path string) *ebiten.Image {
+	if img, ok := g.CharaImgs[key]; ok {
+		return img
+	}
+	if g.charaImgMissing[key] {
+		return nil
+	}
+
+	img, err := loadAssetImage(path)
+	if err != nil {
+		g.charaImgMissing[key] = true
+		return nil
+	}
+	g.CharaImgs[key] = img
+	return img
+}
+
+// GetBackgroundImage はBossDialogue.Backgroundで指定されたキーから
+// assets/images/backgrounds/<キー>.pngを遅延読み込みして返す。無ければ
+// nilを返す(呼び出し側はマップ描画やベタ塗りにフォールバックする)。
+func (g *Game) GetBackgroundImage(key string) *ebiten.Image {
+	if key == "" {
+		return nil
+	}
+	if img, ok := g.bgImgs[key]; ok {
+		return img
+	}
+	if g.bgImgMissing[key] {
+		return nil
+	}
+
+	path := fmt.Sprintf("assets/images/backgrounds/%s.png", key)
+	img, err := loadAssetImage(path)
+	if err != nil {
+		g.bgImgMissing[key] = true
+		return nil
+	}
+	g.bgImgs[key] = img
+	return img
 }
