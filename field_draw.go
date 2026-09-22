@@ -42,6 +42,8 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 		drawMessageControlPanel(screen, s.game, s.autoMode, s.msgSkipHoldElapsed, endingSkipHoldSeconds)
 	}
 
+	s.drawMapNameBanner(screen)
+
 	if s.nearExamineEvent && !s.isMsgActive && !s.isChoiceActive && !s.isCutscene && !s.isItemGetActive {
 		s.drawPromptWithIcon(screen, s.game.ExamineIconImg, "▼ 調べる")
 	}
@@ -542,6 +544,53 @@ func (s *FieldScene) drawDarkness(screen *ebiten.Image, camX, camY float64) {
 	overlay.DrawImage(mask, holeOp)
 
 	screen.DrawImage(overlay, &ebiten.DrawImageOptions{})
+}
+
+// mapNameBannerAlpha はマップ名バナーの不透明度を返す。表示開始からしばらくは
+// 不透明のまま静止させ、その後mapNameBannerFadeDuration秒かけて0まで
+// フェードアウトさせる。
+func (s *FieldScene) mapNameBannerAlpha() float64 {
+	if !s.mapNameBannerActive {
+		return 0
+	}
+	if s.mapNameBannerElapsed < mapNameBannerShowDuration {
+		return 1
+	}
+	fadeT := (s.mapNameBannerElapsed - mapNameBannerShowDuration) / mapNameBannerFadeDuration
+	if fadeT >= 1 {
+		return 0
+	}
+	return 1 - fadeT
+}
+
+const (
+	mapNameBannerMarginX = 16.0
+	mapNameBannerMarginY = 16.0
+	mapNameBannerPadX    = 14.0
+	mapNameBannerPadY    = 8.0
+)
+
+func (s *FieldScene) drawMapNameBanner(screen *ebiten.Image) {
+	alpha := s.mapNameBannerAlpha()
+	if alpha <= 0 {
+		return
+	}
+
+	face := s.game.FontFace(18)
+	textW, textH := text.Measure(s.mapNameBannerText, face, 0)
+
+	boxX := mapNameBannerMarginX
+	boxY := mapNameBannerMarginY
+	boxW := textW + mapNameBannerPadX*2
+	boxH := textH + mapNameBannerPadY*2
+
+	ebitenutil.DrawRect(screen, boxX, boxY, boxW, boxH, color.NRGBA{0, 0, 0, uint8(210 * alpha)})
+
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(boxX+mapNameBannerPadX, boxY+mapNameBannerPadY)
+	op.ColorScale.ScaleWithColor(uiColorText)
+	op.ColorScale.ScaleAlpha(float32(alpha))
+	text.Draw(screen, s.mapNameBannerText, face, op)
 }
 
 func (s *FieldScene) drawPromptWithIcon(screen *ebiten.Image, icon *ebiten.Image, label string) {

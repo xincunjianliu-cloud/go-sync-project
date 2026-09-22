@@ -1,6 +1,6 @@
 {
   "bgmVolume": 0,
-  "seVolume": 0,
+  "seVolume": 1,
   "masterVolume": 1,
   "messageSpeed": 1,
   "fullscreen": false,

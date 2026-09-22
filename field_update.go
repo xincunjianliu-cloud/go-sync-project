@@ -84,6 +84,13 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 	s.applyFieldDebugCheats()
 
+	if s.mapNameBannerActive {
+		s.mapNameBannerElapsed += dt
+		if s.mapNameBannerElapsed >= mapNameBannerShowDuration+mapNameBannerFadeDuration {
+			s.mapNameBannerActive = false
+		}
+	}
+
 	if s.encounterEffectActive {
 		s.encounterEffectTimer += dt
 		if s.encounterEffectTimer >= encounterEffectDuration && s.pendingBattleScene != nil {
@@ -216,7 +223,11 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if s.skillUpgradeTutorialActive {
 		if isConfirmKeyPressed() || len(justPressedTouchPoints()) > 0 {
 			s.game.Audio.PlaySEByKey("decide")
-			s.skillUpgradeTutorialActive = false
+			s.skillUpgradeTutorialPage++
+			if s.skillUpgradeTutorialPage >= skillUpgradeTutorialPageCount {
+				s.skillUpgradeTutorialActive = false
+				s.skillUpgradeTutorialPage = 0
+			}
 		}
 		return s
 	}
@@ -750,7 +761,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 				if rand.Float64()*100.0 < s.encounterWeight {
 					s.encounterWeight = 0.0
 					allowedEnemies := strings.Split(targetEnemiesStr, ",")
-					count := targetMaxCount
+					count := 1 + rand.Intn(targetMaxCount)
 					chosenEnemyNames := make([]string, count)
 					for i := 0; i < count; i++ {
 						chosenEnemyNames[i] = strings.TrimSpace(allowedEnemies[rand.Intn(len(allowedEnemies))])

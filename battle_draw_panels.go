@@ -264,10 +264,14 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	}
 
 	if s.resultSubPhase == resSubDoneWait {
+		hint := "Enter / Space / Z で進む"
+		if s.game.MobileMode {
+			hint = "画面タップで進む"
+		}
 		hintOp := &text.DrawOptions{}
 		hintOp.GeoM.Translate(resultHintX, float64(gameHeight)-resultHintYFromBtm)
 		hintOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "Enter / Space / Z で進む", s.game.FontFace(resultHintFontSize), hintOp)
+		text.Draw(screen, hint, s.game.FontFace(resultHintFontSize), hintOp)
 	}
 }
 

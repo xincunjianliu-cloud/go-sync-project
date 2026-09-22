@@ -54,7 +54,7 @@ func (s *BattleScene) allAttackGaugeCost() int {
 }
 
 func (s *BattleScene) canUseRewind(actor int) bool {
-	return actor >= 0 && actor < partySize && !s.rewindUsed && s.gaugeStage >= gaugeMaxStage-1
+	return actor >= 0 && actor < partySize && !s.rewindUsed && s.gaugePoint >= gaugePoolMax
 }
 
 func (s *BattleScene) consumeAllGaugePoints() {

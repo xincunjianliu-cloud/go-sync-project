@@ -217,7 +217,6 @@ type SaveData struct {
 	SeenEvents               map[string]bool       `json:"seen_events"`
 	SeenBattleTutorial       bool                  `json:"seen_battle_tutorial"`
 	SeenGaugeTutorial        bool                  `json:"seen_gauge_tutorial"`
-	SeenSkillLevelTutorial   bool                  `json:"seen_skill_level_tutorial"`
 	SeenSkillUpgradeTutorial bool                  `json:"seen_skill_upgrade_tutorial"`
 	BlockPositions           map[string][2]float64 `json:"block_positions"`
 	UnlockedBlockDoors       map[string]bool       `json:"unlocked_block_doors"`
@@ -386,7 +385,6 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.SeenEvents = d.SeenEvents
 		s.game.SeenBattleTutorial = d.SeenBattleTutorial
 		s.game.SeenGaugeTutorial = d.SeenGaugeTutorial
-		s.game.SeenSkillLevelTutorial = d.SeenSkillLevelTutorial
 		s.game.SeenSkillUpgradeTutorial = d.SeenSkillUpgradeTutorial
 		s.game.BlockPositions = d.BlockPositions
 		s.game.UnlockedBlockDoors = d.UnlockedBlockDoors

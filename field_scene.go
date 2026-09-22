@@ -305,8 +305,11 @@ type FieldScene struct {
 	justDefeatedBoss      int
 	msg                   MessageSystem
 
-	pendingAutoHealMessage     bool
-	skillUpgradeTutorialActive bool
+	pendingAutoHealMessage       bool
+	skillUpgradeTutorialActive   bool
+	skillUpgradeTutorialPage     int
+	skillUpgradeTutorialSceneImg *ebiten.Image
+	skillUpgradeTutorialOverlay  *ebiten.Image
 
 	touchStickActive   bool
 	touchStickDX       float64
@@ -390,6 +393,10 @@ type FieldScene struct {
 	screenShakeTimer  float64
 	screenShakeMaxDur float64
 	screenShakePower  float64
+
+	mapNameBannerActive  bool
+	mapNameBannerText    string
+	mapNameBannerElapsed float64
 }
 
 func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpawnName string, startDir int) (*FieldScene, error) {
@@ -564,6 +571,11 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	}
 	scene.mapBGM = mapBGM
 
+	if name, ok := tmap.mapDisplayName(); ok {
+		scene.mapNameBannerActive = true
+		scene.mapNameBannerText = name
+	}
+
 	if tmap.mapAutoHeal() {
 		scene.healParty()
 		if game.SeenAutoHealMapIntro == nil {
@@ -589,6 +601,13 @@ var globalActiveFieldInstanceForSave *FieldScene
 
 const autoHealIntroMessage = "ダンジョンに入ると自動的に回復します"
 const autoHealIntroMessageDuration = 2.5
+
+// マップ入場時に左上へ表示する地名バナーの表示時間(フェード開始前)と、
+// そこからフェードアウトし切るまでの時間。
+const (
+	mapNameBannerShowDuration = 2.2
+	mapNameBannerFadeDuration = 0.8
+)
 
 // locationNameFromMap はセーブデータに記録する地名を返す。マップ全体の
 // カスタムプロパティ"displayname"があればそれを使い、無ければマップの
@@ -671,7 +690,6 @@ func SaveGame(slot int, mapPath string, x, y float64, hp [4]int) error {
 		SeenEvents:               g.SeenEvents,
 		SeenBattleTutorial:       g.SeenBattleTutorial,
 		SeenGaugeTutorial:        g.SeenGaugeTutorial,
-		SeenSkillLevelTutorial:   g.SeenSkillLevelTutorial,
 		SeenSkillUpgradeTutorial: g.SeenSkillUpgradeTutorial,
 		BlockPositions:           g.BlockPositions,
 		UnlockedBlockDoors:       g.UnlockedBlockDoors,

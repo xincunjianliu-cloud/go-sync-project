@@ -204,8 +204,7 @@ func (s *BattleScene) applyDebugCheats() {
 				}
 			}
 		}
-		s.skillLevelHintActive = true
-		s.battleLog = "スキルLvヒントを再表示（デバッグ）"
+		s.battleLog = "全キャラのスキルLvを2に設定（デバッグ）"
 		s.battleLogTimer = battleLogDuration
 	}
 }

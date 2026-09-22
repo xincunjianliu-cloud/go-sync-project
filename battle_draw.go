@@ -14,6 +14,11 @@ import (
 )
 
 func (s *BattleScene) Draw(screen *ebiten.Image) {
+	if s.tutorialActive {
+		s.drawBattleTutorial(screen)
+		return
+	}
+
 	s.drawBackground(screen)
 	s.drawEnemyHeader(screen)
 	s.drawPartySprites(screen)
@@ -35,10 +40,6 @@ func (s *BattleScene) Draw(screen *ebiten.Image) {
 		}
 	} else {
 		s.drawUI(screen)
-	}
-
-	if s.tutorialActive {
-		s.drawBattleTutorial(screen)
 	}
 }
 
@@ -307,7 +308,7 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 	case phaseSkillMenu:
 		s.drawCommandMenu(screen)
 		s.drawSkillSubMenu(screen)
-		s.drawBottomDescription(screen, s.currentSkillDescription(), s.skillLevelHint())
+		s.drawBottomDescription(screen, s.currentSkillDescription(), "")
 	case phaseTargetSelect:
 		s.drawTargetSelectUI(screen)
 		targetDesc, targetHint := s.targetSelectDescriptionAndHint()

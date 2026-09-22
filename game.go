@@ -215,7 +215,6 @@ type Game struct {
 	SeenEvents               map[string]bool
 	SeenBattleTutorial       bool
 	SeenGaugeTutorial        bool
-	SeenSkillLevelTutorial   bool
 	SeenSkillUpgradeTutorial bool
 
 	heavyDecoded     chan decodedHeavyAsset
@@ -389,7 +388,6 @@ func (g *Game) ResetForNewGame() {
 	g.SeenEvents = make(map[string]bool)
 	g.SeenBattleTutorial = false
 	g.SeenGaugeTutorial = false
-	g.SeenSkillLevelTutorial = false
 	g.SeenSkillUpgradeTutorial = false
 	g.BlockPositions = make(map[string][2]float64)
 	g.UnlockedBlockDoors = make(map[string]bool)

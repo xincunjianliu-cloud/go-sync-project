@@ -588,8 +588,7 @@ type BattleScene struct {
 	tutorialKind       int
 	tutorialPage       int
 	tutorialOverlayImg *ebiten.Image
-
-	skillLevelHintActive bool
+	tutorialSceneImg   *ebiten.Image
 }
 
 type DamagePop struct {
@@ -714,11 +713,6 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 		game.SeenBattleTutorial = true
 	case battleTutorialKindGauge:
 		game.SeenGaugeTutorial = true
-	}
-
-	s.skillLevelHintActive = !game.SeenSkillLevelTutorial && partyHasLeveledSkill(game)
-	if s.skillLevelHintActive {
-		game.SeenSkillLevelTutorial = true
 	}
 
 	for i := 0; i < partySize; i++ {
