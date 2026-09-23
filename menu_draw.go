@@ -419,7 +419,9 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 		}
 		showNameArrow := false
 		if rowSelected {
-			nameCol = uiColorSelect
+			if usable {
+				nameCol = uiColorSelect
+			}
 			if !m.skillLevelSelecting {
 				showNameArrow = true
 			}
@@ -441,13 +443,19 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 
 		for lv := 1; lv <= len(sk.Levels); lv++ {
 			numX := skillLevelStartX + float64(lv-1)*skillLevelGapX
-			col := color.RGBA{120, 120, 120, 255}
+			col := uiColorLocked
 			label := fmt.Sprintf("%d", lv)
 			if lv <= curLv {
 				col = uiColorText
+				if !usable {
+					col = uiColorDisabled
+				}
 			}
 
 			selected := rowSelected && m.skillLevelSelecting && lv == m.skillLevelCursor
+			if selected && usable && lv <= curLv {
+				col = uiColorSelect
+			}
 
 			numCenterY := rowCenterY + skillLevelOffsetY
 			numOp := &text.DrawOptions{}
@@ -475,7 +483,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 				}
 				spOp := &text.DrawOptions{}
 				spOp.GeoM.Translate(numX+skillRequiredSPOffsetX, numCenterY+skillRequiredSPOffsetY)
-				spOp.ColorScale.ScaleWithColor(uiColorText)
+				spOp.ColorScale.ScaleWithColor(uiColorLocked)
 				text.Draw(screen, requiredSP, m.game.FontFace(skillBottomFontSize), spOp)
 			}
 

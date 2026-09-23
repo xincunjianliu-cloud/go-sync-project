@@ -379,6 +379,11 @@ var commandDescriptions = [4]string{
 	"戦闘から離脱する",
 }
 
+const (
+	itemButtonDescription = "回復アイテムなどを使う（もう一度タップで開く）"
+	rewindDescription     = "敵の直前の攻撃を無効化し、行動回数が一定時間2倍（もう一度タップで発動）"
+)
+
 var skillDescriptions = [3]string{
 	"対象のHPを回復する",
 	"通常より大きなダメージを与える",

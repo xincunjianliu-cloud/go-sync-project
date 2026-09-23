@@ -302,7 +302,7 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 	case phasePlayerMenu:
 		s.drawCommandMenu(screen)
 		s.drawBattleShortcutButtons(screen)
-		s.drawBottomDescription(screen, commandDescriptions[s.commandIndex])
+		s.drawBottomDescription(screen, s.playerMenuDescription())
 	case phaseSkillMenu:
 		s.drawCommandMenu(screen)
 		s.drawSkillSubMenu(screen)
@@ -327,6 +327,20 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 	}
 
 	s.drawMyTurnOverlay(screen)
+}
+
+// playerMenuDescription returns the bottom description for the command menu.
+// A shortcut button (item / rewind) that has been tapped once (armed) shows
+// its own description instead of the highlighted command's, since the first
+// tap only selects it and the second tap confirms.
+func (s *BattleScene) playerMenuDescription() string {
+	switch {
+	case s.itemButtonArmed:
+		return itemButtonDescription
+	case s.rewindButtonArmed:
+		return rewindDescription
+	}
+	return commandDescriptions[s.commandIndex]
 }
 
 func (s *BattleScene) currentSkillDescription() string {

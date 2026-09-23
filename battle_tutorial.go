@@ -71,9 +71,9 @@ func battleTutorialPageCountFor(kind int) int {
 
 func battleTutorialHeadline(kind int) string {
 	if kind == battleTutorialKindGauge {
-		return "バトルのきほん２"
+		return "バトルの基本2"
 	}
-	return "バトルのきほん"
+	return "バトルの基本"
 }
 
 // battleTutorialBody returns the page's dialogue text, drawn as a single
@@ -82,60 +82,59 @@ func battleTutorialBody(kind, page int) string {
 	if kind == battleTutorialKindGauge {
 		switch page {
 		case battleTutorialGaugePageIntro:
-			return "ここで新しいバトル要素が解禁されました。"
+			return "新しいバトル要素が解禁されました。"
 		case battleTutorialGaugePageWhatIsIt:
-			return "このゲージのこと。"
+			return "それは、このゲージです。"
 		case battleTutorialGaugePageFillRule:
-			return "行動するごとにこのゲージが溜まり、\n" +
-				"最大レベル5まで上がります。"
+			return "行動するたびにこのゲージがたまり、\n" +
+				"最大でレベル5まで上がります。"
 		case battleTutorialGaugePageAttackBoost:
-			return "またゲージのレベルが上がるごとに\n" +
+			return "ゲージのレベルが上がるごとに、\n" +
 				"パーティ全体の攻撃力も上昇します。"
 		case battleTutorialGaugePageRewindUnlock:
-			return "そしてゲージを最大まで溜めると、\n" +
-				"時間を巻き戻すことができるようになります。"
+			return "ゲージを最大までためると、\n" +
+				"時間を巻き戻せるようになります。"
 		case battleTutorialGaugePageRewindEffect:
-			return "時間を巻き戻すとゲージは０になって\n" +
-				"しまいますが、敵が直前にした攻撃を\n" +
-				"なかったことにできます。"
+			return "巻き戻すとゲージは0になりますが、\n" +
+				"敵の直前の攻撃をなかったことにできます。"
 		case battleTutorialGaugePageRewindActionBoost:
-			return "さらに、巻き戻した時間の歪みの影響で\n" +
-				"一定時間パーティの行動回数が２倍になります。"
+			return "さらに、時間の歪みの影響で、\n" +
+				"一定時間パーティの行動回数が2倍になります。"
 		default:
-			return "ぜひ、ここぞという場面で\n" +
-				"使ってみてくださいね。"
+			return "ここぞという場面で、\n" +
+				"ぜひ使ってみてください。"
 		}
 	}
 
 	switch page {
 	case battleTutorialPageIntro:
-		return "ここではバトルのルールを説明していきます。"
+		return "ここではバトルのルールを説明します。"
 	case battleTutorialPageHP:
-		return "全員の操作キャラクターのHPが0になると\n" +
-			"ゲームオーバーとなってしまうので、\n" +
-			"アイテムやスキルを駆使しながら戦おう。"
+		return "操作キャラクター全員のHPが0になると\n" +
+			"ゲームオーバーになります。\n" +
+			"アイテムやスキルを使って戦いましょう。"
 	case battleTutorialPageStatus:
-		return "ここは操作キャラクターの状態を示すところ。\n" +
-			"緑ゲージで表現されているHPが0になると、\n" +
-			"そのキャラクターは戦闘不能になってしまいます。"
+		return "ここは操作キャラクターの状態を表示する場所です。\n" +
+			"緑のゲージはHPで、0になるとそのキャラクターは\n" +
+			"戦闘不能になります。"
 	case battleTutorialPageMP:
-		return "下の青のゲージはMPです。\n" +
-			"スキルを使用するのに使います。"
+		return "下の青いゲージはMPです。\n" +
+			"スキルを使うときに消費します。"
 	case battleTutorialPageCommands:
-		return "操作キャラクターが行動できるようになったら\n" +
-			"ここでコマンド選択していきます。\n\n" +
+		return "操作キャラクターが行動できるようになったら、\n" +
+			"ここでコマンドを選びます。\n\n" +
 			"たたかう：ふつうの攻撃\n" +
 			"スキル：MPを消費して特殊な行動\n" +
 			"たいき：4人全員が待機すると大ダメージ\n" +
-			"にげる：戦闘から逃げることができます。\n" +
-			"アイテム：回復アイテムなどを使います"
+			"にげる：戦闘から逃げる\n" +
+			"アイテム：回復アイテムなどを使う"
 	case battleTutorialPageTimeline:
-		return "ここはタイムライン。\n" +
+		return "ここはタイムラインです。\n" +
 			"操作キャラクターのアイコンが一番右に\n" +
-			"到着すると行動できるようになります。"
+			"着くと、行動できるようになります。"
 	default:
-		return "バトルのきほんは以上です！あとはあなたが\n" +
-			"実際に戦って慣れていきましょう！がんばって！"
+		return "バトルの基本は以上です。\n" +
+			"あとは実際に戦って慣れていきましょう。がんばって！"
 	}
 }
 

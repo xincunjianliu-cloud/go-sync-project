@@ -306,6 +306,10 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.commandIndex = cmdFlee
 		s.game.Audio.PlaySEByKey("cursor")
 	}
+	if isMenuUpPressed() || isMenuLeftPressed() || isMenuRightPressed() || isMenuDownPressed() {
+		s.rewindButtonArmed = false
+		s.itemButtonArmed = false
+	}
 	tappedIdx, tappedOk := hitTestCommandMenu(s.game)
 	rewindTapped := isRewindButtonJustPressed(s.game)
 	itemTapped := isItemButtonJustPressed()
