@@ -99,20 +99,24 @@ func (s *TitleScene) Update(dt float64) Scene {
 
 	if isConfirmKeyPressed() || tapped {
 		if s.menuIndex == 0 {
-			if !s.game.heavyAssetsReady || s.game.heavyAssetsErr != nil {
+			if s.game.heavyAssetsErr != nil {
 				s.game.Audio.PlaySEByKey("error")
 				return s
 			}
 			s.game.Audio.PlaySEByKey("decide")
-			s.game.ResetForNewGame()
-			field, err := NewRoomScene(s.game, startMapPath, 0, 0, "start_point", 0)
-			if err != nil {
-				return s
-			}
-			field.applyDialogue(resolveEventDialogue(storyTextPrefix+"opening", "", false))
-			field.msgIndex = 0
-			field.beginMessage()
-			s.game.ChangeSceneWithFade(field, fadeTimeNewGame)
+			// 画像の読み込みがまだ終わっていなければ、暗転後にLoading表示で
+			// 待ってから組み立てる(ChangeSceneWhenReady参照)。
+			s.game.ChangeSceneWhenReady(func() Scene {
+				s.game.ResetForNewGame()
+				field, err := NewRoomScene(s.game, startMapPath, 0, 0, "start_point", 0)
+				if err != nil {
+					return nil
+				}
+				field.applyDialogue(resolveEventDialogue(storyTextPrefix+"opening", "", false))
+				field.msgIndex = 0
+				field.beginMessage()
+				return field
+			}, fadeTimeNewGame)
 			return s
 
 		} else if s.menuIndex == 1 {
@@ -120,12 +124,15 @@ func (s *TitleScene) Update(dt float64) Scene {
 				s.game.Audio.PlaySEByKey("error")
 				return s
 			}
-			if !s.game.heavyAssetsReady || s.game.heavyAssetsErr != nil {
+			if s.game.heavyAssetsErr != nil {
 				s.game.Audio.PlaySEByKey("error")
 				return s
 			}
 			s.game.Audio.PlaySEByKey("decide")
-			return NewLoadSlotScene(s.game, s)
+			s.game.ChangeSceneWhenReady(func() Scene {
+				return NewLoadSlotScene(s.game, s)
+			}, fadeTimeBattleOut)
+			return s
 		} else if s.menuIndex == 2 {
 			s.game.Audio.PlaySEByKey("decide")
 			s.confirmExit = true

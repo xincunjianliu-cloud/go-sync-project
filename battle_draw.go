@@ -302,32 +302,28 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 	case phasePlayerMenu:
 		s.drawCommandMenu(screen)
 		s.drawBattleShortcutButtons(screen)
-		s.drawBottomDescription(screen,
-			commandDescriptions[s.commandIndex],
-			"")
+		s.drawBottomDescription(screen, commandDescriptions[s.commandIndex])
 	case phaseSkillMenu:
 		s.drawCommandMenu(screen)
 		s.drawSkillSubMenu(screen)
-		s.drawBottomDescription(screen, s.currentSkillDescription(), "")
+		s.drawBottomDescription(screen, s.currentSkillDescription())
 	case phaseTargetSelect:
 		s.drawTargetSelectUI(screen)
-		targetDesc, targetHint := s.targetSelectDescriptionAndHint()
-		s.drawBottomDescription(screen, targetDesc, targetHint)
+		s.drawBottomDescription(screen, s.targetSelectDescription())
 	case phaseHealSelect:
 		s.drawHealTargetUI(screen)
 		healDesc := ""
 		if skillIdx := s.pendingSkill - 1; skillIdx >= 0 {
 			healDesc = s.game.CurrentSkillLevelData(s.waitingActor, skillIdx).Description
 		}
-		s.drawBottomDescription(screen, healDesc, "")
+		s.drawBottomDescription(screen, healDesc)
 	case phaseItemMenu:
 		s.drawCommandMenu(screen)
 		s.drawItemSubMenu(screen)
-		s.drawBottomDescription(screen, s.currentItemDescription(), "")
+		s.drawBottomDescription(screen, s.currentItemDescription())
 	case phaseItemTarget:
 		s.drawItemTargetUI(screen)
-		itemDesc, itemHint := s.itemTargetDescriptionAndHint()
-		s.drawBottomDescription(screen, itemDesc, itemHint)
+		s.drawBottomDescription(screen, s.itemTargetDescription())
 	}
 
 	s.drawMyTurnOverlay(screen)

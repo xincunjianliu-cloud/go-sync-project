@@ -33,10 +33,6 @@ func (s *BattleScene) gaugeAtkBonus() int {
 	return gaugeStageAtkBonus[s.gaugeStage]
 }
 
-func (s *BattleScene) canUseSynergy() bool {
-	return s.gaugePoint >= s.allAttackGaugeCost()
-}
-
 func (s *BattleScene) hasFullPartyForSynergy() bool {
 	for i := 0; i < partySize; i++ {
 		if s.game.PlayerHP[i] <= 0 {
@@ -44,13 +40,6 @@ func (s *BattleScene) hasFullPartyForSynergy() bool {
 		}
 	}
 	return true
-}
-
-func (s *BattleScene) allAttackGaugeCost() int {
-	if s.gaugeStage == gaugeMaxStage-1 {
-		return 15
-	}
-	return 10
 }
 
 func (s *BattleScene) canUseRewind(actor int) bool {

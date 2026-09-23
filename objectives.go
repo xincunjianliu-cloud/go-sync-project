@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -96,14 +95,11 @@ func BuildObjectiveAndMapIndex() error {
 		visited[mapPath] = true
 		allMapPaths = append(allMapPaths, mapPath)
 
-		data, err := loadAssetBytes(mapPath)
+		tmap, err := loadTiledMap(mapPath)
 		if err != nil {
 			return fmt.Errorf("マップ読み込み失敗 %s: %w", mapPath, err)
 		}
-		var tmap TiledMap
-		if err := json.Unmarshal(data, &tmap); err != nil {
-			return fmt.Errorf("マップ解析失敗 %s: %w", mapPath, err)
-		}
+		yieldToBrowser()
 
 		for _, layer := range tmap.Layers {
 			if !strings.HasPrefix(layer.Name, "events") {

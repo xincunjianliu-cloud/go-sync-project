@@ -24,10 +24,28 @@ const (
 
 	skillLvLeftArrow  = "◀"
 	skillLvRightArrow = "▶"
+
+	// battleSkillPanelScale enlarges the skill submenu in the skill-upgrade
+	// tutorial's mockup only, so the level number and its ◀▶ switch arrows
+	// read more clearly there - see drawSkillSubMenuEnlarged
+	// (battle_draw_hud.go). Real battles draw the panel at normal size.
+	battleSkillPanelScale = 1.4
 )
 
 func skillLvText(lv int) string {
 	return fmt.Sprintf("Lv%d", lv)
+}
+
+// battleSkillPanelPivot is the point drawSkillSubMenuEnlarged scales the panel
+// around: its unscaled right edge (windowX+windowW), which normally sits
+// almost flush against the screen's right edge (gameWidth=960), paired with
+// the panel's usual vertical center. Scaling around the panel's own center
+// pushed that right edge - and the MP-cost text/border right against it -
+// off-screen; anchoring here instead means the panel only grows left and
+// up/down, into the open space around it, never past the screen edge.
+func (s *BattleScene) battleSkillPanelPivot() (px, py float64) {
+	windowX, _, windowW, _ := s.battleSubPanelOrigin()
+	return windowX + windowW, battleSubCmdCenterY
 }
 
 func (s *BattleScene) battleSubPanelOrigin() (windowX, windowY, windowW, windowH float64) {
@@ -146,30 +164,57 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 }
 
 const (
-	allTargetRowGapY = 10.0
-	allTargetRowH    = 30.0
-	allTargetRowPadX = 12.0
+	// The "全体" boxes share a fixed size. The ally box sits at a fixed
+	// position just under the party (allyAllTargetRowY is its top edge). The
+	// enemy box keeps a fixed horizontal center, but its top edge sits
+	// enemyAllTargetRowGapY below the lowest enemy of the battle's initial
+	// formation (dead enemies included), so the gap looks the same for 2-4
+	// enemies and the box never moves mid-battle.
+	allTargetRowW            = 120.0
+	allTargetRowH            = 24.0
+	allyAllTargetRowY        = 402.0
+	allyAllTargetRowCenterX  = 720.0
+	enemyAllTargetRowCenterX = 240.0
+	enemyAllTargetRowGapY    = 8.0
+
+	// allTargetLabelFontSize sizes the "全体" label drawn inside the box by
+	// drawAllTargetBox (shared by the ally and enemy rows).
+	allTargetLabelFontSize = 18.0
 )
 
-func (s *BattleScene) allTargetRowRect() tapRect {
-	left := s.partyScreenX[0]
-	right := s.partyScreenX[0] + spriteFrameW
-	bottom := s.partyScreenY[0] + spriteFrameH
-	for i := 1; i < partySize; i++ {
-		if s.partyScreenX[i] < left {
-			left = s.partyScreenX[i]
+// textInkCenterY returns the vertical center of str's actually drawn pixels,
+// relative to the y passed to text.Draw with the default (top) alignment.
+// text.AlignCenter centers the font's whole ascent+descent box instead, which
+// leaves glyphs visibly off-center inside a tight box like the "全体" row.
+func textInkCenterY(str string, face text.Face) float64 {
+	top, bottom := 0.0, 0.0
+	found := false
+	for _, g := range text.AppendGlyphs(nil, str, face, nil) {
+		if g.Image == nil {
+			continue
 		}
-		if x := s.partyScreenX[i] + spriteFrameW; x > right {
-			right = x
+		gTop := g.Y
+		gBottom := g.Y + float64(g.Image.Bounds().Dy())
+		if !found || gTop < top {
+			top = gTop
 		}
-		if y := s.partyScreenY[i] + spriteFrameH; y > bottom {
-			bottom = y
+		if !found || gBottom > bottom {
+			bottom = gBottom
 		}
+		found = true
 	}
+	if !found {
+		m := face.Metrics()
+		return (m.HAscent + m.HDescent) / 2
+	}
+	return (top + bottom) / 2
+}
+
+func (s *BattleScene) allTargetRowRect() tapRect {
 	return tapRect{
-		x: left - allTargetRowPadX,
-		y: bottom + allTargetRowGapY,
-		w: (right - left) + allTargetRowPadX*2,
+		x: allyAllTargetRowCenterX - allTargetRowW/2,
+		y: allyAllTargetRowY,
+		w: allTargetRowW,
 		h: allTargetRowH,
 	}
 }
@@ -187,7 +232,7 @@ func (s *BattleScene) drawAllTargetBox(screen *ebiten.Image, r tapRect, selected
 
 	ebitenutil.DrawRect(screen, r.x, r.y, r.w, r.h, boxFillCol)
 
-	face := s.game.FontFace(15)
+	face := s.game.FontFace(allTargetLabelFontSize)
 	label := "全体"
 	centerX := r.x + r.w/2
 	centerY := r.y + r.h/2
@@ -201,16 +246,14 @@ func (s *BattleScene) drawAllTargetBox(screen *ebiten.Image, r tapRect, selected
 
 		labelW := text.Advance(label, face)
 		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(centerX-labelW/2-text.Advance("▶ ", face), centerY)
-		arrowOp.SecondaryAlign = text.AlignCenter
+		arrowOp.GeoM.Translate(centerX-labelW/2-text.Advance("▶ ", face), centerY-textInkCenterY("▶", face))
 		arrowOp.ColorScale.ScaleWithColor(col)
 		text.Draw(screen, "▶", face, arrowOp)
 	}
 
 	op := &text.DrawOptions{}
-	op.GeoM.Translate(centerX, centerY)
+	op.GeoM.Translate(centerX, centerY-textInkCenterY(label, face))
 	op.PrimaryAlign = text.AlignCenter
-	op.SecondaryAlign = text.AlignCenter
 	op.ColorScale.ScaleWithColor(col)
 	text.Draw(screen, label, face, op)
 }
@@ -343,46 +386,26 @@ func (s *BattleScene) enemyTargetRect(slot int) (tapRect, bool) {
 	return tapRect{x: x, y: y, w: w, h: h}, true
 }
 
-const (
-	enemyAllTargetRowGapY = 10.0
-	enemyAllTargetRowH    = 30.0
-	enemyAllTargetRowPadX = 12.0
-)
-
 func (s *BattleScene) enemyAllTargetRowRect() tapRect {
-	alive := s.aliveEnemyIndices()
-	if len(alive) == 0 {
-		return tapRect{}
-	}
-	left, top, w0, h0 := s.enemyDrawRect(alive[0])
-	right := left + w0
-	bottom := top + h0
-	for _, i := range alive[1:] {
-		x, y, w, h := s.enemyDrawRect(i)
-		if x < left {
-			left = x
-		}
-		if x+w > right {
-			right = x + w
-		}
+	// enemyDrawRect lays slots out by the total enemy count, so every slot
+	// (alive or not) keeps its spot for the whole battle.
+	bottom := 0.0
+	for i := range s.enemies {
+		_, y, _, h := s.enemyDrawRect(i)
 		if y+h > bottom {
 			bottom = y + h
 		}
 	}
 	return tapRect{
-		x: left - enemyAllTargetRowPadX,
+		x: enemyAllTargetRowCenterX - allTargetRowW/2,
 		y: bottom + enemyAllTargetRowGapY,
-		w: (right - left) + enemyAllTargetRowPadX*2,
-		h: enemyAllTargetRowH,
+		w: allTargetRowW,
+		h: allTargetRowH,
 	}
 }
 
 func (s *BattleScene) drawEnemyAllTargetRow(screen *ebiten.Image, selected bool) {
-	r := s.enemyAllTargetRowRect()
-	if r.w <= 0 {
-		return
-	}
-	s.drawAllTargetBox(screen, r, selected)
+	s.drawAllTargetBox(screen, s.enemyAllTargetRowRect(), selected)
 }
 
 func (s *BattleScene) currentSkillTargetType() SkillTarget {

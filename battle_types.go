@@ -114,8 +114,8 @@ const (
 	statusBlockGap     = 42.0
 	statusHPTextY      = 25.0
 	statusHPBarY       = 44.0
-	statusMPTextY      = 55.0
-	statusMPBarY       = 74.0
+	statusMPTextY      = 52.0
+	statusMPBarY       = 71.0
 	statusValueOffsetX = 10.0
 
 	// statIconGap/OffsetX/OffsetY position the per-stat up/down icons drawn
@@ -139,14 +139,9 @@ const (
 	// both the battle HUD and the menu party list.
 	partyNameFontSize = 20.0
 
-	descX        = 20.0
-	descY        = 520.0
-	descFontSize = 14.0
-	descScale    = 1.0
-
-	hintOffsetX  = 420.0
-	hintFontSize = 14.0
-	hintScale    = 1.0
+	descX        = 30.0
+	descY        = 515.0
+	descFontSize = 20.0
 )
 
 const (
@@ -516,8 +511,9 @@ type BattleScene struct {
 	battleLogTimer float64
 	deathParticles []DeathParticle
 
-	targetIndex  int
-	pendingSkill int
+	targetIndex    int
+	pendingSkill   int
+	pendingSynergy bool
 
 	itemIndex       int
 	pendingItemID   string
@@ -571,8 +567,6 @@ type BattleScene struct {
 	// buffs/debuffs are currently applied, so pressing it again clears them.
 	debugStatIconTest bool
 
-	selectedSkillTarget SkillTarget
-
 	lastCommandIndex [partySize]int
 	lastSkillIndex   [partySize]int
 	lastSkillLevel   [partySize][8]int
@@ -589,6 +583,11 @@ type BattleScene struct {
 	tutorialPage       int
 	tutorialOverlayImg *ebiten.Image
 	tutorialSceneImg   *ebiten.Image
+
+	// skillSubMenuImg is the scratch buffer drawSkillSubMenuEnlarged (used
+	// only by the skill-upgrade tutorial mockup) renders into before
+	// compositing it back onto screen scaled up by battleSkillPanelScale.
+	skillSubMenuImg *ebiten.Image
 }
 
 type DamagePop struct {

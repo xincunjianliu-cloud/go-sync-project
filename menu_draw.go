@@ -117,9 +117,13 @@ func (m *MenuScene) allTargetRowState() (allowed, selected bool) {
 
 const drawAllTargetRowBoxH = 30.0
 
-const drawAllTargetRowBoxInset = 16.0
+// drawAllTargetRowBoxW is the menu "全体" box's width (the icon-to-bar span
+// it's centered on is 220 wide).
+const drawAllTargetRowBoxW = 180.0
 
-const drawAllTargetRowYOffset = 12.0
+// drawAllTargetRowYOffset raises the menu "全体" row above its default spot
+// (the slot a 5th party row would take); smaller values move it down.
+const drawAllTargetRowYOffset = 6.0
 
 func (m *MenuScene) drawAllTargetRow(screen *ebiten.Image, statusX float64) {
 	allowed, selected := m.allTargetRowState()
@@ -141,10 +145,13 @@ func (m *MenuScene) drawAllTargetRow(screen *ebiten.Image, statusX float64) {
 		boxFillCol = color.RGBA{41, 58, 94, 220}
 	}
 
+	// drawAllTargetRowBoxW wide, centered on the span from the party icon's
+	// left edge to the right end of the HP/MP bars drawn by drawStatusBox.
 	iconW := float64(m.game.PartyIconImgs[0].Bounds().Dx())
-	boxX := statusX - iconW + menuStatusIconOffsetX + drawAllTargetRowBoxInset
-	boxRight := statusX + partyNameOffsetX + statusBlockW - drawAllTargetRowBoxInset
-	boxW := boxRight - boxX
+	spanLeft := statusX - iconW + menuStatusIconOffsetX
+	spanRight := statusX + statusBlockW
+	boxW := drawAllTargetRowBoxW
+	boxX := (spanLeft+spanRight)/2 - boxW/2
 	boxY := y - drawAllTargetRowBoxH/2
 
 	ebitenutil.DrawRect(screen, boxX, boxY, boxW, drawAllTargetRowBoxH, boxFillCol)

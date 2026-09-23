@@ -149,17 +149,29 @@ func (s *FieldScene) drawSkillUpgradeTutorialMockup(scene *ebiten.Image, page in
 	}
 }
 
+// skillUpgradeTutorialMockBattleScene lazily builds (and caches on
+// FieldScene) the throwaway BattleScene the level-switch page mocks up.
+// It's reused across frames/calls instead of a fresh literal each time so
+// its drawSkillSubMenu's scratch buffer (skillSubMenuImg) is allocated once,
+// not every single Draw call.
+func (s *FieldScene) skillUpgradeTutorialMockBattleScene() *BattleScene {
+	if s.skillUpgradeTutorialMockBattle == nil {
+		s.skillUpgradeTutorialMockBattle = &BattleScene{
+			game:         s.game,
+			waitingActor: skillUpgradeTutorialCharIdx,
+			skillIndex:   skillUpgradeTutorialSkillIdx,
+		}
+	}
+	return s.skillUpgradeTutorialMockBattle
+}
+
 // drawBattleLevelSwitchMockup renders the real battle background and party
 // sprites (BattleScene.drawBackground/drawPartySprites on a throwaway
 // instance) with the real battle skill submenu on top, so this page reads
 // as "this is what you'll see in battle" instead of floating the same skill
 // panel over the menu's own backdrop like the earlier pages.
 func (s *FieldScene) drawBattleLevelSwitchMockup(scene *ebiten.Image) {
-	mockBattle := &BattleScene{
-		game:         s.game,
-		waitingActor: skillUpgradeTutorialCharIdx,
-		skillIndex:   skillUpgradeTutorialSkillIdx,
-	}
+	mockBattle := s.skillUpgradeTutorialMockBattleScene()
 	mockBattle.drawBackground(scene)
 	mockBattle.drawPartySprites(scene)
 
@@ -168,7 +180,7 @@ func (s *FieldScene) drawBattleLevelSwitchMockup(scene *ebiten.Image) {
 	}
 	s.withMockSkillLevel(func() {
 		mockBattle.skillLevelCursors[skillUpgradeTutorialCharIdx][skillUpgradeTutorialSkillIdx] = skillUpgradeTutorialMockLevel
-		mockBattle.drawSkillSubMenu(scene)
+		mockBattle.drawSkillSubMenuEnlarged(scene)
 	})
 }
 
@@ -228,8 +240,22 @@ func (s *FieldScene) skillUpgradeTutorialBox(page int) *battleTutorialBox {
 		leftX := lvX - battleSubLvGap - leftArrowW
 		textY := windowY + battleSubLabelOffsetY
 		rowH := lvFace.Metrics().HAscent + lvFace.Metrics().HDescent
+
+		// drawBattleLevelSwitchMockup draws this panel through
+		// BattleScene.drawSkillSubMenuEnlarged, which scales the whole panel up
+		// around battleSkillPanelPivot (see battle_draw_hud.go /
+		// battle_submenu_touch.go) - leftX/blockRightX/textY/rowH above are
+		// still in that function's unscaled local space, so the highlight
+		// box has to go through the same scale-about-pivot transform or it
+		// frames empty space next to the real (bigger, shifted) arrows.
+		pivotX, pivotY := s.skillUpgradeTutorialMockBattleScene().battleSkillPanelPivot()
+		scaledLeftX := pivotX + (leftX-pivotX)*battleSkillPanelScale
+		scaledBlockRightX := pivotX + (blockRightX-pivotX)*battleSkillPanelScale
+		scaledTextY := pivotY + (textY-pivotY)*battleSkillPanelScale
+		scaledRowH := rowH * battleSkillPanelScale
+
 		const padX, padY = 14.0, 10.0
-		return &battleTutorialBox{leftX - padX, textY - padY, (blockRightX - leftX) + padX*2, rowH + padY*2}
+		return &battleTutorialBox{scaledLeftX - padX, scaledTextY - padY, (scaledBlockRightX - scaledLeftX) + padX*2, scaledRowH + padY*2}
 
 	default:
 		return nil

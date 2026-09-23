@@ -102,11 +102,13 @@ func resolveTilesetImagePath(image string) string {
 // 別のPNGに差し替えたりしても、Tiled側でその画像を指定するだけで
 // 自動的に反映される(コード側に画像を個別登録する必要はない)。
 // 同じ画像を複数マップが使い回す場合は2回目以降キャッシュから返す。
+// 起動時のバックグラウンド読み込みで全マップ分を先にキャッシュへ入れておく
+// (assets_deferred.go参照)ので、通常はここで同期デコードは発生しない。
 func mapTilesetImage(tmap TiledMap) (*ebiten.Image, error) {
-	if len(tmap.Tilesets) == 0 || tmap.Tilesets[0].Image == "" {
+	imgPath, ok := mapTilesetImagePath(tmap)
+	if !ok {
 		return nil, fmt.Errorf("マップにタイルセットが設定されていません")
 	}
-	imgPath := resolveTilesetImagePath(tmap.Tilesets[0].Image)
 
 	if img, ok := tilesetImageCache[imgPath]; ok {
 		return img, nil
@@ -311,6 +313,12 @@ type FieldScene struct {
 	skillUpgradeTutorialSceneImg *ebiten.Image
 	skillUpgradeTutorialOverlay  *ebiten.Image
 
+	// skillUpgradeTutorialMockBattle is the throwaway BattleScene the level-
+	// switch page (drawBattleLevelSwitchMockup) reuses across frames so its
+	// drawSkillSubMenu's own scratch buffer (skillSubMenuImg) isn't
+	// reallocated - a fresh GPU texture - every single Draw call.
+	skillUpgradeTutorialMockBattle *BattleScene
+
 	touchStickActive   bool
 	touchStickDX       float64
 	touchStickDY       float64
@@ -400,12 +408,8 @@ type FieldScene struct {
 }
 
 func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpawnName string, startDir int) (*FieldScene, error) {
-	mapData, err := loadAssetBytes(mapPath)
+	tmap, err := loadTiledMap(mapPath)
 	if err != nil {
-		return nil, err
-	}
-	var tmap TiledMap
-	if err := json.Unmarshal(mapData, &tmap); err != nil {
 		return nil, err
 	}
 
@@ -526,7 +530,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		targetTileImg = img
 	}
 
-	playerCfg, playerSheet, err := LoadFieldPlayerConfig("assets/field_player.json")
+	playerCfg, playerSheet, err := LoadFieldPlayerConfig(fieldPlayerConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -613,12 +617,8 @@ const (
 // カスタムプロパティ"displayname"があればそれを使い、無ければマップの
 // パスをそのまま表示名として使う。
 func locationNameFromMap(mapPath string) string {
-	data, err := loadAssetBytesCached(mapPath)
+	tmap, err := loadTiledMap(mapPath)
 	if err != nil {
-		return mapPath
-	}
-	var tmap TiledMap
-	if err := json.Unmarshal(data, &tmap); err != nil {
 		return mapPath
 	}
 	if name, ok := tmap.mapDisplayName(); ok {

@@ -429,14 +429,8 @@ func (s *FieldScene) drawLevers(screen *ebiten.Image, camX, camY float64) {
 
 func (s *FieldScene) drawBlockSpots(screen *ebiten.Image, camX, camY float64) {
 	img := s.game.BlockSpotImg
-	if img == nil {
-		return
-	}
 	imgW := float64(img.Bounds().Dx())
 	imgH := float64(img.Bounds().Dy())
-	if imgW <= 0 || imgH <= 0 {
-		return
-	}
 
 	for _, layer := range s.tileMap.Layers {
 		if !strings.HasPrefix(layer.Name, "events") {
@@ -460,14 +454,8 @@ func (s *FieldScene) drawBlockSpots(screen *ebiten.Image, camX, camY float64) {
 
 func (s *FieldScene) drawBlocks(screen *ebiten.Image, camX, camY float64) {
 	img := s.game.BlockImg
-	if img == nil {
-		return
-	}
 	imgW := float64(img.Bounds().Dx())
 	imgH := float64(img.Bounds().Dy())
-	if imgW <= 0 || imgH <= 0 {
-		return
-	}
 
 	for _, b := range s.blocks {
 		op := &ebiten.DrawImageOptions{}
@@ -564,37 +552,42 @@ func (s *FieldScene) mapNameBannerAlpha() float64 {
 }
 
 const (
-	mapNameBannerMarginX = 16.0
-	mapNameBannerMarginY = 16.0
-	mapNameBannerPadX    = 14.0
-	mapNameBannerPadY    = 8.0
+	mapNameBannerMarginY  = 16.0
+	mapNameBannerPadX     = 24.0
+	mapNameBannerFontSize = 32.0
 )
 
+// drawMapNameBanner はバナー画像を左右反転し、画像の(反転前の)左端が
+// 画面右端にぴったり重なる位置に描画する。丸い不透明端が画面右端付近に
+// 来て、そこからフェードしながら画面内へ伸びる見た目になる。
 func (s *FieldScene) drawMapNameBanner(screen *ebiten.Image) {
 	alpha := s.mapNameBannerAlpha()
-	if alpha <= 0 {
+	banner := s.game.MapNameBannerImg
+	if alpha <= 0 || banner == nil {
 		return
 	}
 
-	face := s.game.FontFace(18)
+	boxY := mapNameBannerMarginY
+
+	imgOp := &ebiten.DrawImageOptions{}
+	imgOp.GeoM.Scale(-1, 1)
+	imgOp.GeoM.Translate(float64(gameWidth), boxY)
+	imgOp.ColorScale.ScaleAlpha(float32(alpha))
+	screen.DrawImage(banner, imgOp)
+
+	bannerH := float64(banner.Bounds().Dy())
+	face := s.game.FontFace(mapNameBannerFontSize)
 	textW, textH := text.Measure(s.mapNameBannerText, face, 0)
 
-	boxX := mapNameBannerMarginX
-	boxY := mapNameBannerMarginY
-	boxW := textW + mapNameBannerPadX*2
-	boxH := textH + mapNameBannerPadY*2
-
-	ebitenutil.DrawRect(screen, boxX, boxY, boxW, boxH, color.NRGBA{0, 0, 0, uint8(210 * alpha)})
-
 	op := &text.DrawOptions{}
-	op.GeoM.Translate(boxX+mapNameBannerPadX, boxY+mapNameBannerPadY)
+	op.GeoM.Translate(float64(gameWidth)-mapNameBannerPadX-textW, boxY+(bannerH-textH)/2)
 	op.ColorScale.ScaleWithColor(uiColorText)
 	op.ColorScale.ScaleAlpha(float32(alpha))
 	text.Draw(screen, s.mapNameBannerText, face, op)
 }
 
 func (s *FieldScene) drawPromptWithIcon(screen *ebiten.Image, icon *ebiten.Image, label string) {
-	face := s.game.FontFace(15)
+	face := s.game.FontFace(20)
 
 	textW, textH := text.Measure(label, face, 0)
 

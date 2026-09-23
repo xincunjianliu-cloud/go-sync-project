@@ -89,10 +89,10 @@ func (s *BattleScene) drawItemTargetUI(screen *ebiten.Image) {
 	}
 }
 
-func (s *BattleScene) itemTargetDescriptionAndHint() (string, string) {
+func (s *BattleScene) itemTargetDescription() string {
 	def, ok := GetItemDef(s.pendingItemID)
 	if !ok {
-		return "", ""
+		return ""
 	}
-	return def.Description, ""
+	return def.Description
 }

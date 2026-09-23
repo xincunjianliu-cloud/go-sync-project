@@ -32,11 +32,12 @@ func nextBattleTutorialKind(game *Game) int {
 	}
 }
 
-// battleTutorialPageIntro/Status/HP/Timeline/Commands/Conclusion are the
+// battleTutorialPageIntro/Status/MP/HP/Timeline/Commands/Conclusion are the
 // basics tutorial's page indices, in the order they're shown.
 const (
 	battleTutorialPageIntro = iota
 	battleTutorialPageStatus
+	battleTutorialPageMP
 	battleTutorialPageHP
 	battleTutorialPageTimeline
 	battleTutorialPageCommands
@@ -44,8 +45,8 @@ const (
 )
 
 // battleTutorialGaugePageIntro/WhatIsIt/FillRule/AttackBoost/RewindUnlock/
-// RewindEffect/Conclusion are the gauge tutorial's page indices, in the
-// order they're shown.
+// RewindEffect/RewindActionBoost/Conclusion are the gauge tutorial's page
+// indices, in the order they're shown.
 const (
 	battleTutorialGaugePageIntro = iota
 	battleTutorialGaugePageWhatIsIt
@@ -53,6 +54,7 @@ const (
 	battleTutorialGaugePageAttackBoost
 	battleTutorialGaugePageRewindUnlock
 	battleTutorialGaugePageRewindEffect
+	battleTutorialGaugePageRewindActionBoost
 	battleTutorialGaugePageConclusion
 )
 
@@ -95,8 +97,9 @@ func battleTutorialBody(kind, page int) string {
 		case battleTutorialGaugePageRewindEffect:
 			return "時間を巻き戻すとゲージは０になって\n" +
 				"しまいますが、敵が直前にした攻撃を\n" +
-				"なかったことにできます。\n" +
-				"さらに、巻き戻した時間の歪みの影響で\n" +
+				"なかったことにできます。"
+		case battleTutorialGaugePageRewindActionBoost:
+			return "さらに、巻き戻した時間の歪みの影響で\n" +
 				"一定時間パーティの行動回数が２倍になります。"
 		default:
 			return "ぜひ、ここぞという場面で\n" +
@@ -115,13 +118,17 @@ func battleTutorialBody(kind, page int) string {
 		return "ここは操作キャラクターの状態を示すところ。\n" +
 			"緑ゲージで表現されているHPが0になると、\n" +
 			"そのキャラクターは戦闘不能になってしまいます。"
+	case battleTutorialPageMP:
+		return "下の青のゲージはMPです。\n" +
+			"スキルを使用するのに使います。"
 	case battleTutorialPageCommands:
 		return "操作キャラクターが行動できるようになったら\n" +
 			"ここでコマンド選択していきます。\n\n" +
 			"たたかう：ふつうの攻撃\n" +
 			"スキル：MPを消費して特殊な行動\n" +
 			"たいき：4人全員が待機すると大ダメージ\n" +
-			"にげる：戦闘から逃げることができます。"
+			"にげる：戦闘から逃げることができます。\n" +
+			"アイテム：回復アイテムなどを使います"
 	case battleTutorialPageTimeline:
 		return "ここはタイムライン。\n" +
 			"操作キャラクターのアイコンが一番右に\n" +
@@ -168,7 +175,7 @@ func (s *BattleScene) battleTutorialBox(kind, page int) *battleTutorialBox {
 	}
 
 	switch page {
-	case battleTutorialPageHP, battleTutorialPageStatus:
+	case battleTutorialPageHP, battleTutorialPageStatus, battleTutorialPageMP:
 		sx, sy := partyNamePosition(0)
 		const padTop, padSide, padBottom = 14.0, 18.0, 12.0
 		top := sy - padTop
@@ -330,6 +337,8 @@ func (s *BattleScene) drawBattleTutorial(screen *ebiten.Image) {
 			op.GeoM.Translate(pos[0]-float64(iw)/2, pos[1]-float64(ih)/2)
 			scene.DrawImage(icon, op)
 		}
+		ix, iy := itemButtonCenter()
+		drawItemIcon(scene, ix, iy, battleIconR, false)
 	}
 
 	s.dimSceneExceptBox(scene, box)

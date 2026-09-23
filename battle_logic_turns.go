@@ -267,6 +267,7 @@ func (s *BattleScene) openPlayerMenu(actor int) {
 	s.waitingActor = actor
 	s.activePlayer = actor + 1
 	s.commandIndex = s.lastCommandIndex[actor]
+	s.pendingSynergy = false
 	s.commandTapArmed = false
 	s.rewindButtonArmed = false
 	s.itemButtonArmed = false
@@ -365,10 +366,6 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 			s.game.Audio.PlaySEByKey("error")
 			return nil
 		}
-		if !s.canUseSynergy() {
-			s.game.Audio.PlaySEByKey("error")
-			return nil
-		}
 	}
 
 	s.game.Audio.PlaySEByKey("decide")
@@ -377,6 +374,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	switch s.commandIndex {
 	case cmdNormalAttack:
 		s.pendingSkill = 0
+		s.pendingSynergy = false
 		s.targetIndex = s.firstAliveEnemySlot()
 		s.battlePhase = phaseTargetSelect
 		return nil
@@ -399,23 +397,18 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.battlePhase = phaseSkillMenu
 		return nil
 	case cmdWait:
-		s.waitStance[p] = true
-		s.atbGauge[p] = atbMax
-		alreadyInOrder := false
-		for _, actorIdx := range s.waitOrder {
-			if actorIdx == p {
-				alreadyInOrder = true
-				break
-			}
+		// The member completing the 4-person wait picks the synergy target.
+		if s.othersAllInWaitStance(p) {
+			s.pendingSkill = 0
+			s.pendingSynergy = true
+			s.targetIndex = s.firstAliveEnemySlot()
+			s.battlePhase = phaseTargetSelect
+			return nil
 		}
-		if !alreadyInOrder {
-			s.waitOrder = append(s.waitOrder, p)
-		}
-		if !s.tryWaitSynergy() {
-			s.waitingActor = -1
-			s.battlePhase = phaseATB
-			s.tryStartNextActor()
-		}
+		s.enterWaitStance(p)
+		s.waitingActor = -1
+		s.battlePhase = phaseATB
+		s.tryStartNextActor()
 		return nil
 	case cmdFlee:
 		if rand.Intn(100) >= s.fleeSuccessRate() {
@@ -543,11 +536,6 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		return
 	}
 
-	if data.Target == TargetBoth {
-		s.selectedSkillTarget = TargetSingle
-	} else {
-		s.selectedSkillTarget = data.Target
-	}
 	if data.Target == TargetAll {
 		s.targetIndex = maxEnemies
 	} else {

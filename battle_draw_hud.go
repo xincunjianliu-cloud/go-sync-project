@@ -351,6 +351,29 @@ func (s *BattleScene) drawCommandMenu(screen *ebiten.Image) {
 	}
 }
 
+// drawSkillSubMenuEnlarged is used only by the skill-upgrade tutorial's
+// mockup (field_tutorial.go): it renders the normal skill submenu into a
+// scratch buffer, then composites that buffer back onto screen scaled up by
+// battleSkillPanelScale around battleSkillPanelPivot (the panel's own right
+// edge) so the level number and its ◀▶ switch read more clearly while being
+// explained, without pushing anything off the right edge of the screen.
+// Real battles keep drawing drawSkillSubMenu at normal size.
+func (s *BattleScene) drawSkillSubMenuEnlarged(screen *ebiten.Image) {
+	if s.skillSubMenuImg == nil {
+		s.skillSubMenuImg = ebiten.NewImage(gameWidth, gameHeight)
+	}
+	buf := s.skillSubMenuImg
+	buf.Clear()
+	s.drawSkillSubMenu(buf)
+
+	pivotX, pivotY := s.battleSkillPanelPivot()
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(-pivotX, -pivotY)
+	op.GeoM.Scale(battleSkillPanelScale, battleSkillPanelScale)
+	op.GeoM.Translate(pivotX, pivotY)
+	screen.DrawImage(buf, op)
+}
+
 func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
 

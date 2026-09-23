@@ -69,15 +69,18 @@ func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 	}
 }
 
-func (s *BattleScene) targetSelectDescriptionAndHint() (string, string) {
+func (s *BattleScene) targetSelectDescription() string {
 	p := s.waitingActor
+	if s.pendingSynergy {
+		return "4人の連携攻撃で大ダメージを与える"
+	}
 	if p < 0 || p >= partySize || s.pendingSkill < 1 {
-		return "", ""
+		return ""
 	}
 	skillIdx := s.pendingSkill - 1
 	skills := s.game.CharacterSkills(p)
 	if skillIdx < 0 || skillIdx >= len(skills) {
-		return "", ""
+		return ""
 	}
 	lv := s.lastSkillLevel[p][skillIdx]
 	if lv < 1 {
@@ -86,17 +89,7 @@ func (s *BattleScene) targetSelectDescriptionAndHint() (string, string) {
 	if lv > len(skills[skillIdx].Levels) {
 		lv = len(skills[skillIdx].Levels)
 	}
-	data := skills[skillIdx].Levels[lv-1]
-
-	hint := ""
-	if data.Target == TargetBoth && s.currentTargetAllowsAll() {
-		if s.selectedSkillTarget == TargetAll {
-			hint = "←:単体に切替"
-		} else {
-			hint = "→:全体に切替"
-		}
-	}
-	return data.Description, hint
+	return skills[skillIdx].Levels[lv-1].Description
 }
 
 func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
@@ -275,20 +268,11 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	}
 }
 
-func (s *BattleScene) drawBottomDescription(screen *ebiten.Image, desc string, hint string) {
+func (s *BattleScene) drawBottomDescription(screen *ebiten.Image, desc string) {
 	descOp := &text.DrawOptions{}
 	descOp.GeoM.Translate(descX, descY)
 	descOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, desc, s.game.FontFace(descFontSize*descScale), descOp)
-
-	if hint == "" {
-		return
-	}
-
-	hintOp := &text.DrawOptions{}
-	hintOp.GeoM.Translate(descX+hintOffsetX, descY)
-	hintOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, hint, s.game.FontFace(hintFontSize*hintScale), hintOp)
+	text.Draw(screen, desc, s.game.FontFace(descFontSize), descOp)
 }
 
 func scaleAlpha(c color.RGBA, factor float64) color.RGBA {

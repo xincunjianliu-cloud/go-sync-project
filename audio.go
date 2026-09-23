@@ -2,11 +2,12 @@ package main
 
 import (
 	"bytes"
-	"io"
+	"errors"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2/audio"
-	"github.com/hajimehoshi/ebiten/v2/audio/mp3"
 )
 
 const sampleRate = 44100
@@ -161,8 +162,28 @@ type AudioManager struct {
 	fadeOutNextFadeIn float64
 	fadeOutHardCut    bool
 
-	pcmCache map[string][]byte
+	// pcmCache/pcmLoading/pcmFailedはバックグラウンドのデコードgoroutineと
+	// メインゴルーチンの両方から触るためpcmMuで保護する。
+	pcmMu      sync.Mutex
+	pcmCache   map[string][]byte
+	pcmLoading map[string]bool
+	pcmFailed  map[string]bool
+	// bgmLRU は最近再生したBGMのパス(古い順)。BGMのPCMは1曲あたり数十MBに
+	// なるため、キャッシュする曲数をmaxCachedBGMまでに制限する。
+	bgmLRU []string
+
+	// pendingStart は再生したいBGMのデコード待ち中に、デコード完了後に
+	// 実行する再生開始処理。pendingPathsが全てデコード済み(または失敗)に
+	// なった時点でUpdateから呼ばれる。pendingBGMはその待機中の曲名。
+	pendingStart func()
+	pendingPaths []string
+	pendingBGM   string
 }
+
+// maxCachedBGM はPCMをメモリに保持しておくBGMの最大曲数。
+const maxCachedBGM = 5
+
+var errPCMFailed = errors.New("pcm decode failed")
 
 func NewAudioManager() *AudioManager {
 	return &AudioManager{
@@ -171,6 +192,8 @@ func NewAudioManager() *AudioManager {
 		seVolume:     defaultSEVolume,
 		masterVolume: defaultMasterVolume,
 		pcmCache:     make(map[string][]byte),
+		pcmLoading:   make(map[string]bool),
+		pcmFailed:    make(map[string]bool),
 	}
 }
 
@@ -193,25 +216,162 @@ func (a *AudioManager) effectiveSEVolume() float64 {
 // メモリからコピーするだけになり、デコード負荷による音切れがなくなる。
 // デコード結果は曲ごとにキャッシュし、2回目以降の再生(戦闘開始・終了の
 // 繰り返しなど)で重いデコードが毎回走らないようにする。
+// この関数はその場で同期的にデコードするため、BGMのような長い曲には
+// 使わず(画面が固まる)、requestPCMでバックグラウンドデコードすること。
 func (a *AudioManager) decodePCM(path string) (*bytes.Reader, int64, error) {
-	if pcm, ok := a.pcmCache[path]; ok {
+	a.pcmMu.Lock()
+	pcm, ok := a.pcmCache[path]
+	failed := a.pcmFailed[path]
+	a.pcmMu.Unlock()
+	if ok {
 		return bytes.NewReader(pcm), int64(len(pcm)), nil
 	}
-	f, err := loadAssetReader(path)
+	if failed {
+		return nil, 0, errPCMFailed
+	}
+
+	pcm, err := decodePCMData(path)
+	a.pcmMu.Lock()
+	if err != nil {
+		// 中身が空のプレースホルダーSEなどを毎回デコードし直さないよう、
+		// 失敗も記録しておく。
+		a.pcmFailed[path] = true
+	} else {
+		a.pcmCache[path] = pcm
+	}
+	a.pcmMu.Unlock()
 	if err != nil {
 		return nil, 0, err
 	}
-	d, err := mp3.DecodeWithSampleRate(sampleRate, f)
-	if err != nil {
-		return nil, 0, err
-	}
-	pcm, err := io.ReadAll(d)
-	if err != nil {
-		return nil, 0, err
-	}
-	pcm = trimTrailingSilence(pcm)
-	a.pcmCache[path] = pcm
 	return bytes.NewReader(pcm), int64(len(pcm)), nil
+}
+
+// decodePCMData はmp3を丸ごとPCMへデコードする。Web版はブラウザ組み込みの
+// デコーダを使う(pcm_decode_js.go)。
+func decodePCMData(path string) ([]byte, error) {
+	data, err := loadAssetBytesCached(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		// assets/se/の未差し替えプレースホルダー(0バイト)。
+		return nil, errPCMFailed
+	}
+	pcm, err := decodeMP3ToPCM(data)
+	if err != nil {
+		return nil, err
+	}
+	return trimTrailingSilence(pcm), nil
+}
+
+// requestPCM はpathのPCMがまだ無ければバックグラウンドでデコードを始める。
+// 既にキャッシュ済み・デコード中・失敗済みなら何もしない。
+func (a *AudioManager) requestPCM(path string) {
+	if path == "" {
+		return
+	}
+	a.pcmMu.Lock()
+	_, cached := a.pcmCache[path]
+	if cached || a.pcmLoading[path] || a.pcmFailed[path] {
+		a.pcmMu.Unlock()
+		return
+	}
+	a.pcmLoading[path] = true
+	a.pcmMu.Unlock()
+
+	go func() {
+		pcm, err := decodePCMData(path)
+		a.pcmMu.Lock()
+		delete(a.pcmLoading, path)
+		if err != nil {
+			a.pcmFailed[path] = true
+		} else {
+			a.pcmCache[path] = pcm
+		}
+		a.pcmMu.Unlock()
+	}()
+}
+
+// Prewarm は次に使いそうな曲・効果音をバックグラウンドで先にデコードしておく。
+func (a *AudioManager) Prewarm(paths ...string) {
+	if a == nil {
+		return
+	}
+	for _, p := range paths {
+		a.requestPCM(p)
+	}
+}
+
+// pcmSettled はpathのデコードが終わっている(成功・失敗どちらでも)かを返す。
+func (a *AudioManager) pcmSettled(path string) bool {
+	a.pcmMu.Lock()
+	defer a.pcmMu.Unlock()
+	_, ok := a.pcmCache[path]
+	return ok || a.pcmFailed[path]
+}
+
+// touchBGM はBGMのPCMキャッシュの使用順を更新し、上限を超えた古い曲を
+// キャッシュから外す(再生中のPlayerは自前のReaderでPCMを参照し続けるので、
+// キャッシュから外しても再生は途切れない)。メインゴルーチン専用。
+func (a *AudioManager) touchBGM(path string) {
+	if !strings.HasPrefix(path, "assets/bgm/") {
+		return
+	}
+	for i, p := range a.bgmLRU {
+		if p == path {
+			a.bgmLRU = append(a.bgmLRU[:i], a.bgmLRU[i+1:]...)
+			break
+		}
+	}
+	a.bgmLRU = append(a.bgmLRU, path)
+	for len(a.bgmLRU) > maxCachedBGM {
+		evict := a.bgmLRU[0]
+		a.bgmLRU = a.bgmLRU[1:]
+		a.pcmMu.Lock()
+		delete(a.pcmCache, evict)
+		a.pcmMu.Unlock()
+	}
+}
+
+// startWhenDecoded はpathsのPCMが揃った時点でstartを実行する。揃っていれば
+// その場で実行し、まだならバックグラウンドデコードを始めてUpdateに任せる。
+// 待機できるのは1件だけで、後から呼んだものが優先される。
+func (a *AudioManager) startWhenDecoded(start func(), paths ...string) {
+	for _, p := range paths {
+		a.requestPCM(p)
+	}
+	a.pendingStart = start
+	a.pendingPaths = paths
+	a.tryPendingStart()
+}
+
+func (a *AudioManager) tryPendingStart() {
+	if a.pendingStart == nil {
+		return
+	}
+	for _, p := range a.pendingPaths {
+		if !a.pcmSettled(p) {
+			return
+		}
+	}
+	start := a.pendingStart
+	a.pendingStart = nil
+	a.pendingPaths = nil
+	a.pendingBGM = ""
+	start()
+}
+
+// IsLoading は次に鳴らすBGMのデコード待ちがあるかを返す。Game側は
+// シーン切り替えの暗転中にこれを見て、曲の準備ができるまでLoading表示で
+// 待つ(画面が明けてから遅れて曲が鳴り始める、を防ぐ)。
+func (a *AudioManager) IsLoading() bool {
+	if a == nil {
+		return false
+	}
+	if a.pendingStart != nil {
+		return true
+	}
+	return a.fadeOutActive && a.fadeOutNextPath != "" && !a.pcmSettled(a.fadeOutNextPath)
 }
 
 // trimTrailingSilence はmp3→PCM変換後の完全な無音区間(エンコーダーが
@@ -237,6 +397,7 @@ func trimTrailingSilence(pcm []byte) []byte {
 }
 
 func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
+	a.touchBGM(path)
 	r, _, err := a.decodePCM(path)
 	if err != nil {
 		return nil, err
@@ -251,6 +412,7 @@ func (a *AudioManager) loadStreamPlayer(path string) (*audio.Player, error) {
 }
 
 func (a *AudioManager) loadLoopPlayer(path string) (*audio.Player, error) {
+	a.touchBGM(path)
 	r, length, err := a.decodePCM(path)
 	if err != nil {
 		return nil, err
@@ -266,43 +428,45 @@ func (a *AudioManager) loadLoopPlayer(path string) (*audio.Player, error) {
 }
 
 func (a *AudioManager) PlayBGM(path string) {
-	if a == nil {
-		return
-	}
-	if a.bgmName == path && a.bgmPlayer != nil && a.bgmPlayer.IsPlaying() {
-		return
-	}
-	a.stopCurrent()
-
-	p, err := a.loadLoopPlayer(path)
-	if err != nil {
-		return
-	}
-	p.Play()
-	a.bgmPlayer = p
-	a.bgmName = path
+	a.playBGM(path, 0)
 }
 
 func (a *AudioManager) PlayBGMFadeIn(path string, duration float64) {
+	a.playBGM(path, duration)
+}
+
+// playBGM はpathをループ再生する(fadeIn>0ならその秒数かけてフェードイン)。
+// PCMがまだ無ければバックグラウンドでデコードし、終わり次第Updateから
+// 再生を開始する(その間は無音)。以前はここでmp3を丸ごと同期デコード
+// していたため、曲が切り替わるたびに数百ms〜数秒画面が固まっていた。
+func (a *AudioManager) playBGM(path string, fadeIn float64) {
 	if a == nil {
 		return
 	}
 	if a.bgmName == path && a.bgmPlayer != nil && a.bgmPlayer.IsPlaying() {
 		return
 	}
-	a.stopCurrent()
-
-	p, err := a.loadLoopPlayer(path)
-	if err != nil {
+	if a.pendingStart != nil && a.pendingBGM == path {
 		return
 	}
-	p.SetVolume(0)
-	p.Play()
-	a.bgmPlayer = p
-	a.bgmName = path
-	a.fadeInActive = true
-	a.fadeInTarget = a.effectiveBGMVolume()
-	a.fadeInSpeed = a.fadeInTarget / duration
+	a.stopCurrent()
+
+	a.pendingBGM = path
+	a.startWhenDecoded(func() {
+		p, err := a.loadLoopPlayer(path)
+		if err != nil {
+			return
+		}
+		a.bgmPlayer = p
+		a.bgmName = path
+		if fadeIn > 0 {
+			p.SetVolume(0)
+			a.fadeInActive = true
+			a.fadeInTarget = a.effectiveBGMVolume()
+			a.fadeInSpeed = a.fadeInTarget / fadeIn
+		}
+		p.Play()
+	}, path)
 }
 
 func (a *AudioManager) PlayBGMWithIntro(introPath, loopPath string) {
@@ -311,16 +475,21 @@ func (a *AudioManager) PlayBGMWithIntro(introPath, loopPath string) {
 	}
 	a.stopCurrent()
 
-	p, err := a.loadStreamPlayer(introPath)
-	if err != nil {
-		a.PlayBGM(loopPath)
-		return
-	}
-	p.Play()
-	a.bgmPlayer = p
-	a.bgmName = introPath
-	a.waitingLoopSwitch = true
-	a.pendingLoopPath = loopPath
+	a.pendingBGM = introPath
+	// ループ部分もイントロと一緒に先にデコードしておき、イントロ終了時の
+	// PlayBGM(loopPath)で待ちが発生しないようにする。
+	a.startWhenDecoded(func() {
+		p, err := a.loadStreamPlayer(introPath)
+		if err != nil {
+			a.PlayBGM(loopPath)
+			return
+		}
+		p.Play()
+		a.bgmPlayer = p
+		a.bgmName = introPath
+		a.waitingLoopSwitch = true
+		a.pendingLoopPath = loopPath
+	}, introPath, loopPath)
 }
 
 // FadeOutThenPlay は現在のBGMを fadeOutDuration 秒かけてフェードアウトし、
@@ -331,6 +500,11 @@ func (a *AudioManager) PlayBGMWithIntro(introPath, loopPath string) {
 // そうでなければ fadeInDuration 秒かけてフェードインする。
 func (a *AudioManager) FadeOutThenPlay(nextPath string, fadeOutDuration, fadeInDuration float64, hardCut bool) {
 	if a == nil {
+		return
+	}
+	// フェードアウトしている間に次の曲のデコードを進めておく。
+	a.requestPCM(nextPath)
+	if a.pendingStart != nil && a.pendingBGM == nextPath {
 		return
 	}
 	if a.bgmName == nextPath && a.bgmPlayer != nil && a.bgmPlayer.IsPlaying() {
@@ -381,6 +555,9 @@ func (a *AudioManager) stopCurrent() {
 	// プレイヤー差し替え時は必ず両方のフェード状態を破棄する。
 	a.fadeOutActive = false
 	a.fadeInActive = false
+	a.pendingStart = nil
+	a.pendingPaths = nil
+	a.pendingBGM = ""
 }
 
 func (a *AudioManager) SetVolume(v float64) {
@@ -457,6 +634,7 @@ func (a *AudioManager) Update(dt float64) {
 	if a == nil {
 		return
 	}
+	a.tryPendingStart()
 	if len(a.sePlayers) > 0 {
 		alive := a.sePlayers[:0]
 		for _, p := range a.sePlayers {

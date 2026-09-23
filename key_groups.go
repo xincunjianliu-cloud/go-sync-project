@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 )
 
@@ -47,12 +46,8 @@ func loadWallKeyGroups() map[string][]string {
 
 	var maps []TiledMap
 	for _, mapPath := range allMapPaths {
-		data, err := loadAssetBytes(mapPath)
+		tmap, err := loadTiledMap(mapPath)
 		if err != nil {
-			continue
-		}
-		var tmap TiledMap
-		if err := json.Unmarshal(data, &tmap); err != nil {
 			continue
 		}
 		maps = append(maps, tmap)

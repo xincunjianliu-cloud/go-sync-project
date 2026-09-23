@@ -85,6 +85,28 @@ func (s *BattleScene) cancelWaitAfterDeath() {
 	s.battleLogTimer = battleLogDuration
 }
 
+func (s *BattleScene) othersAllInWaitStance(actor int) bool {
+	for i := 0; i < partySize; i++ {
+		if i != actor && !s.waitStance[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *BattleScene) enterWaitStance(actor int) {
+	s.waitStance[actor] = true
+	s.atbGauge[actor] = atbMax
+	for _, actorIdx := range s.waitOrder {
+		if actorIdx == actor {
+			return
+		}
+	}
+	s.waitOrder = append(s.waitOrder, actor)
+}
+
+// tryWaitSynergy fires the 4-person synergy attack on s.targetIndex once
+// every party member is in wait stance.
 func (s *BattleScene) tryWaitSynergy() bool {
 	for i := 0; i < partySize; i++ {
 		if !s.waitStance[i] {
@@ -92,24 +114,7 @@ func (s *BattleScene) tryWaitSynergy() bool {
 		}
 	}
 
-	if !s.canUseSynergy() {
-		s.game.Audio.PlaySEByKey("error")
-		for i := 0; i < partySize; i++ {
-			s.waitStance[i] = false
-		}
-		s.waitOrder = []int{}
-		s.battlePhase = phaseATB
-		s.waitingActor = -1
-		s.tryStartNextActor()
-		return true
-	}
-
-	power := 100.0 + float64(s.gaugeAtkBonus())
-	s.gaugePoint -= s.allAttackGaugeCost()
-	if s.gaugePoint < 0 {
-		s.gaugePoint = 0
-	}
-	s.recomputeGaugeStage()
+	power := 200.0 + float64(s.gaugeAtkBonus())
 
 	atk := 0
 	luck := 0
@@ -118,7 +123,8 @@ func (s *BattleScene) tryWaitSynergy() bool {
 		luck += s.game.PlayerLuck[i]
 	}
 
-	for _, slot := range s.aliveEnemyIndices() {
+	s.pendingSynergy = false
+	for _, slot := range s.enemyTargetsForAttack(false) {
 		def := s.effectiveEnemyDef(slot, false)
 		dmg := s.rollDamage(float64(atk), power, float64(def), 1.0, luck)
 		if s.lastRollWasCrit {
@@ -469,59 +475,39 @@ func (s *BattleScene) enemyTargetsForAttack(isAll bool) []int {
 
 func (s *BattleScene) updateTargetSelect() {
 	p := s.waitingActor
-	if p >= 0 && p < partySize && s.pendingSkill >= 1 {
-		skillIdx := s.pendingSkill - 1
-		skills := s.game.CharacterSkills(p)
-		if skillIdx >= 0 && skillIdx < len(skills) {
-			data := s.game.CurrentSkillLevelData(p, skillIdx)
-			if data.Target == TargetBoth && s.currentTargetAllowsAll() {
-				if isMenuRightPressed() {
-					s.selectedSkillTarget = TargetAll
-					s.targetIndex = maxEnemies
-					s.game.Audio.PlaySEByKey("cursor")
-				}
-				if isMenuLeftPressed() {
-					s.selectedSkillTarget = TargetSingle
-					if s.targetIndex == maxEnemies {
-						s.targetIndex = s.firstAliveEnemySlot()
-					}
-					s.game.Audio.PlaySEByKey("cursor")
-				}
-			}
-		}
-	}
 
-	if alive := s.aliveEnemyIndices(); len(alive) > 0 && (isMenuUpPressed() || isMenuDownPressed()) {
+	// Up/down cycles through the alive enemies and, for skills that can hit
+	// everyone (and only while more than one enemy is alive), a trailing
+	// "全体" row (targetIndex == maxEnemies) - the same way heal/item target
+	// selection offers its "全員" row. Forced-all skills stay on that row.
+	if alive := s.aliveEnemyIndices(); len(alive) > 0 && !s.currentTargetIsForcedAll() && (isMenuUpPressed() || isMenuDownPressed()) {
+		options := alive
+		if s.currentTargetAllowsAll() {
+			options = append(append([]int(nil), alive...), maxEnemies)
+		}
 		curPos := 0
-		for i, slot := range alive {
+		for i, slot := range options {
 			if slot == s.targetIndex {
 				curPos = i
 				break
 			}
 		}
 		if isMenuDownPressed() {
-			curPos = (curPos + 1) % len(alive)
+			curPos = (curPos + 1) % len(options)
 		} else {
-			curPos = (curPos - 1 + len(alive)) % len(alive)
+			curPos = (curPos - 1 + len(options)) % len(options)
 		}
-		s.targetIndex = alive[curPos]
-		s.selectedSkillTarget = TargetSingle
+		s.targetIndex = options[curPos]
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 
 	tappedIdx, tappedOk := s.hitTestEnemyTarget()
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.targetIndex, s.game.Audio)
-	if tappedOk {
-		if s.targetIndex == maxEnemies {
-			s.selectedSkillTarget = TargetAll
-		} else {
-			s.selectedSkillTarget = TargetSingle
-		}
-	}
 
 	hadTouch := len(justPressedTouchPoints()) > 0
 	if isEscapePressed() || (hadTouch && !tappedOk) {
 		s.game.Audio.PlaySEByKey("cancel")
+		s.pendingSynergy = false
 		if s.pendingSkill >= 1 {
 			s.battlePhase = phaseSkillMenu
 		} else {
@@ -535,6 +521,12 @@ func (s *BattleScene) updateTargetSelect() {
 	}
 
 	if p < 0 || p >= partySize {
+		return
+	}
+
+	if s.pendingSynergy {
+		s.enterWaitStance(p)
+		s.tryWaitSynergy()
 		return
 	}
 

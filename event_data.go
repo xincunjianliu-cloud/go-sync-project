@@ -125,10 +125,17 @@ func convertBossDialogue(src *bossDialogueJSON) BossDialogue {
 }
 
 func LoadDialogues(dir string) error {
-	for bossNum := 1; bossNum <= 4; bossNum++ {
-		filePath := path.Join(dir, fmt.Sprintf("boss_%d.json", bossNum))
+	// Web版は1ファイルずつfetchすると往復時間が積み重なるので、先にまとめて並列取得する。
+	bossFiles := make([]string, 4)
+	for i := range bossFiles {
+		bossFiles[i] = path.Join(dir, fmt.Sprintf("boss_%d.json", i+1))
+	}
+	prefetchAssetBytes(append(bossFiles, path.Join(dir, "story", "_index.json")))
 
-		data, err := loadAssetBytes(filePath)
+	for bossNum := 1; bossNum <= 4; bossNum++ {
+		filePath := bossFiles[bossNum-1]
+
+		data, err := loadAssetBytesCached(filePath)
 		if err != nil {
 			continue
 		}
@@ -163,7 +170,7 @@ func loadStoryDialogues(dir string) {
 	storyDir := path.Join(dir, "story")
 	indexPath := path.Join(storyDir, "_index.json")
 
-	indexData, err := loadAssetBytes(indexPath)
+	indexData, err := loadAssetBytesCached(indexPath)
 	if err != nil {
 		log.Printf("会話ファイル一覧の読み込み失敗 %s: %v", indexPath, err)
 		return
@@ -175,10 +182,14 @@ func loadStoryDialogues(dir string) {
 		return
 	}
 
-	for _, file := range files {
-		filePath := path.Join(storyDir, file)
+	filePaths := make([]string, len(files))
+	for i, file := range files {
+		filePaths[i] = path.Join(storyDir, file)
+	}
+	prefetchAssetBytes(filePaths)
 
-		data, err := loadAssetBytes(filePath)
+	for _, filePath := range filePaths {
+		data, err := loadAssetBytesCached(filePath)
 		if err != nil {
 			log.Printf("会話ファイルの読み込み失敗 %s: %v", filePath, err)
 			continue

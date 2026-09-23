@@ -69,6 +69,7 @@ type Game struct {
 	TimelineIcons        [4]*ebiten.Image
 	TimelineIconsLarge   [4]*ebiten.Image
 	SkillPanelImg        *ebiten.Image
+	MapNameBannerImg     *ebiten.Image
 
 	BossDefeatedFlags  [4]bool
 	EnemyImgs          map[string]*ebiten.Image
@@ -85,6 +86,10 @@ type Game struct {
 	fadeMode           int
 	fadeSpeed          float64
 	pendingScene       Scene
+	// pendingBuild はChangeSceneWhenReadyで、画像の読み込み完了を待ってから
+	// 遷移先シーンを組み立てる場合の組み立て処理(暗転中に呼ばれる)。
+	pendingBuild    func() Scene
+	pendingDuration float64
 
 	GoalImg  *ebiten.Image
 	GaugeImg *ebiten.Image
@@ -239,6 +244,9 @@ const (
 	FadeNone = iota
 	FadeOut
 	FadeIn
+	// FadeLoading は暗転しきった後、遷移先に必要な画像・BGMの準備が
+	// 終わるまで真っ暗なままLoading表示を出して待っている状態。
+	FadeLoading
 )
 
 func (g *Game) FontFace(size float64) text.Face {
@@ -246,7 +254,11 @@ func (g *Game) FontFace(size float64) text.Face {
 		return f
 	}
 	base := &text.GoTextFace{Source: g.fontSource, Size: size}
-	mf, err := text.NewMultiFace(base, triangleFallbackFace(size))
+	// triangleFallbackFace is listed first so its "▶"/"◀"/"▼" glyphs are
+	// always used, even though k8x12.ttf has its own (differently sized)
+	// "▼" outline — MultiFace resolves each rune to the first face that
+	// claims it.
+	mf, err := text.NewMultiFace(triangleFallbackFace(size), base)
 	if err != nil {
 		panic(err)
 	}
@@ -277,43 +289,6 @@ func generateLightMaskImage(size int) *ebiten.Image {
 
 const blockTileSize = 32
 
-func generateBlockImage(size int) *ebiten.Image {
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	fill := color.RGBA{150, 105, 60, 255}
-	border := color.RGBA{90, 60, 30, 255}
-	const borderW = 3
-
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			if x < borderW || y < borderW || x >= size-borderW || y >= size-borderW {
-				img.Set(x, y, border)
-			} else {
-				img.Set(x, y, fill)
-			}
-		}
-	}
-
-	drawDiagonalCross(img, size, border)
-
-	return ebiten.NewImageFromImage(img)
-}
-
-func generateBlockSpotImage(size int) *ebiten.Image {
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	markColor := color.RGBA{255, 225, 90, 220}
-	const thickness = 3
-
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			if x < thickness || y < thickness || x >= size-thickness || y >= size-thickness {
-				img.Set(x, y, markColor)
-			}
-		}
-	}
-
-	return ebiten.NewImageFromImage(img)
-}
-
 func generateBlockDoorImage(size int) *ebiten.Image {
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	fill := color.RGBA{110, 118, 138, 255}
@@ -331,20 +306,6 @@ func generateBlockDoorImage(size int) *ebiten.Image {
 	}
 
 	return ebiten.NewImageFromImage(img)
-}
-
-func drawDiagonalCross(img *image.RGBA, size int, c color.RGBA) {
-	const thickness = 2
-	for x := 0; x < size; x++ {
-		for _, y := range []int{x, size - 1 - x} {
-			for dy := -thickness; dy <= thickness; dy++ {
-				yy := y + dy
-				if yy >= 0 && yy < size {
-					img.Set(x, yy, c)
-				}
-			}
-		}
-	}
 }
 
 func (g *Game) rememberedIndex(v int) int {
@@ -438,8 +399,6 @@ func NewGame() *Game {
 
 	g.LightMaskImg = generateLightMaskImage(256)
 
-	g.BlockImg = generateBlockImage(blockTileSize)
-	g.BlockSpotImg = generateBlockSpotImage(blockTileSize)
 	g.BlockDoorImg = generateBlockDoorImage(blockTileSize)
 
 	g.Audio = NewAudioManager()
@@ -553,9 +512,12 @@ func (g *Game) Update() error {
 		g.fadeAlpha += g.fadeSpeed * dt
 		if g.fadeAlpha >= 1.0 {
 			g.fadeAlpha = 1.0
-			g.currentScene = g.pendingScene
-			g.fadeMode = FadeIn
+			g.fadeMode = FadeLoading
+			g.updateSceneLoading()
 		}
+		return nil
+	} else if g.fadeMode == FadeLoading {
+		g.updateSceneLoading()
 		return nil
 	} else if g.fadeMode == FadeIn {
 		g.fadeAlpha -= g.fadeSpeed * dt
@@ -586,6 +548,7 @@ type bgmScene interface {
 
 func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
 	g.pendingScene = nextScene
+	g.pendingBuild = nil
 	g.fadeMode = FadeOut
 	g.fadeAlpha = 0.0
 	g.fadeSpeed = 1.0 / durationSeconds
@@ -593,6 +556,62 @@ func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
 		path, fadeIn, hardCut := bs.desiredBGM(durationSeconds)
 		g.Audio.FadeOutThenPlay(path, durationSeconds, fadeIn, hardCut)
 	}
+}
+
+// ChangeSceneWhenReady は、戦闘・メニュー用画像のバックグラウンド読み込みが
+// 終わっていないと組み立てられないシーン(ニューゲーム・ロード画面など)へ
+// 遷移する。読み込み済みなら通常のChangeSceneWithFadeと同じ。まだなら先に
+// 暗転させ、読み込みが終わるまでLoading表示で待ってからbuildを呼ぶ。
+// buildがnilを返した場合(マップ読み込み失敗など)は元のシーンへ戻る。
+func (g *Game) ChangeSceneWhenReady(build func() Scene, durationSeconds float64) {
+	if g.heavyAssetsReady {
+		if next := build(); next != nil {
+			g.ChangeSceneWithFade(next, durationSeconds)
+		}
+		return
+	}
+	g.pendingScene = nil
+	g.pendingBuild = build
+	g.pendingDuration = durationSeconds
+	g.fadeMode = FadeOut
+	g.fadeAlpha = 0.0
+	g.fadeSpeed = 1.0 / durationSeconds
+}
+
+// updateSceneLoading は暗転中(FadeLoading)に毎フレーム呼ばれ、遷移先の
+// 準備が整ったらシーンを差し替えてフェードインを始める。準備ができるまでは
+// 画面を暗転させたままにし、DrawがLoading表示を出す。以前はシーンの
+// 組み立てやBGMのデコードを1フレーム内で同期的に行っていたため、
+// その間ゲーム全体(Loading表示を含む)が固まっていた。
+func (g *Game) updateSceneLoading() {
+	if g.pendingBuild != nil {
+		if !g.heavyAssetsReady {
+			return
+		}
+		build := g.pendingBuild
+		g.pendingBuild = nil
+		next := build()
+		if next == nil {
+			next = g.currentScene
+		}
+		g.pendingScene = next
+		// BGMは待っている間も流し続け、遷移先が決まった時点で切り替える。
+		if bs, ok := next.(bgmScene); ok {
+			path, fadeIn, hardCut := bs.desiredBGM(g.pendingDuration)
+			g.Audio.FadeOutThenPlay(path, g.pendingDuration, fadeIn, hardCut)
+		}
+	}
+	if g.Audio.IsLoading() {
+		return
+	}
+	g.currentScene = g.pendingScene
+	g.pendingScene = nil
+	g.fadeMode = FadeIn
+}
+
+// isLoading はLoading表示を出すべき状態かを返す。
+func (g *Game) isLoading() bool {
+	return !g.heavyAssetsReady || g.fadeMode == FadeLoading
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
@@ -610,7 +629,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DrawRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, uint8(255 * g.fadeAlpha)})
 	}
 
-	if !g.heavyAssetsReady {
+	if g.isLoading() {
 		drawLoadingIndicator(screen, g.loadingAnimTime)
 	}
 }

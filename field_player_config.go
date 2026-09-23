@@ -84,10 +84,34 @@ func DefaultFieldPlayerConfig() FieldPlayerConfig {
 	}
 }
 
+const fieldPlayerConfigPath = "assets/field_player.json"
+
+// fieldPlayerConfigCache はLoadFieldPlayerConfigの結果のキャッシュ。
+// マップ移動のたびに設定JSONの再取得とスプライト画像の再デコード
+// (+GPUテクスチャの作り直し)が走っていたのを1回だけにする。
+var fieldPlayerConfigCache = map[string]fieldPlayerConfigEntry{}
+
+type fieldPlayerConfigEntry struct {
+	cfg FieldPlayerConfig
+	img *ebiten.Image
+}
+
 func LoadFieldPlayerConfig(path string) (FieldPlayerConfig, *ebiten.Image, error) {
+	if c, ok := fieldPlayerConfigCache[path]; ok {
+		return c.cfg, c.img, nil
+	}
+	cfg, img, err := loadFieldPlayerConfigUncached(path)
+	if err != nil {
+		return cfg, img, err
+	}
+	fieldPlayerConfigCache[path] = fieldPlayerConfigEntry{cfg, img}
+	return cfg, img, nil
+}
+
+func loadFieldPlayerConfigUncached(path string) (FieldPlayerConfig, *ebiten.Image, error) {
 	cfg := DefaultFieldPlayerConfig()
 
-	data, err := loadAssetBytes(path)
+	data, err := loadAssetBytesCached(path)
 	if err == nil {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			return cfg, nil, fmt.Errorf("field player config parse: %w", err)

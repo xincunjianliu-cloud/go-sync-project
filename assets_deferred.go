@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -45,28 +46,77 @@ func (g *Game) loadHeavyAssetsAsync() {
 	}
 
 	assignments := deferredAssetAssignments()
-	paths := make([]string, len(assignments))
-	for i, a := range assignments {
-		paths[i] = a.path
+	tilesets := mapTilesetAssignments(assignments)
+	paths := make([]string, 0, len(assignments)+len(tilesets)+1)
+	for _, a := range assignments {
+		paths = append(paths, a.path)
 	}
+	for _, a := range tilesets {
+		paths = append(paths, a.path)
+	}
+	paths = append(paths, fieldPlayerConfigPath)
 	prefetchAssetBytes(paths)
 
 	for _, a := range assignments {
 		img, err := decodeAssetImage(a.path)
 		g.heavyDecoded <- decodedHeavyAsset{assign: a.assign, img: img, err: err, label: a.path}
+		yieldToBrowser()
+	}
+
+	// 各マップのタイルセットは、読み込めなくてもそのマップに入った時点で
+	// NewRoomSceneが改めて読み込み・エラー表示するので、ここでの失敗は
+	// ゲーム全体の読み込みエラー扱いにはしない。
+	for _, a := range tilesets {
+		img, err := decodeAssetImage(a.path)
+		if err == nil {
+			g.heavyDecoded <- decodedHeavyAsset{assign: a.assign, img: img, label: a.path}
+		}
+		yieldToBrowser()
 	}
 }
 
+// mapTilesetAssignments はBuildObjectiveAndMapIndexが見つけた全マップの
+// タイルセット画像を、mapTilesetImageのキャッシュへ先に入れておくための
+// 一覧を返す。これが無いと、初めて入るマップのタイルセット画像を
+// ドア移動やロードの瞬間に同期デコードすることになり、画面が固まる。
+// alreadyに同じパスがある画像(デフォルトのタイルセット)は二重に読まない。
+func mapTilesetAssignments(already []deferredAssetAssign) []deferredAssetAssign {
+	seen := make(map[string]bool, len(already))
+	for _, a := range already {
+		seen[a.path] = true
+	}
+	var out []deferredAssetAssign
+	for _, mapPath := range allMapPaths {
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			continue
+		}
+		p, ok := mapTilesetImagePath(tmap)
+		if !ok || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, deferredAssetAssign{p, func(g *Game, img *ebiten.Image) { tilesetImageCache[p] = img }})
+	}
+	return out
+}
+
+// heavyPumpFrameBudget は1フレームのうちpumpHeavyAssetsがGPUテクスチャ
+// 生成に使ってよい時間。溜まった画像を1フレームで全部処理すると、
+// その1フレームが長引いてLoading表示やタイトル画面がカクつく。
+const heavyPumpFrameBudget = 6 * time.Millisecond
+
 // pumpHeavyAssets はUpdate()から毎フレーム呼ばれ、バックグラウンドで
 // デコード済みの画像をebiten.Imageへ変換してGameへ反映する。
-// チャンネルに溜まっている分を1フレームで一気に処理するが、送信側
-// (loadHeavyAssetsAsync)がネットワーク待ちで詰まっている間はdefaultに
-// 抜けてブロックしない。
+// チャンネルに溜まっている分をheavyPumpFrameBudgetの範囲で処理し、
+// 送信側(loadHeavyAssetsAsync)がネットワーク待ちで詰まっている間は
+// defaultに抜けてブロックしない。
 func (g *Game) pumpHeavyAssets() {
 	if g.heavyAssetsReady || g.heavyDecoded == nil {
 		return
 	}
-	for {
+	start := time.Now()
+	for time.Since(start) < heavyPumpFrameBudget {
 		select {
 		case item, ok := <-g.heavyDecoded:
 			if !ok {
@@ -74,6 +124,7 @@ func (g *Game) pumpHeavyAssets() {
 				if g.heavyAssetsErr == nil {
 					g.TileImg = g.Tilesets["default"]
 				}
+				g.prewarmAudio()
 				return
 			}
 			if item.err != nil {
@@ -91,6 +142,25 @@ func (g *Game) pumpHeavyAssets() {
 	}
 }
 
+// prewarmAudio は画像の読み込みが一通り終わった後、次に鳴りそうな曲と
+// 全効果音をバックグラウンドで先にデコードしておく。これで最初の戦闘開始・
+// 勝利・ニューゲーム時に、曲のデコード待ちが発生しにくくなる。
+// (BGMは1曲あたり数十MBのPCMになるので、全曲ではなく使用頻度の高いものに絞る)
+func (g *Game) prewarmAudio() {
+	paths := []string{bgmBattleNormal, bgmVictoryIntro, bgmVictoryLoop, bgmField1}
+	if tmap, err := loadTiledMap(startMapPath); err == nil {
+		if key, ok := tmap.mapBGMKey(); ok {
+			if p, found := resolveBGMKey(key); found {
+				paths = append(paths, p)
+			}
+		}
+	}
+	for _, p := range seByKey {
+		paths = append(paths, p)
+	}
+	g.Audio.Prewarm(paths...)
+}
+
 // deferredAssetAssignments はバックグラウンドで読み込む画像の一覧と、
 // 読み込み後にGameのどのフィールドへ入れるかを返す。
 func deferredAssetAssignments() []deferredAssetAssign {
@@ -98,7 +168,10 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	// 都度読み込むため、ここでの事前登録は不要。"default"は、万一マップに
 	// タイルセットが設定されていない場合のフォールバック用に残しておく。
 	a := []deferredAssetAssign{
-		{"assets/images/field/Tile_set_School_Set.png", func(g *Game, img *ebiten.Image) { g.Tilesets["default"] = img }},
+		{"assets/images/field/Tile_set_School_Set.png", func(g *Game, img *ebiten.Image) {
+			g.Tilesets["default"] = img
+			tilesetImageCache["assets/images/field/Tile_set_School_Set.png"] = img
+		}},
 		{"assets/images/field/player_walk.png", func(g *Game, img *ebiten.Image) { g.SpriteSheet = img }},
 	}
 
@@ -158,6 +231,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		deferredAssetAssign{"assets/images/battle/timeline_bar_vertical.png", func(g *Game, img *ebiten.Image) { g.TimelineBarVertImg = img }},
 		deferredAssetAssign{"assets/images/battle/skill_panel.png", func(g *Game, img *ebiten.Image) { g.SkillPanelImg = img }},
 		deferredAssetAssign{"assets/images/battle/battle_bg.png", func(g *Game, img *ebiten.Image) { g.BattleBgImg = img }},
+		deferredAssetAssign{"assets/images/field/map_name_banner.png", func(g *Game, img *ebiten.Image) { g.MapNameBannerImg = img }},
 	)
 
 	for i := 0; i < 4; i++ {
@@ -191,6 +265,8 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		deferredAssetAssign{"assets/images/field/lever_wall_open.png", func(g *Game, img *ebiten.Image) { g.LeverWallOpenImg = img }},
 		deferredAssetAssign{"assets/images/field/lever_wall_open_deco.png", func(g *Game, img *ebiten.Image) { g.LeverWallOpenDecoImg = img }},
 		deferredAssetAssign{"assets/images/field/lever.png", func(g *Game, img *ebiten.Image) { g.LeverImg = img }},
+		deferredAssetAssign{"assets/images/field/push_block.png", func(g *Game, img *ebiten.Image) { g.BlockImg = img }},
+		deferredAssetAssign{"assets/images/field/push_block_spot.png", func(g *Game, img *ebiten.Image) { g.BlockSpotImg = img }},
 	)
 
 	for i := 0; i < 4; i++ {

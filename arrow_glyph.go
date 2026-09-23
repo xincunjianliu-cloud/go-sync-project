@@ -19,13 +19,18 @@ import (
 // triangleGlyphFace synthesizes those two glyphs procedurally instead of
 // requiring a second font file: Glyph() below draws a plain hard-edged
 // "play button" triangle from scratch (three straight edges converging to a
-// point) — it does NOT reuse k8x12.ttf's "▼" (U+25BC) outline data in any
-// way, only its own hand-tuned proportions (triWidthRatio/triHeightRatio).
-// Its vertical center is placed to match the actual ink-center of ordinary
-// text in this font (measured from "あ"/"項"'s glyph bounds at ppem 14:
-// center ≈ -0.375*size from the baseline). FontFace() below combines this
-// with the real font via text.MultiFace, so every existing "▶"/"◀"
-// text.Draw call keeps working with no per-call-site changes.
+// point) — it does NOT reuse k8x12.ttf's outline data in any way, only its
+// own hand-tuned proportions (triWidthRatio/triHeightRatio). Its vertical
+// center is placed to match the actual ink-center of ordinary text in this
+// font (measured from "あ"/"項"'s glyph bounds at ppem 14: center ≈
+// -0.375*size from the baseline).
+//
+// k8x12.ttf DOES have its own "▼" (U+25BC) glyph, but its size/weight didn't
+// match the synthesized "▶"/"◀" cursor, so "▼" is synthesized here too
+// (as downTriangleRune) using the same construction, rotated 90°, so all
+// three read as one consistent set. FontFace() in game.go lists this face
+// BEFORE the real font in its MultiFace so these three runes always resolve
+// here instead of falling through to k8x12.ttf's own "▼" outline.
 type triangleGlyphFace struct {
 	size float64
 }
@@ -35,6 +40,7 @@ var _ font.Face = (*triangleGlyphFace)(nil)
 const (
 	rightTriangleRune = '▶'
 	leftTriangleRune  = '◀'
+	downTriangleRune  = '▼'
 )
 
 const (
@@ -49,10 +55,17 @@ const (
 	triAdvanceRatio = 0.53
 	triAscentRatio  = 0.8337
 	triDescentRatio = 0.1663
+
+	// downAdvanceRatio gives "▼" some side padding beyond its own spread
+	// (downSpreadRatio below), matching the amount triAdvanceRatio adds
+	// beyond triWidthRatio for "▶"/"◀".
+	downSpreadRatio  = triHeightRatio
+	downDepthRatio   = triWidthRatio
+	downAdvanceRatio = downSpreadRatio + (triAdvanceRatio - triWidthRatio)
 )
 
 func (f *triangleGlyphFace) isTriangle(r rune) bool {
-	return r == rightTriangleRune || r == leftTriangleRune
+	return r == rightTriangleRune || r == leftTriangleRune || r == downTriangleRune
 }
 
 func (f *triangleGlyphFace) Close() error { return nil }
@@ -67,26 +80,45 @@ func (f *triangleGlyphFace) Metrics() font.Metrics {
 
 func (f *triangleGlyphFace) Kern(r0, r1 rune) fixed.Int26_6 { return 0 }
 
-func (f *triangleGlyphFace) glyphBox() (w, h, top float64) {
-	return f.size * triWidthRatio, f.size * triHeightRatio, f.size * triTopRatio
+// glyphBox returns the glyph's ink box (w, h) and its offset from the glyph
+// origin (top, left). "▶"/"◀" are flush with the origin on the X axis (left
+// == 0), matching how they were always laid out; "▼" is instead centered
+// within its own advance width, since a downward cursor reads naturally
+// centered rather than flush-left.
+func (f *triangleGlyphFace) glyphBox(r rune) (w, h, top, left float64) {
+	if r == downTriangleRune {
+		w = f.size * downSpreadRatio
+		h = f.size * downDepthRatio
+		adv := f.size * downAdvanceRatio
+		left = (adv - w) / 2
+		top = f.size*triCenterRatio - h/2
+		return w, h, top, left
+	}
+	w = f.size * triWidthRatio
+	h = f.size * triHeightRatio
+	top = f.size * triTopRatio
+	return w, h, top, 0
 }
 
 func (f *triangleGlyphFace) GlyphAdvance(r rune) (fixed.Int26_6, bool) {
-	if !f.isTriangle(r) {
-		return 0, false
+	switch r {
+	case rightTriangleRune, leftTriangleRune:
+		return floatToFixed(f.size * triAdvanceRatio), true
+	case downTriangleRune:
+		return floatToFixed(f.size * downAdvanceRatio), true
 	}
-	return floatToFixed(f.size * triAdvanceRatio), true
+	return 0, false
 }
 
 func (f *triangleGlyphFace) GlyphBounds(r rune) (fixed.Rectangle26_6, fixed.Int26_6, bool) {
 	if !f.isTriangle(r) {
 		return fixed.Rectangle26_6{}, 0, false
 	}
-	w, h, top := f.glyphBox()
+	w, h, top, left := f.glyphBox(r)
 	adv, _ := f.GlyphAdvance(r)
 	return fixed.Rectangle26_6{
-		Min: fixed.Point26_6{X: 0, Y: floatToFixed(top)},
-		Max: fixed.Point26_6{X: floatToFixed(w), Y: floatToFixed(top + h)},
+		Min: fixed.Point26_6{X: floatToFixed(left), Y: floatToFixed(top)},
+		Max: fixed.Point26_6{X: floatToFixed(left + w), Y: floatToFixed(top + h)},
 	}, adv, true
 }
 
@@ -95,13 +127,41 @@ func (f *triangleGlyphFace) GlyphBounds(r rune) (fixed.Rectangle26_6, fixed.Int2
 // (~14-24px), a hard-edged diagonal looked visibly jagged/staircased.
 const triSuperSample = 4
 
+// triangleLit reports whether local point (fx, fy) inside a w×h box falls
+// inside the triangle for rune r: a flat base on the side opposite the
+// direction r points, tapering to a single point in that direction.
+func triangleLit(r rune, fx, fy, w, h float64) bool {
+	switch r {
+	case rightTriangleRune:
+		d := math.Abs(fy-h/2) / (h / 2)
+		if d > 1 {
+			d = 1
+		}
+		return fx <= w*(1-d)
+	case leftTriangleRune:
+		d := math.Abs(fy-h/2) / (h / 2)
+		if d > 1 {
+			d = 1
+		}
+		return fx >= w*d
+	case downTriangleRune:
+		d := math.Abs(fx-w/2) / (w / 2)
+		if d > 1 {
+			d = 1
+		}
+		return fy <= h*(1-d)
+	}
+	return false
+}
+
 // Glyph rasterizes an antialiased "play button" triangle: pointing right for
-// rightTriangleRune, mirrored for leftTriangleRune.
+// rightTriangleRune, mirrored for leftTriangleRune, and pointing down for
+// downTriangleRune.
 func (f *triangleGlyphFace) Glyph(dot fixed.Point26_6, r rune) (image.Rectangle, image.Image, image.Point, fixed.Int26_6, bool) {
 	if !f.isTriangle(r) {
 		return image.Rectangle{}, nil, image.Point{}, 0, false
 	}
-	w, h, top := f.glyphBox()
+	w, h, top, left := f.glyphBox(r)
 	adv, _ := f.GlyphAdvance(r)
 	iw, ih := int(math.Ceil(w))+1, int(math.Ceil(h))+1
 	mask := image.NewAlpha(image.Rect(0, 0, iw, ih))
@@ -111,20 +171,9 @@ func (f *triangleGlyphFace) Glyph(dot fixed.Point26_6, r rune) (image.Rectangle,
 			var hits int
 			for sy := 0; sy < ss; sy++ {
 				fy := float64(y) + (float64(sy)+0.5)/ss
-				d := math.Abs(fy-h/2) / (h / 2)
-				if d > 1 {
-					d = 1
-				}
-				xMax := w * (1 - d)
 				for sx := 0; sx < ss; sx++ {
 					fx := float64(x) + (float64(sx)+0.5)/ss
-					var lit bool
-					if r == rightTriangleRune {
-						lit = fx <= xMax
-					} else {
-						lit = fx >= w-xMax
-					}
-					if lit {
+					if triangleLit(r, fx, fy, w, h) {
 						hits++
 					}
 				}
@@ -135,9 +184,10 @@ func (f *triangleGlyphFace) Glyph(dot fixed.Point26_6, r rune) (image.Rectangle,
 		}
 	}
 	top32 := int(math.Round(top))
+	left32 := int(math.Round(left))
 	dr := image.Rect(
-		dot.X.Round(), dot.Y.Round()+top32,
-		dot.X.Round()+iw, dot.Y.Round()+top32+ih,
+		dot.X.Round()+left32, dot.Y.Round()+top32,
+		dot.X.Round()+left32+iw, dot.Y.Round()+top32+ih,
 	)
 	return dr, mask, image.Point{}, adv, true
 }
@@ -148,8 +198,8 @@ func floatToFixed(v float64) fixed.Int26_6 {
 
 var multiFaceCache = map[float64]*text.MultiFace{}
 
-// triangleFallbackFace builds the "▶"/"◀" fallback text.Face for the given
-// size, combined with the real font in FontFace().
+// triangleFallbackFace builds the "▶"/"◀"/"▼" face for the given size,
+// combined with the real font in FontFace().
 func triangleFallbackFace(size float64) *text.GoXFace {
 	return text.NewGoXFace(&triangleGlyphFace{size: size})
 }
