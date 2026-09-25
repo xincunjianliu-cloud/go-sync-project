@@ -2,74 +2,74 @@
   "slot_id": 1,
   "location_name": "ダンジョンA",
   "current_map": "assets/maps/ダンジョンA.tmj",
-  "player_x": 928,
-  "player_y": 1007,
-  "player_dir": 1,
+  "player_x": 569,
+  "player_y": 1004,
+  "player_dir": 2,
   "player_hp": [
-    100,
-    70,
-    110,
-    90
+    112,
+    78,
+    121,
+    99
   ],
   "player_max_hp": [
-    100,
-    70,
-    110,
-    90
+    112,
+    78,
+    121,
+    99
   ],
   "player_mp": [
-    15,
-    40,
-    20,
-    10
+    19,
+    47,
+    25,
+    14
   ],
   "player_max_mp": [
-    15,
-    40,
-    20,
-    10
+    19,
+    47,
+    25,
+    14
   ],
   "player_atk": [
-    1,
-    1,
-    1,
-    1
+    19,
+    9,
+    15,
+    15
   ],
   "player_magic_atk": [
-    1,
-    1,
-    1,
-    1
+    11,
+    14,
+    12,
+    12
   ],
   "player_def": [
-    1000,
-    1000,
-    1000,
-    1000
+    12,
+    11,
+    13,
+    12
   ],
   "player_magic_def": [
-    1000,
-    1000,
-    1000,
-    1000
+    11,
+    13,
+    12,
+    12
   ],
   "player_spd": [
-    30,
-    30,
-    30,
-    30
+    25,
+    28,
+    23,
+    23
   ],
   "player_luck": [
+    6,
+    10,
     5,
-    8,
-    4,
-    10
+    13
   ],
   "player_sp": [
-    0,
-    0,
-    0,
-    0
+    4,
+    4,
+    4,
+    4
   ],
   "player_skill_lv": [
     [
@@ -114,22 +114,22 @@
     ]
   ],
   "player_lv": [
-    1,
-    1,
-    1,
-    1
+    2,
+    2,
+    2,
+    2
   ],
   "player_exp": [
-    0,
-    0,
-    0,
-    0
+    43,
+    43,
+    43,
+    43
   ],
   "player_next_exp": [
-    65,
-    65,
-    65,
-    65
+    110,
+    110,
+    110,
+    110
   ],
   "boss_defeated_flags": [
     false,
@@ -137,15 +137,27 @@
     false,
     false
   ],
-  "play_time": 65.66666666666423,
-  "saved_at": "2026/09/15",
+  "play_time": 149.0166666666774,
+  "saved_at": "2026/09/25",
   "inventory": [
     {
       "item_id": "potion",
-      "count": 1
+      "count": 5
     }
   ],
   "opened_chests": {
     "assets/maps/ダンジョンA.tmj|736.0_3392.0": true
-  }
+  },
+  "unlocked_walls": null,
+  "keys": null,
+  "raised_levers": null,
+  "seen_auto_heal_map_intro": {
+    "assets/maps/ダンジョンA.tmj": true
+  },
+  "seen_events": null,
+  "seen_battle_tutorial": true,
+  "seen_gauge_tutorial": false,
+  "seen_skill_upgrade_tutorial": false,
+  "block_positions": null,
+  "unlocked_block_doors": null
 }
