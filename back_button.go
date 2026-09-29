@@ -4,7 +4,6 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
@@ -40,7 +39,7 @@ func isTouchBackPressed() bool {
 func drawBackButton(screen *ebiten.Image, game *Game) {
 	cx, cy := backBtnCenter()
 	x, y, w, h := backBtnRect()
-	ebitenutil.DrawRect(screen, x, y, w, h, color.NRGBA{0, 0, 0, 170})
+	fillRect(screen, x, y, w, h, color.NRGBA{0, 0, 0, 170})
 	vector.StrokeRect(screen, float32(x), float32(y), float32(w), float32(h), backBtnBorderWidth, color.White, true)
 
 	s := backBtnR * 0.55

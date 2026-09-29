@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -477,10 +476,10 @@ func (s *BattleScene) drawLogWindowBackground(screen *ebiten.Image) {
 	winW := float64(gameWidth)
 	winY := logPanelY
 	winH := 28.0
-	ebitenutil.DrawRect(screen, winX, winY, winW, winH, color.RGBA{0, 0, 0, 200})
+	fillRect(screen, winX, winY, winW, winH, color.RGBA{0, 0, 0, 200})
 	borderColor := color.RGBA{255, 255, 255, 255}
-	ebitenutil.DrawRect(screen, winX, winY, winW, 1, borderColor)
-	ebitenutil.DrawRect(screen, winX, winY+winH-1, winW, 1, borderColor)
+	fillRect(screen, winX, winY, winW, 1, borderColor)
+	fillRect(screen, winX, winY+winH-1, winW, 1, borderColor)
 }
 
 func (s *BattleScene) drawBattleMessage(screen *ebiten.Image) {
@@ -498,11 +497,11 @@ func (s *BattleScene) drawBattleMessage(screen *ebiten.Image) {
 func (s *BattleScene) drawDirectMessages(screen *ebiten.Image) {
 	if s.battlePhase == phaseBattleEnd && !s.isWon && s.battleLogTimer <= 0 {
 		winX, winY, winW, winH := 380.0, 235.0, 220.0, 80.0
-		ebitenutil.DrawRect(screen, winX, winY, winW, winH, color.RGBA{40, 10, 10, 220})
-		ebitenutil.DrawRect(screen, winX, winY, winW, 1, uiColorDanger)
-		ebitenutil.DrawRect(screen, winX, winY+winH, winW, 1, uiColorDanger)
-		ebitenutil.DrawRect(screen, winX, winY, 1, winH, uiColorDanger)
-		ebitenutil.DrawRect(screen, winX+winW, winY, 1, winH, uiColorDanger)
+		fillRect(screen, winX, winY, winW, winH, color.RGBA{40, 10, 10, 220})
+		fillRect(screen, winX, winY, winW, 1, uiColorDanger)
+		fillRect(screen, winX, winY+winH, winW, 1, uiColorDanger)
+		fillRect(screen, winX, winY, 1, winH, uiColorDanger)
+		fillRect(screen, winX+winW, winY, 1, winH, uiColorDanger)
 
 		gameOverFace := s.game.FontFace(18)
 		gameOverArrowGap := text.Advance("▶ ", gameOverFace)

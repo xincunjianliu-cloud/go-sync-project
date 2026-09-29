@@ -290,17 +290,31 @@ func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool)
 }
 
 func (s *BattleScene) effectiveAtk(actor int) int {
-	base := s.game.PlayerAtk[actor]
+	return s.applyAtkBuffs(actor, s.game.PlayerAtk[actor])
+}
+
+func (s *BattleScene) effectiveMagicAtk(actor int) int {
+	return s.applyAtkBuffs(actor, s.game.PlayerMagicAtk[actor])
+}
+
+// applyAtkBuffs は物理/魔法攻撃力の共通補正。バフ・デバフとも攻撃系は
+// StatAtkひとつで管理しているので、どちらの攻撃力にも同じ倍率がかかる。
+func (s *BattleScene) applyAtkBuffs(actor, base int) int {
 	down := SumDebuffPercent(s.PlayerDebuffs[actor], StatAtk)
 	up := SumBuffPercent(s.PlayerBuffs[actor], StatAtk)
 	return int(float64(base) * (1.0 + float64(up)/100.0 - float64(down)/100.0))
 }
 
-func (s *BattleScene) effectiveMagicAtk(actor int) int {
-	base := s.game.PlayerMagicAtk[actor]
-	down := SumDebuffPercent(s.PlayerDebuffs[actor], StatAtk)
-	up := SumBuffPercent(s.PlayerBuffs[actor], StatAtk)
-	return int(float64(base) * (1.0 + float64(up)/100.0 - float64(down)/100.0))
+// reduceAtb は対象のATBゲージをamount減らす(0未満にはしない)。
+func (s *BattleScene) reduceAtb(targetIsEnemy bool, targetIdx int, amount float64) {
+	actor := targetIdx
+	if targetIsEnemy {
+		if targetIdx < 0 || targetIdx >= len(s.enemies) {
+			return
+		}
+		actor = s.enemyActorIndex(targetIdx)
+	}
+	s.atbGauge[actor] = max(s.atbGauge[actor]-amount, 0)
 }
 
 func (s *BattleScene) effectiveEnemyDef(slot int, magic bool) int {
@@ -335,37 +349,9 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 	for _, e := range effects {
 		switch e.Type {
 		case EffectAtbDownSmall:
-			if targetIsEnemy {
-				if targetIdx < 0 || targetIdx >= len(s.enemies) {
-					continue
-				}
-				actor := s.enemyActorIndex(targetIdx)
-				s.atbGauge[actor] -= 15
-				if s.atbGauge[actor] < 0 {
-					s.atbGauge[actor] = 0
-				}
-			} else {
-				s.atbGauge[targetIdx] -= 15
-				if s.atbGauge[targetIdx] < 0 {
-					s.atbGauge[targetIdx] = 0
-				}
-			}
+			s.reduceAtb(targetIsEnemy, targetIdx, 15)
 		case EffectAtbDownLarge:
-			if targetIsEnemy {
-				if targetIdx < 0 || targetIdx >= len(s.enemies) {
-					continue
-				}
-				actor := s.enemyActorIndex(targetIdx)
-				s.atbGauge[actor] -= 35
-				if s.atbGauge[actor] < 0 {
-					s.atbGauge[actor] = 0
-				}
-			} else {
-				s.atbGauge[targetIdx] -= 35
-				if s.atbGauge[targetIdx] < 0 {
-					s.atbGauge[targetIdx] = 0
-				}
-			}
+			s.reduceAtb(targetIsEnemy, targetIdx, 35)
 		case EffectDebuffDefBoth:
 			d1 := Debuff{Type: StatDef, Percent: e.Percent, Turns: e.Turns}
 			d2 := Debuff{Type: StatMdf, Percent: e.Percent, Turns: e.Turns}

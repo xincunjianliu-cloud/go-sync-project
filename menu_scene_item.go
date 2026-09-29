@@ -15,18 +15,7 @@ func (m *MenuScene) hitTestItemListRows(rowCount int) (int, bool) {
 }
 
 func (m *MenuScene) usableFieldItems() []InventorySlot {
-	var list []InventorySlot
-	for _, slot := range m.game.Inventory {
-		if slot.Count <= 0 {
-			continue
-		}
-		def, ok := GetItemDef(slot.ItemID)
-		if !ok || !def.UsableInField {
-			continue
-		}
-		list = append(list, slot)
-	}
-	return list
+	return filterInventory(m.game.Inventory, func(def ItemDef) bool { return def.UsableInField })
 }
 
 func (m *MenuScene) clampItemListIndex(n int) {
@@ -88,7 +77,6 @@ func (m *MenuScene) updateItemList() {
 
 func (m *MenuScene) beginItemTarget(itemID string) {
 	m.pendingItemID = itemID
-	m.clearNotice()
 	if def, ok := GetItemDef(itemID); ok {
 		allowSingle, allowAll := itemTargetModes(def)
 		switch {
@@ -184,7 +172,6 @@ func (m *MenuScene) updateItemTarget() {
 
 	m.game.Audio.PlaySEByKey("decide")
 	m.game.ConsumeItem(m.pendingItemID, 1)
-	m.clearNotice()
 
 	if m.game.ItemCount(m.pendingItemID) <= 0 {
 		m.pendingItemID = ""

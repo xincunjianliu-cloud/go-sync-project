@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
@@ -78,14 +77,14 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 			} else {
 				c = color.RGBA{70, 80, 100, 200}
 			}
-			ebitenutil.DrawRect(screen, px, py, pw, ph, c)
+			fillRect(screen, px, py, pw, ph, c)
 		}
 	}
 
-	ebitenutil.DrawRect(screen, offsetX, offsetY, drawW, 1, color.RGBA{80, 100, 140, 255})
-	ebitenutil.DrawRect(screen, offsetX, offsetY+drawH-1, drawW, 1, color.RGBA{80, 100, 140, 255})
-	ebitenutil.DrawRect(screen, offsetX, offsetY, 1, drawH, color.RGBA{80, 100, 140, 255})
-	ebitenutil.DrawRect(screen, offsetX+drawW-1, offsetY, 1, drawH, color.RGBA{80, 100, 140, 255})
+	fillRect(screen, offsetX, offsetY, drawW, 1, color.RGBA{80, 100, 140, 255})
+	fillRect(screen, offsetX, offsetY+drawH-1, drawW, 1, color.RGBA{80, 100, 140, 255})
+	fillRect(screen, offsetX, offsetY, 1, drawH, color.RGBA{80, 100, 140, 255})
+	fillRect(screen, offsetX+drawW-1, offsetY, 1, drawH, color.RGBA{80, 100, 140, 255})
 
 	plx := offsetX + field.px*scale
 	ply := offsetY + field.py*scale
@@ -157,10 +156,10 @@ func (m *MenuScene) drawVolumeRow(screen *ebiten.Image, barY float64, label stri
 	knobCol := uiColorText
 
 	trackY := midY - volumeTrackH/2
-	vector.DrawFilledRect(screen, float32(barX), float32(trackY), float32(volumeBarW), float32(volumeTrackH), color.RGBA{30, 30, 40, 255}, true)
+	vector.FillRect(screen, float32(barX), float32(trackY), float32(volumeBarW), float32(volumeTrackH), color.RGBA{30, 30, 40, 255}, true)
 	fillW := volumeBarW * volume
 	if fillW > 0 {
-		vector.DrawFilledRect(screen, float32(barX), float32(trackY), float32(fillW), float32(volumeTrackH), knobCol, true)
+		vector.FillRect(screen, float32(barX), float32(trackY), float32(fillW), float32(volumeTrackH), knobCol, true)
 	}
 
 	knobR := volumeKnobR
@@ -168,7 +167,7 @@ func (m *MenuScene) drawVolumeRow(screen *ebiten.Image, barY float64, label stri
 		knobR = volumeKnobRSel
 	}
 	knobX := barX + fillW
-	vector.DrawFilledCircle(screen, float32(knobX), float32(midY), float32(knobR), knobCol, true)
+	vector.FillCircle(screen, float32(knobX), float32(midY), float32(knobR), knobCol, true)
 
 	labelCol := uiColorText
 	if selected {
@@ -225,7 +224,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	text.Draw(screen, "音量設定", m.game.FontFace(optionHeaderFontSize), headerOp)
 
 	lineY1 := headerY + 24
-	ebitenutil.DrawRect(screen, labelX, lineY1, lineW, 1, lineCol)
+	fillRect(screen, labelX, lineY1, lineW, 1, lineCol)
 
 	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY := optionRowPositions()
 
@@ -240,7 +239,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	text.Draw(screen, "表示設定", m.game.FontFace(optionHeaderFontSize), dispHeaderOp)
 
 	lineY2 := dispHeaderY + 24
-	ebitenutil.DrawRect(screen, labelX, lineY2, lineW, 1, lineCol)
+	fillRect(screen, labelX, lineY2, lineW, 1, lineCol)
 
 	displayLabelCol := uiColorText
 	onDisplayRow := onOptionRow(optionIdxDisplayMode)
@@ -369,7 +368,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	text.Draw(screen, "システム設定", m.game.FontFace(optionHeaderFontSize), sysHeaderOp)
 
 	lineY4 := sysHeaderY + 24
-	ebitenutil.DrawRect(screen, labelX, lineY4, lineW, 1, lineCol)
+	fillRect(screen, labelX, lineY4, lineW, 1, lineCol)
 
 	onCursorRow := onOptionRow(optionIdxCursorMemory)
 	adjustingCursor := onCursorRow
@@ -445,10 +444,6 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 	var desc string
 
-	if m.drawNotice(screen) {
-		return
-	}
-
 	if m.showReturnTitleConfirm {
 		desc = menuCommandDescriptions["タイトルに戻る"]
 		if desc == "" {
@@ -489,9 +484,9 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 		desc = d
 
 	case menuStateSkillCharSel:
-		desc = "スキルを確認・強化するキャラクターを選択してください"
+		desc = "スキルを使用・確認・強化するキャラクターを選択してください"
 	case menuStateStatus:
-		desc = "←/→: キャラ切替　ESC: 戻る"
+		desc = "キャラクターの詳細なステータスを確認できます"
 
 	case menuStateSkillSub:
 		skills := m.game.CharacterSkills(m.skillCharIndex)
@@ -540,10 +535,9 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 			desc = descText
 		}
 	case menuStateHealTarget:
-		desc = "回復する相手を選んでください"
 		skills := m.game.CharacterSkills(m.skillCharIndex)
 		if si, lv := m.pendingSkill-1, m.pendingSkillLevel; si >= 0 && si < len(skills) && lv >= 1 && lv <= len(skills[si].Levels) {
-			desc = fmt.Sprintf("%s　消費MP:%d（残りMP:%d）", desc, skills[si].Levels[lv-1].MPCost, m.game.PlayerMP[m.skillCharIndex])
+			desc = skills[si].Levels[lv-1].Description
 		}
 
 	case menuStateItemList:

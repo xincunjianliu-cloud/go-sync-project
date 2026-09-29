@@ -20,14 +20,8 @@ const (
 	endingSkipHoldSeconds = 1.0
 )
 
-type creditPageJSON struct {
-	Lines []string `json:"lines"`
-}
-type creditsFileJSON struct {
-	Pages []creditPageJSON `json:"pages"`
-}
 type CreditPage struct {
-	Lines []string
+	Lines []string `json:"lines"`
 }
 
 func loadCredits(path string) ([]CreditPage, error) {
@@ -35,15 +29,13 @@ func loadCredits(path string) ([]CreditPage, error) {
 	if err != nil {
 		return nil, err
 	}
-	var f creditsFileJSON
+	var f struct {
+		Pages []CreditPage `json:"pages"`
+	}
 	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, err
 	}
-	pages := make([]CreditPage, 0, len(f.Pages))
-	for _, p := range f.Pages {
-		pages = append(pages, CreditPage{Lines: p.Lines})
-	}
-	return pages, nil
+	return f.Pages, nil
 }
 
 const (

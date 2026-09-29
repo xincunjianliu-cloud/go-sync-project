@@ -421,22 +421,22 @@ func (m *MenuScene) changeRowVolume(idx int, delta float64) {
 }
 
 var menuCommandDescriptions = map[string]string{
-	"アイテム":    "所持しているアイテムを使用・確認します",
-	"スキル":     "スキルの確認・強化、回復スキルの使用ができます",
-	"ステータス":   "キャラクターの詳細なステータスを確認します",
+	"アイテム":    "所持しているアイテムを使用・確認できます",
+	"スキル":     "スキルの使用・確認・強化ができます",
+	"ステータス":   "キャラクターの詳細なステータスを確認できます",
 	"セーブ":     "現在の状況をセーブします",
 	"ロード":     "セーブデータをロードします",
 	"オプション":   "ゲームを遊びやすいように設定できます",
-	"タイトルに戻る": "タイトル画面に戻ります（未セーブの進行は失われます）",
+	"タイトルに戻る": "タイトル画面に戻ります",
 }
 
 var menuOptionDescriptions = map[int]string{
-	optionIdxBGM:          "BGMの音量を調整します（←→ / バーをタップ・ドラッグ）",
-	optionIdxSE:           "効果音の音量を調整します（←→ / バーをタップ・ドラッグ）",
-	optionIdxMaster:       "ゲーム全体の音量を調整します（←→ / バーをタップ・ドラッグ）",
-	optionIdxDisplayMode:  "フルスクリーン/ウィンドウを切り替えます（ウィンドウは端をドラッグしてサイズ変更できます）",
-	optionIdxMessageSpeed: "メッセージの表示速度を変更します（←→）",
-	optionIdxCursorMemory: "ONにすると、次にこのメニューを開いた時も前回選んでいた項目にカーソルが合った状態にします",
+	optionIdxBGM:          "BGMの音量を調整できます",
+	optionIdxSE:           "効果音の音量を調整できます",
+	optionIdxMaster:       "ゲーム全体の音量を調整できます",
+	optionIdxDisplayMode:  "フルスクリーンとウィンドウを切り替えられます",
+	optionIdxMessageSpeed: "メッセージの表示速度を変更できます",
+	optionIdxCursorMemory: "ONにすると直前に選択していたコマンドや項目の位置を記憶します",
 	optionIdxReset:        "設定をすべて初期値に戻します",
 }
 
@@ -462,7 +462,7 @@ func (m *MenuScene) previewRevealCount() int {
 }
 
 var skillShortDescriptions = map[string]string{
-	"回復": "対象を回復する",
+	"回復": "対象を回復します",
 }
 
 func skillShortDescription(skillName string) string {

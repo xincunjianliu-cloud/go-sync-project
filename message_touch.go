@@ -117,51 +117,31 @@ func ctrlIconHitRect(game *Game, cx, cy float64, label string, margin float64) (
 }
 
 func isAutoIconJustPressed(game *Game) bool {
-	cx, cy := ctrlIconXAt(0), ctrlRowY()
 	touches, mouse := justPressedTouchAndMousePoints()
-	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, "オート", ctrlIconTapMargin)
-	for _, p := range touches {
-		if p.inRect(tx, ty, tw, th) {
-			return true
-		}
-	}
-	mx, my, mw, mh := ctrlIconHitRect(game, cx, cy, "オート", 0)
-	for _, p := range mouse {
-		if p.inRect(mx, my, mw, mh) {
-			return true
-		}
-	}
-	return false
+	return ctrlIconHit(game, 0, "オート", touches, mouse)
 }
 
 func isLogIconJustPressed(game *Game) bool {
-	cx, cy := ctrlIconXAt(1), ctrlRowY()
 	touches, mouse := justPressedTouchAndMousePoints()
-	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, "ログ", ctrlIconTapMargin)
-	for _, p := range touches {
-		if p.inRect(tx, ty, tw, th) {
-			return true
-		}
-	}
-	mx, my, mw, mh := ctrlIconHitRect(game, cx, cy, "ログ", 0)
-	for _, p := range mouse {
-		if p.inRect(mx, my, mw, mh) {
-			return true
-		}
-	}
-	return false
+	return ctrlIconHit(game, 1, "ログ", touches, mouse)
 }
 
 func isSkipIconHeld(game *Game) bool {
-	cx, cy := ctrlIconXAt(2), ctrlRowY()
 	touches, mouse := activeTouchAndMousePoints()
-	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, "スキップ", ctrlIconTapMargin)
+	return ctrlIconHit(game, 2, "スキップ", touches, mouse)
+}
+
+// ctrlIconHit はindex番目の操作アイコン(ラベル含む)に触れた点があるかを返す。
+// 指は狙いがぶれやすいのでタッチだけ当たり判定をctrlIconTapMarginぶん広げる。
+func ctrlIconHit(game *Game, index int, label string, touches, mouse []touchPoint) bool {
+	cx, cy := ctrlIconXAt(index), ctrlRowY()
+	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, label, ctrlIconTapMargin)
 	for _, p := range touches {
 		if p.inRect(tx, ty, tw, th) {
 			return true
 		}
 	}
-	mx, my, mw, mh := ctrlIconHitRect(game, cx, cy, "スキップ", 0)
+	mx, my, mw, mh := ctrlIconHitRect(game, cx, cy, label, 0)
 	for _, p := range mouse {
 		if p.inRect(mx, my, mw, mh) {
 			return true

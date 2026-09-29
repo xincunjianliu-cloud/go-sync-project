@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -83,17 +84,17 @@ func TestBuildFileJSONGroupsByIDAndPhase(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected gate_hint entry, got %+v", out)
 	}
-	if entry.First == nil || len(entry.First.Commands) != 2 {
+	if entry.First == nil || len(entry.First.Commands) != 4 {
 		t.Fatalf("expected 2 commands in first, got %+v", entry.First)
 	}
-	if entry.First.BGM != "talk_tense" {
-		t.Fatalf("expected bgm talk_tense, got %q", entry.First.BGM)
+	if c := entry.First.Commands; c[0].Text != "PLAY_BGM_talk_tense" || c[2].Text != "STOP_BGM" {
+		t.Fatalf("expected PLAY_BGM_talk_tense then STOP_BGM, got %+v", c)
 	}
-	if entry.First.Commands[1].Expression != 2 {
+	if entry.First.Commands[3].Expression != 2 {
 		t.Fatalf("expected expression 2 on second line, got %d", entry.First.Commands[1].Expression)
 	}
-	if entry.Repeat == nil || len(entry.Repeat.Commands) != 1 {
-		t.Fatalf("expected 1 command in repeat, got %+v", entry.Repeat)
+	if entry.Repeat == nil || len(entry.Repeat.Commands) != 2 {
+		t.Fatalf("expected STOP_BGM + 1 line in repeat, got %+v", entry.Repeat)
 	}
 }
 
@@ -193,17 +194,17 @@ func TestBuildBossFileJSONGroupsByPhase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out.Battle == nil || len(out.Battle.Commands) != 2 {
+	if out.Battle == nil || len(out.Battle.Commands) != 4 {
 		t.Fatalf("expected 2 battle commands, got %+v", out.Battle)
 	}
-	if out.Battle.BGM != "talk_tense" {
-		t.Fatalf("expected battle bgm talk_tense, got %q", out.Battle.BGM)
+	if c := out.Battle.Commands; c[0].Text != "PLAY_BGM_talk_tense" || c[2].Text != "STOP_BGM" {
+		t.Fatalf("expected PLAY_BGM_talk_tense then STOP_BGM, got %+v", c)
 	}
-	if out.Clear == nil || len(out.Clear.Commands) != 2 {
+	if out.Clear == nil || len(out.Clear.Commands) != 3 {
 		t.Fatalf("expected 2 clear commands, got %+v", out.Clear)
 	}
-	if out.Clear.Commands[1].Speaker != "SYSTEM_COMMAND" || out.Clear.Commands[1].Text != "START_ENDING" {
-		t.Fatalf("expected SYSTEM_COMMAND/START_ENDING as the last clear line, got %+v", out.Clear.Commands[1])
+	if out.Clear.Commands[2].Speaker != "SYSTEM_COMMAND" || out.Clear.Commands[2].Text != "START_ENDING" {
+		t.Fatalf("expected SYSTEM_COMMAND/START_ENDING as the last clear line, got %+v", out.Clear.Commands[2])
 	}
 }
 
@@ -226,7 +227,28 @@ func TestBuildBossFileJSONKeepsPlaceholderEmptyText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out.Battle == nil || len(out.Battle.Commands) != 1 {
+	if out.Battle == nil || len(out.Battle.Commands) != 2 {
 		t.Fatalf("expected the placeholder empty-text row to be kept, got %+v", out.Battle)
+	}
+}
+
+func TestBuildFileJSONBGMPerRow(t *testing.T) {
+	rows := [][]string{
+		{"id", "text", "bgm"},
+		{"a", "one", "talk_tense"},
+		{"a", "two", ""},
+		{"a", "three", "talk_sad"},
+	}
+	out, err := buildFileJSON(rows)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var got []string
+	for _, c := range out["a"].First.Commands {
+		got = append(got, c.Text)
+	}
+	want := []string{"PLAY_BGM_talk_tense", "one", "STOP_BGM", "two", "PLAY_BGM_talk_sad", "three"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 }

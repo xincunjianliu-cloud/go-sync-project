@@ -559,7 +559,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			pop.Vy *= math.Pow(0.05, dt)
 			pop.Y += pop.Vy * dt
 		}
-		if pop.Timer <= 1.6 {
+		if pop.Timer <= damagePopLifetime {
 			activePops = append(activePops, pop)
 		}
 	}

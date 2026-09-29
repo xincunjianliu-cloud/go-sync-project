@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
@@ -72,7 +71,7 @@ func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 func (s *BattleScene) targetSelectDescription() string {
 	p := s.waitingActor
 	if s.pendingSynergy {
-		return "4人の連携攻撃で大ダメージを与える"
+		return commandDescriptions[2]
 	}
 	if p < 0 || p >= partySize || s.pendingSkill < 1 {
 		return ""
@@ -104,11 +103,11 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 
 	panelW := float64(gameWidth) * resultPanelWidthRatio
 	panelH := float64(gameHeight)
-	ebitenutil.DrawRect(screen, 0, 0, panelW, panelH,
+	fillRect(screen, 0, 0, panelW, panelH,
 		scaleAlpha(resultPanelBgColor, float64(panelAlpha)))
 	if s.resultFadeAlpha > 0 {
 		alphaByte := uint8(255 * s.resultFadeAlpha)
-		ebitenutil.DrawRect(screen, 0, 0, panelW, panelH, color.RGBA{0, 0, 0, alphaByte})
+		fillRect(screen, 0, 0, panelW, panelH, color.RGBA{0, 0, 0, alphaByte})
 	}
 
 	titleOp := &text.DrawOptions{}
@@ -141,7 +140,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	spValueOp.ColorScale.ScaleAlpha(panelAlpha)
 	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemySP()), s.game.FontFace(resultSpFontSize), spValueOp)
 
-	ebitenutil.DrawRect(screen, resultDividerX, resultDividerY, resultDividerW, resultDividerH, uiColorText)
+	fillRect(screen, resultDividerX, resultDividerY, resultDividerW, resultDividerH, uiColorText)
 
 	barW := resultBarWAbs
 
@@ -197,7 +196,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		text.Draw(screen, "EXP", s.game.FontFace(resultExpLabelFontSize), expLabelOp2)
 
 		if s.resultSubPhase >= resSubBarAnimate {
-			ebitenutil.DrawRect(screen, barX, barY, barW, barH, resultBarBgColor)
+			fillRect(screen, barX, barY, barW, barH, resultBarBgColor)
 			if s.game.PlayerHP[i] > 0 && s.drawPlayerMaxEXP[i] > 0 {
 				ratio := s.drawPlayerEXPF[i] / float64(s.drawPlayerMaxEXP[i])
 				if ratio > 1.0 {
@@ -207,7 +206,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 					ratio = 0.0
 				}
 				if int(barW*ratio) >= 1 {
-					ebitenutil.DrawRect(screen, barX, barY, barW*ratio, barH, resultBarFillColor)
+					fillRect(screen, barX, barY, barW*ratio, barH, resultBarFillColor)
 				}
 			}
 		}
@@ -236,7 +235,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	headerOp.ColorScale.ScaleAlpha(panelAlpha)
 	text.Draw(screen, "獲得アイテム", s.game.FontFace(resultItemsHeaderFontSize), headerOp)
 
-	ebitenutil.DrawRect(screen, resultItemsDividerX, resultItemsDividerY, resultItemsDividerW, resultItemsDividerH,
+	fillRect(screen, resultItemsDividerX, resultItemsDividerY, resultItemsDividerW, resultItemsDividerH,
 		scaleAlpha(resultItemsDividerColor, float64(panelAlpha)))
 
 	for i, item := range s.earnedItems {
@@ -257,9 +256,9 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	}
 
 	if s.resultSubPhase == resSubDoneWait {
-		hint := "Enter / Space / Z で進む"
+		hint := "Enter / Space / Z で進みます"
 		if s.game.MobileMode {
-			hint = "画面タップで進む"
+			hint = "画面タップで進みます"
 		}
 		hintOp := &text.DrawOptions{}
 		hintOp.GeoM.Translate(resultHintX, float64(gameHeight)-resultHintYFromBtm)
@@ -376,51 +375,30 @@ func drawSlantedStatusBar(screen *ebiten.Image, x, y, w, h, slant, ratio float64
 // menu); isDead switches the bar palette to gray and the value text to
 // valueColor, matching the original battle behavior.
 func drawStatusBox(screen *ebiten.Image, g *Game, sx, sy float64, hp, maxHP, mp, maxMP int, alpha float64, valueColor color.RGBA, isDead bool) {
-	hpRatio := 0.0
-	if maxHP > 0 {
-		hpRatio = float64(hp) / float64(maxHP)
-	}
-	if hpRatio > 1.0 {
-		hpRatio = 1.0
-	}
-
-	drawStatusValue(screen, sx+statusValueOffsetX, sy+statusHPTextY, hp, maxHP,
-		g.FontFace(statusValueFontSizeLarge), g.FontFace(statusValueFontSizeSmall), alpha, valueColor)
-
+	hpPalette := statusBarPalette{fill: color.RGBA{75, 171, 120, 255}, empty: color.RGBA{20, 50, 30, 255}, edge: color.RGBA{41, 94, 66, 255}}
+	mpPalette := statusBarPalette{fill: color.RGBA{75, 105, 171, 255}, empty: color.RGBA{20, 30, 55, 255}, edge: color.RGBA{41, 58, 94, 255}}
 	if isDead {
-		drawSlantedStatusBar(screen, sx, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
-			scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
-			scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
-			scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
-	} else {
-		drawSlantedStatusBar(screen, sx, sy+statusHPBarY, statusBlockW, statusBarH, statusBarSlant, hpRatio,
-			scaleAlpha(color.RGBA{75, 171, 120, 255}, alpha),
-			scaleAlpha(color.RGBA{20, 50, 30, 255}, alpha),
-			scaleAlpha(color.RGBA{41, 94, 66, 255}, alpha))
+		hpPalette = deadStatusBarPalette
+		mpPalette = deadStatusBarPalette
 	}
+	drawStatusGaugeRow(screen, g, sx, sy+statusHPTextY, sy+statusHPBarY, hp, maxHP, alpha, valueColor, hpPalette)
+	drawStatusGaugeRow(screen, g, sx, sy+statusMPTextY, sy+statusMPBarY, mp, maxMP, alpha, valueColor, mpPalette)
+}
 
-	mpRatio := 0.0
-	if maxMP > 0 {
-		mpRatio = float64(mp) / float64(maxMP)
-	}
-	if mpRatio > 1.0 {
-		mpRatio = 1.0
-	}
+type statusBarPalette struct{ fill, empty, edge color.RGBA }
 
-	drawStatusValue(screen, sx+statusValueOffsetX, sy+statusMPTextY, mp, maxMP,
+var deadStatusBarPalette = statusBarPalette{fill: color.RGBA{90, 90, 90, 255}, empty: color.RGBA{30, 30, 30, 255}, edge: color.RGBA{55, 55, 55, 255}}
+
+// drawStatusGaugeRow はHPまたはMPの「数値＋斜めバー」1行ぶんを描く。
+func drawStatusGaugeRow(screen *ebiten.Image, g *Game, sx, textY, barY float64, cur, maxVal int, alpha float64, valueColor color.RGBA, pal statusBarPalette) {
+	ratio := 0.0
+	if maxVal > 0 {
+		ratio = min(float64(cur)/float64(maxVal), 1.0)
+	}
+	drawStatusValue(screen, sx+statusValueOffsetX, textY, cur, maxVal,
 		g.FontFace(statusValueFontSizeLarge), g.FontFace(statusValueFontSizeSmall), alpha, valueColor)
-
-	if isDead {
-		drawSlantedStatusBar(screen, sx, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
-			scaleAlpha(color.RGBA{90, 90, 90, 255}, alpha),
-			scaleAlpha(color.RGBA{30, 30, 30, 255}, alpha),
-			scaleAlpha(color.RGBA{55, 55, 55, 255}, alpha))
-	} else {
-		drawSlantedStatusBar(screen, sx, sy+statusMPBarY, statusBlockW, statusBarH, statusBarSlant, mpRatio,
-			scaleAlpha(color.RGBA{75, 105, 171, 255}, alpha),
-			scaleAlpha(color.RGBA{20, 30, 55, 255}, alpha),
-			scaleAlpha(color.RGBA{41, 58, 94, 255}, alpha))
-	}
+	drawSlantedStatusBar(screen, sx, barY, statusBlockW, statusBarH, statusBarSlant, ratio,
+		scaleAlpha(pal.fill, alpha), scaleAlpha(pal.empty, alpha), scaleAlpha(pal.edge, alpha))
 }
 
 // partyNamePosition returns the i-th party member's name draw position

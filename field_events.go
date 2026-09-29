@@ -32,6 +32,16 @@ const (
 	floorTileLayerName = "yuka"
 )
 
+// 会話データ中の演出命令。Speakerがsystemスピーカーの行は台詞ではなく
+// Textを命令として解釈する(tools/dialoguegenが生成する文字列と対応)。
+const (
+	systemSpeaker        = "SYSTEM_COMMAND"
+	cmdStopBGM           = "STOP_BGM"
+	cmdPlayBGMPrefix     = "PLAY_BGM_"
+	cmdStartBattlePrefix = "START_BATTLE_"
+	cmdStartEnding       = "START_ENDING"
+)
+
 func isKeyChestObj(p map[string]string) bool {
 	return p["type"] == evTypeEvent && strings.HasPrefix(p["text"], chestKeyTextPrefix)
 }

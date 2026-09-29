@@ -1,18 +1,7 @@
 package main
 
 func (s *BattleScene) battleUsableItems() []InventorySlot {
-	var list []InventorySlot
-	for _, slot := range s.game.Inventory {
-		if slot.Count <= 0 {
-			continue
-		}
-		def, ok := GetItemDef(slot.ItemID)
-		if !ok || !def.UsableInBattle {
-			continue
-		}
-		list = append(list, slot)
-	}
-	return list
+	return filterInventory(s.game.Inventory, func(def ItemDef) bool { return def.UsableInBattle })
 }
 
 func (s *BattleScene) hasAnyBattleUsableItem() bool {
@@ -170,6 +159,7 @@ func (s *BattleScene) applyItemToTargetInBattle(def ItemDef, target int) bool {
 			Vy:     -45.0,
 			Timer:  -0.1,
 			IsHeal: true,
+			IsMP:   true,
 		})
 	}
 	return true

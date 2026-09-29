@@ -87,9 +87,6 @@ type MenuScene struct {
 	itemListIndex   int
 	pendingItemID   string
 	itemTargetIndex int
-
-	notice      string
-	noticeTicks int
 }
 
 func NewMenuScene(game *Game, backScene Scene) *MenuScene {
@@ -106,7 +103,6 @@ func NewMenuScene(game *Game, backScene Scene) *MenuScene {
 func (m *MenuScene) Update(dt float64) Scene {
 	m.nextScene = nil
 	m.previewTicks++
-	m.tickNotice()
 
 	if !m.isModalMenuState() && m.menuState != menuStateMain {
 		if idx, ok := m.hitTestMainCommandList(); ok {
@@ -262,7 +258,6 @@ func (m *MenuScene) statusBackState() string {
 func (m *MenuScene) enterCommand(idx int) {
 	m.menuIndex = idx
 	m.game.LastMenuIndex = idx
-	m.clearNotice()
 	switch idx {
 	case 0:
 		m.pendingItemID = ""
@@ -454,13 +449,6 @@ func (m *MenuScene) updateSlot() {
 		m.menuState = menuStateLoadConfirm
 		lockDialogInput(&m.inputLockTicks)
 	}
-}
-
-func (m *MenuScene) saveConfirmMessage() string {
-	if i := m.pendingSlot - 1; i >= 0 && i < maxSaveSlots && m.slotData[i] != nil {
-		return "上書きセーブしますか？"
-	}
-	return "セーブしますか？"
 }
 
 func (m *MenuScene) updateSaveConfirm() {

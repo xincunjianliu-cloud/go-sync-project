@@ -96,7 +96,7 @@ func (m *MessageSystem) SkipToEnd(cmd EventCommand) {
 
 func (m *MessageSystem) UpdateCharaAnim(currentSpeaker string, currentExpression int) {
 	activeSlot := -1
-	if currentSpeaker != "" && currentSpeaker != "SYSTEM_COMMAND" {
+	if currentSpeaker != "" && currentSpeaker != systemSpeaker {
 		slot := -1
 		for i := range m.slots {
 			if m.slots[i].spawned && m.slots[i].speaker == currentSpeaker {
@@ -194,7 +194,7 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, si
 	winOp.Filter = ebiten.FilterNearest
 	screen.DrawImage(m.WindowImg, winOp)
 
-	if cmd.Speaker != "" && cmd.Speaker != "SYSTEM_COMMAND" {
+	if cmd.Speaker != "" && cmd.Speaker != systemSpeaker {
 		nameX := float64(gameWidth) * msgNameXRatio
 		nameY := float64(gameHeight) * msgNameYRatio
 		nameOp := &text.DrawOptions{}

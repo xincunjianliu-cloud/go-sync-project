@@ -171,6 +171,13 @@ const damagePopHeadOffsetRatio = 0.08
 
 const partyDamagePopOffsetY = spriteFrameH * damagePopHeadOffsetRatio
 
+// Damage popup lifetime in seconds: fully opaque until damagePopHoldTime,
+// then fading out until damagePopLifetime.
+const (
+	damagePopHoldTime = 0.6
+	damagePopLifetime = 1.1
+)
+
 const (
 	poseWalk           = 11
 	poseAttack         = 12
@@ -263,7 +270,6 @@ const (
 	gaugePointCap = 8
 )
 
-var gaugeStageThresholds = [gaugeMaxStage - 1]int{8, 8, 8, 8}
 var gaugeStageAtkBonus = [gaugeMaxStage]int{0, 3, 5, 7, 20}
 
 var gaugeStageColors = [gaugeMaxStage]color.RGBA{
@@ -362,33 +368,17 @@ var resultLevelUpColor = color.RGBA{255, 255, 100, 255}
 var resultSkillUnlockColor = color.RGBA{150, 220, 255, 255}
 var resultItemsDividerColor = color.RGBA{255, 255, 255, 255}
 
-var actorColors = [partySize + 1]color.RGBA{
-	{80, 220, 230, 255},
-	{120, 200, 235, 255},
-	{200, 150, 230, 255},
-	{230, 130, 220, 255},
-	{230, 90, 180, 255},
-}
-
-var actorLabels = [partySize + 1]string{"1", "2", "3", "4", "敵"}
-
 var commandDescriptions = [4]string{
-	"敵に物理ダメージを与える",
-	"MPを消費して特殊な技を使う",
-	"ATBを止めて味方との連携を狙う",
-	"戦闘から離脱する",
+	"敵に物理ダメージを与えます",
+	"MPを消費して特殊な技を使います",
+	"味方全員と連携して大ダメージを与えます",
+	"戦闘から離脱します",
 }
 
 const (
-	itemButtonDescription = "回復アイテムなどを使う（もう一度タップで開く）"
-	rewindDescription     = "敵の直前の攻撃を無効化し、行動回数が一定時間2倍（もう一度タップで発動）"
+	itemButtonDescription = "回復アイテムなどを使います"
+	rewindDescription     = "敵の直前の攻撃を無効化し、行動回数が一定時間2倍になります"
 )
-
-var skillDescriptions = [3]string{
-	"対象のHPを回復する",
-	"通常より大きなダメージを与える",
-	"ゲージレベル5で巻き戻し",
-}
 
 type EnemyUnit struct {
 	Name              string
@@ -443,7 +433,6 @@ type BattleScene struct {
 	waitCancelHold  [partySize]float64
 	deadWaitStuck   [partySize]bool
 	waitingActor    int
-	readyQueue      []int
 
 	rewindActive             bool
 	rewindTimer              float64
@@ -492,13 +481,9 @@ type BattleScene struct {
 	drawPlayerEXP    [partySize]int
 	drawPlayerMaxEXP [partySize]int
 
-	earnedGold  int
 	earnedItems []EarnedItemEntry
 
 	resultFadeAlpha float64
-
-	clearDialogs   []EventCommand
-	clearDialogIdx int
 
 	isLevelUp        [partySize]bool
 	resultStartLevel [partySize]int
@@ -506,12 +491,6 @@ type BattleScene struct {
 	pendingPlayerHits  []pendingPlayerHit
 	pendingPlayerHits2 []pendingPlayerHit
 	lastRollWasCrit    bool
-
-	damageActive bool
-	damageValue  int
-	damageTimer  float64
-	damageX      float64
-	damageY      float64
 
 	battleLogTimer float64
 	deathParticles []DeathParticle
@@ -602,6 +581,7 @@ type DamagePop struct {
 	Vy     float64
 	Timer  float64
 	IsHeal bool
+	IsMP   bool // MP recovery; drawn blue, combined with IsHeal for motion
 	IsCrit bool
 	IsMiss bool
 }
@@ -731,10 +711,7 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 	for i := range s.enemies {
 		headStartSpeeds[s.enemyActorIndex(i)] = int(s.enemies[i].Speed)
 	}
-	headStarts := atbHeadStarts(headStartSpeeds)
-	for i, pos := range headStarts {
-		s.atbGauge[i] = pos
-	}
+	copy(s.atbGauge[:], atbHeadStarts(headStartSpeeds))
 
 	if evType == lastBossEventType {
 		s.bgmPath = bgmBattleLastBoss

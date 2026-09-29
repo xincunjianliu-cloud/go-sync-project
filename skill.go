@@ -99,7 +99,7 @@ var HeroSkills = []SkillDef{
 		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description:    "強い攻撃",
+				Description:    "強い攻撃をします",
 				Target:         TargetSingle,
 				Element:        ElemPhysicalNone,
 				PowerSingle:    150,
@@ -108,7 +108,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description:    "強い攻撃",
+				Description:    "強い攻撃をします",
 				Target:         TargetSingle,
 				Element:        ElemPhysicalNone,
 				PowerSingle:    170,
@@ -117,7 +117,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description: "強い攻撃 対象に10%の物理防御力低下付与",
+				Description: "強い攻撃をして、対象の物理防御力を10%下げます",
 				Target:      TargetSingle,
 				Element:     ElemPhysicalNone,
 				PowerSingle: 200,
@@ -135,7 +135,7 @@ var HeroSkills = []SkillDef{
 		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description:    "炎でばぁん",
+				Description:    "炎でばぁんと攻撃します",
 				Target:         TargetBoth,
 				Element:        ElemFire,
 				PowerSingle:    160,
@@ -145,7 +145,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description: "炎でばぁん 魔法防御力を15%下げる",
+				Description: "炎でばぁんと攻撃し、魔法防御力を15%下げます",
 				Target:      TargetBoth,
 				Element:     ElemFire,
 				PowerSingle: 180,
@@ -158,7 +158,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description: "炎でばぁん 魔法防御力を30%下げる",
+				Description: "炎でばぁんと攻撃し、魔法防御力を30%下げます",
 				Target:      TargetBoth,
 				Element:     ElemFire,
 				PowerSingle: 210,
@@ -177,7 +177,7 @@ var HeroSkills = []SkillDef{
 		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description: "対象の物理魔法攻撃力を10%下げる",
+				Description: "対象の物理魔法攻撃力を10%下げます",
 				Target:      TargetSingle,
 				Element:     ElemPhysicalNone,
 				MPCost:      3,
@@ -188,7 +188,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description: "対象の物理魔法攻撃力を20%下げる 対象の物理防御力を15%下げる",
+				Description: "対象の物理魔法攻撃力を20%、物理防御力を15%下げます",
 				Target:      TargetSingle,
 				Element:     ElemPhysicalNone,
 				MPCost:      9,
@@ -200,7 +200,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description: "対象の物理魔法攻撃力を30%下げる 対象の物理魔法防御力を15%下げる",
+				Description: "対象の物理魔法攻撃力を30%、物理魔法防御力を15%下げます",
 				Target:      TargetAll,
 				Element:     ElemPhysicalNone,
 				MPCost:      15,
@@ -218,7 +218,7 @@ var HeroSkills = []SkillDef{
 		UnlockLevel: 1,
 		Levels: []SkillLevelData{
 			{
-				Description:    "対象のHPを回復する",
+				Description:    "対象のHPを回復します",
 				Target:         TargetBoth,
 				Element:        ElemMagicNone,
 				PowerSingle:    20,
@@ -229,7 +229,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description: "対象のHPを回復する 対象に物理魔法攻撃力up",
+				Description: "対象のHPを回復し、物理魔法攻撃力を上げます",
 				Target:      TargetBoth,
 				Element:     ElemMagicNone,
 				PowerSingle: 30,
@@ -243,7 +243,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description: "対象のHPを大きく回復する 対象に物理魔法攻撃力up",
+				Description: "対象のHPを大きく回復し、物理魔法攻撃力を上げます",
 				Target:      TargetBoth,
 				Element:     ElemMagicNone,
 				PowerSingle: 50,
@@ -263,7 +263,7 @@ var HeroSkills = []SkillDef{
 		UnlockLevel: 2,
 		Levels: []SkillLevelData{
 			{
-				Description:    "全体にダメージを与える",
+				Description:    "全体にダメージを与えます",
 				Target:         TargetAll,
 				Element:        ElemMagicNone,
 				PowerAll:       80,
@@ -272,7 +272,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description:    "全体にダメージを与える",
+				Description:    "全体にダメージを与えます",
 				Target:         TargetAll,
 				Element:        ElemMagicNone,
 				PowerAll:       100,
@@ -281,7 +281,7 @@ var HeroSkills = []SkillDef{
 				GaugePoint:     2,
 			},
 			{
-				Description:    "全体にダメージを与える",
+				Description:    "全体にダメージを与えます",
 				Target:         TargetAll,
 				Element:        ElemMagicNone,
 				PowerAll:       140,

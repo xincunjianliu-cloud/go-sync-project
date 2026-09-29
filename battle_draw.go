@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -35,7 +34,7 @@ func (s *BattleScene) Draw(screen *ebiten.Image) {
 
 		if s.resultFadeAlpha > 0 {
 			alphaByte := uint8(255 * s.resultFadeAlpha)
-			ebitenutil.DrawRect(screen, 0, 0, float64(gameWidth), float64(gameHeight),
+			fillRect(screen, 0, 0, float64(gameWidth), float64(gameHeight),
 				color.RGBA{0, 0, 0, alphaByte})
 		}
 	} else {
@@ -96,7 +95,7 @@ func (s *BattleScene) drawEnemyHeader(screen *ebiten.Image) {
 	for _, p := range s.deathParticles {
 		a := uint8(255 * p.Life)
 		size := p.Size
-		ebitenutil.DrawRect(screen, p.X-size/2+s.shakeX, p.Y-size/2+s.shakeY, size, size,
+		fillRect(screen, p.X-size/2+s.shakeX, p.Y-size/2+s.shakeY, size, size,
 			color.RGBA{255, 255, 255, a})
 	}
 }
@@ -188,9 +187,6 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 		s.partyScreenX[i] = centerX
 		s.partyScreenY[i] = centerY
 
-		if pose == poseWin {
-		}
-
 		op.GeoM.Translate(centerX+s.shakeX, centerY+s.shakeY)
 
 		if pose == poseDead {
@@ -230,8 +226,8 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 			continue
 		}
 		alpha := uint8(255)
-		if pop.Timer > 1.0 {
-			fade := 1.0 - (pop.Timer-1.0)/0.6
+		if pop.Timer > damagePopHoldTime {
+			fade := 1.0 - (pop.Timer-damagePopHoldTime)/(damagePopLifetime-damagePopHoldTime)
 			if fade < 0 {
 				fade = 0
 			}
@@ -251,16 +247,12 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 
 		msg := fmt.Sprintf("%d", pop.Value)
 		numFontSize := 52.0
-		mainColor := color.RGBA{255, 255, 255, alpha}
-		switch {
-		case pop.IsMiss:
+		base := damagePopColor(pop)
+		mainColor := color.RGBA{base.R, base.G, base.B, alpha}
+		if pop.IsMiss {
 			msg = "MISS"
-			mainColor = color.RGBA{170, 170, 170, alpha}
-		case pop.IsHeal:
-			mainColor = color.RGBA{140, 255, 160, alpha}
-		case pop.IsCrit:
+		} else if pop.IsCrit && !pop.IsHeal {
 			numFontSize = 62.0
-			mainColor = color.RGBA{255, 130, 40, alpha}
 		}
 		numFace := s.game.FontFace(numFontSize)
 
@@ -368,4 +360,28 @@ func (s *BattleScene) skillLevelDataAtCursor(p, skillIdx int) SkillLevelData {
 		lv = len(levels)
 	}
 	return levels[lv-1]
+}
+
+// Damage popup colors, all in one place.
+var (
+	popColorDamage = color.RGBA{255, 255, 255, 255} // damage dealt to enemies
+	popColorCrit   = color.RGBA{255, 130, 40, 255}  // critical hit
+	popColorHeal   = color.RGBA{140, 255, 160, 255} // HP recovery
+	popColorMPHeal = color.RGBA{120, 190, 255, 255} // MP recovery
+	popColorMiss   = color.RGBA{170, 170, 170, 255} // miss
+)
+
+// damagePopColor picks the popup color for pop (alpha is applied by the caller).
+func damagePopColor(pop DamagePop) color.RGBA {
+	switch {
+	case pop.IsMiss:
+		return popColorMiss
+	case pop.IsMP:
+		return popColorMPHeal
+	case pop.IsHeal:
+		return popColorHeal
+	case pop.IsCrit:
+		return popColorCrit
+	}
+	return popColorDamage
 }

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -57,7 +56,7 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 	}
 
 	if s.cseFadeAlpha > 0 {
-		ebitenutil.DrawRect(screen, 0, 0,
+		fillRect(screen, 0, 0,
 			float64(gameWidth), float64(gameHeight),
 			scaleAlpha(color.RGBA{0, 0, 0, 255}, s.cseFadeAlpha))
 	}
@@ -180,7 +179,7 @@ func (s *FieldScene) drawEncounterEffect(screen *ebiten.Image) {
 
 	if t > 0.6 {
 		darken := (t - 0.6) / 0.4
-		ebitenutil.DrawRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, uint8(220 * darken)})
+		fillRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, uint8(220 * darken)})
 	}
 }
 
@@ -679,8 +678,8 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 		subW, subH = text.Measure(s.itemGetSubLabel, s.game.FontFace(15), 0)
 	}
 
-	ebitenutil.DrawRect(screen, bx, by, boxW, boxH, uiColorText)
-	ebitenutil.DrawRect(screen, bx+borderWidth, by+borderWidth, boxW-borderWidth*2, boxH-borderWidth*2, uiColorPanelBg)
+	fillRect(screen, bx, by, boxW, boxH, uiColorText)
+	fillRect(screen, bx+borderWidth, by+borderWidth, boxW-borderWidth*2, boxH-borderWidth*2, uiColorPanelBg)
 
 	blockH := textH
 	if s.itemGetSubLabel != "" {
@@ -717,7 +716,7 @@ func (s *FieldScene) drawChoiceUI(screen *ebiten.Image, camX, camY float64) {
 		by = 4
 	}
 
-	ebitenutil.DrawRect(screen, bx, by, boxW, boxH, uiColorPanelBg)
+	fillRect(screen, bx, by, boxW, boxH, uiColorPanelBg)
 
 	face := s.game.FontFace(14)
 

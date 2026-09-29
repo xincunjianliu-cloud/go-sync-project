@@ -35,7 +35,7 @@ const (
 	bgmTalkSad        = "assets/bgm/talk_sad.mp3"
 )
 
-// bgmByKey はマップ側(.tmjのbgmプロパティ)や会話JSON側(bgmキー)から
+// bgmByKey はマップ側(.tmjのbgmプロパティ)や会話データ側(PLAY_BGM_<キー>)から
 // 曲を指定する際に使う、キー文字列→実ファイルパスの対応表。
 // 実データの差し替え時はこのファイルパスだけ書き換えればよく、
 // マップ・会話データ側は曲名キーを変更する必要がない。
@@ -525,6 +525,18 @@ func (a *AudioManager) FadeOutThenPlay(nextPath string, fadeOutDuration, fadeInD
 	a.fadeOutHardCut = hardCut
 }
 
+// FadeOutBGM は現在のBGMを duration 秒かけてフェードアウトし、無音になったら
+// 停止する(次の曲は再生しない)。
+func (a *AudioManager) FadeOutBGM(duration float64) {
+	if a == nil || a.bgmPlayer == nil || !a.bgmPlayer.IsPlaying() {
+		return
+	}
+	a.fadeInActive = false
+	a.fadeOutActive = true
+	a.fadeOutSpeed = a.bgmPlayer.Volume() / duration
+	a.fadeOutNextPath = ""
+}
+
 func (a *AudioManager) startNext(path string, fadeInDuration float64, hardCut bool) {
 	if hardCut || fadeInDuration <= 0 {
 		a.PlayBGM(path)
@@ -658,6 +670,10 @@ func (a *AudioManager) Update(dt float64) {
 			cur = 0
 			a.bgmPlayer.SetVolume(cur)
 			a.fadeOutActive = false
+			if a.fadeOutNextPath == "" {
+				a.stopCurrent()
+				return
+			}
 			a.startNext(a.fadeOutNextPath, a.fadeOutNextFadeIn, a.fadeOutHardCut)
 		} else {
 			a.bgmPlayer.SetVolume(cur)

@@ -220,7 +220,6 @@ func resolveEventDialogue(text string, repeatText string, seen bool) BossDialogu
 
 func (s *FieldScene) applyDialogue(bd BossDialogue) {
 	s.msgTexts = bd.Commands
-	s.msgBGM = bd.BGM
 	s.msg.SpeakerSides = bd.SpeakerSides
 	s.msgBackground = bd.Background
 }
@@ -230,8 +229,8 @@ func (s *FieldScene) applyCutsceneMessage() {
 		bd := GetEventCommands(s.cutsceneMessage, s.game)
 		bossType := strings.TrimPrefix(s.cutsceneMessage, "event_")
 		bd.Commands = append(bd.Commands, EventCommand{
-			Speaker: "SYSTEM_COMMAND",
-			Text:    "START_BATTLE_" + bossType,
+			Speaker: systemSpeaker,
+			Text:    cmdStartBattlePrefix + bossType,
 		})
 		s.applyDialogue(bd)
 		return
@@ -274,7 +273,6 @@ type FieldScene struct {
 	enemies            []*EnemyField
 	currentMap         string
 	mapBGM             string
-	msgBGM             string
 	msgBackground      string
 	msgTexts           []EventCommand
 	msgIndex           int
@@ -778,7 +776,6 @@ func (s *FieldScene) openChest(obj TiledObject, itemID string) {
 	def, ok := GetItemDef(itemID)
 	if !ok {
 		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
-		s.msgBGM = ""
 		s.msgIndex = 0
 		s.beginMessage()
 		return
@@ -829,7 +826,6 @@ func (s *FieldScene) openKeyChest(obj TiledObject, keyName string) {
 
 	if keyName == "" {
 		s.msgTexts = []EventCommand{{Speaker: "", Text: "何も入っていなかった"}}
-		s.msgBGM = ""
 		s.msgIndex = 0
 		s.beginMessage()
 		return

@@ -92,14 +92,6 @@ func decodeAssetImage(path string) (image.Image, error) {
 	return img, nil
 }
 
-func loadAssetReader(path string) (*bytes.Reader, error) {
-	data, err := loadAssetBytesCached(path)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.NewReader(data), nil
-}
-
 func loadRuntimeImage(path string) (*ebiten.Image, error) {
 	data, err := readRuntimeFile(path)
 	if err != nil {

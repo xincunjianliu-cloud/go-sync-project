@@ -6,7 +6,6 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -109,7 +108,7 @@ func drawStatusRow(screen *ebiten.Image, g *Game, label, value string, labelX, v
 	valueOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, value, face, valueOp)
 
-	ebitenutil.DrawRect(screen, lineX, y+lineOffsetY, lineW, 1, statusLineColor)
+	fillRect(screen, lineX, y+lineOffsetY, lineW, 1, statusLineColor)
 }
 
 func (m *MenuScene) drawStatusScreen(screen *ebiten.Image) {
@@ -334,8 +333,8 @@ func drawConfirmDialog(screen *ebiten.Image, game *Game, message string, selecte
 	winX := float64(gameWidth)/2 - winW/2 + horizontalOffset
 	winY := float64(gameHeight)/2 - winH/2 + confirmImageOffsetY
 
-	ebitenutil.DrawRect(screen, winX, winY, winW, winH, uiColorText)
-	ebitenutil.DrawRect(screen, winX+confirmPanelBorderWidth, winY+confirmPanelBorderWidth, winW-confirmPanelBorderWidth*2, winH-confirmPanelBorderWidth*2, uiColorConfirmBg)
+	fillRect(screen, winX, winY, winW, winH, uiColorText)
+	fillRect(screen, winX+confirmPanelBorderWidth, winY+confirmPanelBorderWidth, winW-confirmPanelBorderWidth*2, winH-confirmPanelBorderWidth*2, uiColorConfirmBg)
 
 	face := game.FontFace(confirmFontSize)
 	lineOp := &text.DrawOptions{}
@@ -430,7 +429,7 @@ func slotScrollBarMoveRange() float64 {
 }
 
 func drawSaveScrollBar(screen *ebiten.Image, g *Game, scrollTop float64, scrollBarX, barTop float64) {
-	ebitenutil.DrawRect(screen, scrollBarX, barTop, scrollBarTrackWidth, scrollBarTrackHeight, scrollBarTrackColor)
+	fillRect(screen, scrollBarX, barTop, scrollBarTrackWidth, scrollBarTrackHeight, scrollBarTrackColor)
 
 	moveRange := scrollBarTrackHeight - scrollBarCursorH
 	if moveRange < 0 {
@@ -448,7 +447,7 @@ func drawSaveScrollBar(screen *ebiten.Image, g *Game, scrollTop float64, scrollB
 	}
 	cursorY := barTop + ratio*moveRange
 
-	ebitenutil.DrawRect(screen, scrollBarX, cursorY, scrollBarCursorWidth, scrollBarCursorH, scrollBarCursorColor)
+	fillRect(screen, scrollBarX, cursorY, scrollBarCursorWidth, scrollBarCursorH, scrollBarCursorColor)
 }
 
 func drawImageFitAspect(screen *ebiten.Image, img *ebiten.Image, x, y, w, h float64) {

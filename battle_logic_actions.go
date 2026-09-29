@@ -650,101 +650,63 @@ func (s *BattleScene) updateHealTargetSelect() {
 	data := skills[skillIdx].Levels[lv-1]
 	cost := s.effectiveMPCost(data.MPCost)
 
-	if s.healTargetIndex == partySize {
-		if s.game.PlayerMP[p] < cost {
-			s.game.Audio.PlaySEByKey("error")
-			return
-		}
-		s.game.Audio.PlaySEByKey("heal")
-		s.startCast(p)
-		s.game.PlayerMP[p] -= cost
-		healAmount := s.rollSkillHeal(p, skillIdx, lv, true)
+	isAll := s.healTargetIndex == partySize
+	targets := []int{s.healTargetIndex}
+	if isAll {
+		targets = targets[:0]
 		for i := 0; i < partySize; i++ {
-			if s.game.PlayerHP[i] <= 0 {
-				continue
-			}
-			s.game.PlayerHP[i] += healAmount
-			if s.game.PlayerHP[i] > s.game.PlayerMaxHP[i] {
-				s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
-			}
-			s.spawnDamagePop(DamagePop{
-				Value:  healAmount,
-				X:      s.partyScreenX[i] + spriteFrameW/2,
-				Y:      s.partyScreenY[i] - partyDamagePopOffsetY,
-				Vy:     -45.0,
-				Timer:  0.0,
-				IsHeal: true,
-			})
-			s.applySkillEffects(data.Effects, p, false, i, true)
-			if s.rewindActive {
-				healAmount2 := s.rollSkillHeal(p, skillIdx, lv, true)
-				s.game.PlayerHP[i] += healAmount2
-				if s.game.PlayerHP[i] > s.game.PlayerMaxHP[i] {
-					s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
-				}
-				s.spawnDamagePop(DamagePop{
-					Value:  healAmount2,
-					X:      s.partyScreenX[i] + spriteFrameW/2,
-					Y:      s.partyScreenY[i] - partyDamagePopOffsetY - 10.0,
-					Vy:     -45.0,
-					Timer:  -0.18,
-					IsHeal: true,
-				})
-				s.applySkillEffects(data.Effects, p, false, i, true)
+			if s.game.PlayerHP[i] > 0 {
+				targets = append(targets, i)
 			}
 		}
-		s.healingAnimTimer[p] = 1.5
-		s.battleLog = skills[skillIdx].Name + "（全体）"
-		s.battleLogTimer = battleLogDuration
-		s.addGaugePoint(data.GaugePoint)
-	} else {
-		target := s.healTargetIndex
-		if s.game.PlayerHP[target] <= 0 {
-			s.game.Audio.PlaySEByKey("error")
-			return
-		}
-		if s.game.PlayerMP[p] < cost {
-			s.game.Audio.PlaySEByKey("error")
-			return
-		}
-		s.game.Audio.PlaySEByKey("heal")
-		s.startCast(p)
-		s.game.PlayerMP[p] -= cost
-		healAmount := s.rollSkillHeal(p, skillIdx, lv, false)
-		s.game.PlayerHP[target] += healAmount
-		if s.game.PlayerHP[target] > s.game.PlayerMaxHP[target] {
-			s.game.PlayerHP[target] = s.game.PlayerMaxHP[target]
-		}
-		s.spawnDamagePop(DamagePop{
-			Value:  healAmount,
-			X:      s.partyScreenX[target] + spriteFrameW/2,
-			Y:      s.partyScreenY[target] - partyDamagePopOffsetY,
-			Vy:     -45.0,
-			Timer:  0.0,
-			IsHeal: true,
-		})
-		s.applySkillEffects(data.Effects, p, false, target, false)
-		if s.rewindActive {
-			healAmount2 := s.rollSkillHeal(p, skillIdx, lv, false)
-			s.game.PlayerHP[target] += healAmount2
-			if s.game.PlayerHP[target] > s.game.PlayerMaxHP[target] {
-				s.game.PlayerHP[target] = s.game.PlayerMaxHP[target]
-			}
-			s.spawnDamagePop(DamagePop{
-				Value:  healAmount2,
-				X:      s.partyScreenX[target] + spriteFrameW/2,
-				Y:      s.partyScreenY[target] - partyDamagePopOffsetY - 10.0,
-				Vy:     -45.0,
-				Timer:  -0.18,
-				IsHeal: true,
-			})
-			s.applySkillEffects(data.Effects, p, false, target, false)
-		}
-		s.healingAnimTimer[p] = 1.5
-		s.battleLog = skills[skillIdx].Name
-		s.battleLogTimer = battleLogDuration
-		s.addGaugePoint(data.GaugePoint)
+	} else if s.game.PlayerHP[s.healTargetIndex] <= 0 {
+		s.game.Audio.PlaySEByKey("error")
+		return
 	}
+	if s.game.PlayerMP[p] < cost {
+		s.game.Audio.PlaySEByKey("error")
+		return
+	}
+	s.game.Audio.PlaySEByKey("heal")
+	s.startCast(p)
+	s.game.PlayerMP[p] -= cost
+
+	// 全体回復は1回だけ回復量を振って全員に同じ量を配る。巻き戻し中の
+	// 2回目の回復は、全体/単体とも対象ごとに振り直す。
+	healAmount := s.rollSkillHeal(p, skillIdx, lv, isAll)
+	for _, target := range targets {
+		s.applySkillHeal(target, healAmount, false)
+		s.applySkillEffects(data.Effects, p, false, target, isAll)
+		if s.rewindActive {
+			s.applySkillHeal(target, s.rollSkillHeal(p, skillIdx, lv, isAll), true)
+			s.applySkillEffects(data.Effects, p, false, target, isAll)
+		}
+	}
+	s.healingAnimTimer[p] = 1.5
+	s.battleLog = skills[skillIdx].Name
+	if isAll {
+		s.battleLog += "（全体）"
+	}
+	s.battleLogTimer = battleLogDuration
+	s.addGaugePoint(data.GaugePoint)
 
 	s.finishPlayerTurn(s.pendingActionReturnPosition())
+}
+
+// applySkillHeal はtargetのHPを最大HPを上限にamount回復し、回復量を表示する。
+// secondは巻き戻し中の2回目の回復で、1回目と重ならないよう少し上に遅れて出す。
+func (s *BattleScene) applySkillHeal(target, amount int, second bool) {
+	s.game.PlayerHP[target] = min(s.game.PlayerHP[target]+amount, s.game.PlayerMaxHP[target])
+	pop := DamagePop{
+		Value:  amount,
+		X:      s.partyScreenX[target] + spriteFrameW/2,
+		Y:      s.partyScreenY[target] - partyDamagePopOffsetY,
+		Vy:     -45.0,
+		IsHeal: true,
+	}
+	if second {
+		pop.Y -= 10.0
+		pop.Timer = -0.18
+	}
+	s.spawnDamagePop(pop)
 }

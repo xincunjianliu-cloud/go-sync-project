@@ -5,7 +5,6 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -51,19 +50,19 @@ const (
 func drawMenuBgFrame(screen *ebiten.Image) {
 	w := menuLineWidth
 
-	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameTop, menuFrameRight-menuFrameLeft, w, uiColorMenuLine)
-	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameBottom-w, menuFrameRight-menuFrameLeft, w, uiColorMenuLine)
-	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
-	ebitenutil.DrawRect(screen, menuFrameRight-w, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
+	fillRect(screen, menuFrameLeft, menuFrameTop, menuFrameRight-menuFrameLeft, w, uiColorMenuLine)
+	fillRect(screen, menuFrameLeft, menuFrameBottom-w, menuFrameRight-menuFrameLeft, w, uiColorMenuLine)
+	fillRect(screen, menuFrameLeft, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
+	fillRect(screen, menuFrameRight-w, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
 
-	ebitenutil.DrawRect(screen, menuFrameDividerX-w/2, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
+	fillRect(screen, menuFrameDividerX-w/2, menuFrameTop, w, menuFrameBottom-menuFrameTop, uiColorMenuLine)
 
-	ebitenutil.DrawRect(screen, menuFrameLeft, menuFrameDividerY-w/2, menuFrameDividerX-menuFrameLeft+w/2, w, uiColorMenuLine)
+	fillRect(screen, menuFrameLeft, menuFrameDividerY-w/2, menuFrameDividerX-menuFrameLeft+w/2, w, uiColorMenuLine)
 }
 
 const (
-	confirmPanelW           = 500.0
-	confirmPanelH           = 170.0
+	confirmPanelW           = 580.0
+	confirmPanelH           = 190.0
 	confirmPanelBorderWidth = 2.0
 	confirmFontSize         = 22.0
 
@@ -71,10 +70,10 @@ const (
 	confirmImageOffsetY = 0.0
 
 	confirmTextOffsetX = 0.0
-	confirmTextOffsetY = 30.0
+	confirmTextOffsetY = 35.0
 
 	confirmChoiceOffsetX = 0.0
-	confirmChoiceStartY  = 90.0
+	confirmChoiceStartY  = 108.0
 	confirmChoiceGap     = 32.0
 )
 
@@ -154,17 +153,17 @@ func (m *MenuScene) drawAllTargetRow(screen *ebiten.Image, statusX float64) {
 	boxX := (spanLeft+spanRight)/2 - boxW/2
 	boxY := y - drawAllTargetRowBoxH/2
 
-	ebitenutil.DrawRect(screen, boxX, boxY, boxW, drawAllTargetRowBoxH, boxFillCol)
+	fillRect(screen, boxX, boxY, boxW, drawAllTargetRowBoxH, boxFillCol)
 
 	nameFace := m.game.FontFace(partyNameFontSize)
 	textCenterX := boxX + boxW/2
 
 	if selected {
 		const bw = 2.0
-		ebitenutil.DrawRect(screen, boxX, boxY, boxW, bw, col)
-		ebitenutil.DrawRect(screen, boxX, boxY+drawAllTargetRowBoxH-bw, boxW, bw, col)
-		ebitenutil.DrawRect(screen, boxX, boxY, bw, drawAllTargetRowBoxH, col)
-		ebitenutil.DrawRect(screen, boxX+boxW-bw, boxY, bw, drawAllTargetRowBoxH, col)
+		fillRect(screen, boxX, boxY, boxW, bw, col)
+		fillRect(screen, boxX, boxY+drawAllTargetRowBoxH-bw, boxW, bw, col)
+		fillRect(screen, boxX, boxY, bw, drawAllTargetRowBoxH, col)
+		fillRect(screen, boxX+boxW-bw, boxY, bw, drawAllTargetRowBoxH, col)
 
 		nameW := text.Advance("全体", nameFace)
 		arrowOp := &text.DrawOptions{}
@@ -200,7 +199,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		m.drawCommandList(screen)
 		m.drawStatusScreen(screen)
 		if m.showReturnTitleConfirm {
-			drawConfirmDialog(screen, m.game, "タイトルに戻りますか？", m.confirmIndex, confirmImageOffsetX)
+			drawConfirmDialog(screen, m.game, "タイトル画面に戻りますか？\n※現在までの進行状況は失われます。", m.confirmIndex, confirmImageOffsetX)
 		}
 		m.drawMenuDescription(screen)
 		return
@@ -209,9 +208,9 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		m.drawCommandList(screen)
 		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
 
-		line := "ロードしますか？"
+		line := "ロードしますか？\n※現在までの進行状況は失われます。"
 		if m.menuState == menuStateSaveConfirm {
-			line = m.saveConfirmMessage()
+			line = "セーブしますか？\n※すでにセーブデータがある場合は上書きされます。"
 		}
 		drawConfirmDialog(screen, m.game, line, m.confirmIndex, confirmImageOffsetX)
 
@@ -229,7 +228,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 		m.drawCommandList(screen)
 		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
 		if m.showReturnTitleConfirm {
-			drawConfirmDialog(screen, m.game, "タイトルに戻りますか？", m.confirmIndex, confirmImageOffsetX)
+			drawConfirmDialog(screen, m.game, "タイトル画面に戻りますか？\n※現在までの進行状況は失われます。", m.confirmIndex, confirmImageOffsetX)
 		}
 		m.drawMenuDescription(screen)
 		return
@@ -244,7 +243,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 			drawConfirmDialog(screen, m.game, "初期設定に戻しました", 0, confirmImageOffsetX, false)
 		}
 		if m.showReturnTitleConfirm {
-			drawConfirmDialog(screen, m.game, "タイトルに戻りますか？", m.confirmIndex, confirmImageOffsetX)
+			drawConfirmDialog(screen, m.game, "タイトル画面に戻りますか？\n※現在までの進行状況は失われます。", m.confirmIndex, confirmImageOffsetX)
 		}
 		m.drawMenuDescription(screen)
 		return
@@ -354,7 +353,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 	}
 
 	if m.showReturnTitleConfirm {
-		drawConfirmDialog(screen, m.game, "タイトルに戻りますか？", m.confirmIndex, confirmImageOffsetX)
+		drawConfirmDialog(screen, m.game, "タイトル画面に戻りますか？\n※現在までの進行状況は失われます。", m.confirmIndex, confirmImageOffsetX)
 	}
 
 	m.drawMenuDescription(screen)
@@ -468,12 +467,12 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 			if lv > curLv {
 				gaugeX := numX - skillGaugeWidth/2
 				gaugeY := numCenterY + skillGaugeOffsetY
-				ebitenutil.DrawRect(screen, gaugeX, gaugeY, skillGaugeWidth, skillGaugeHeight, color.RGBA{45, 45, 55, 255})
+				fillRect(screen, gaugeX, gaugeY, skillGaugeWidth, skillGaugeHeight, color.RGBA{45, 45, 55, 255})
 				gaugeRatio := 0.0
 				if selected {
 					gaugeRatio = m.upgradeProgress
 				}
-				ebitenutil.DrawRect(screen, gaugeX, gaugeY, skillGaugeWidth*gaugeRatio, skillGaugeHeight, uiColorSelect)
+				fillRect(screen, gaugeX, gaugeY, skillGaugeWidth*gaugeRatio, skillGaugeHeight, uiColorSelect)
 			}
 
 			if lv > curLv {

@@ -5,7 +5,6 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -230,7 +229,7 @@ func (s *BattleScene) drawAllTargetBox(screen *ebiten.Image, r tapRect, selected
 		boxFillCol = color.RGBA{41, 58, 94, 220}
 	}
 
-	ebitenutil.DrawRect(screen, r.x, r.y, r.w, r.h, boxFillCol)
+	fillRect(screen, r.x, r.y, r.w, r.h, boxFillCol)
 
 	face := s.game.FontFace(allTargetLabelFontSize)
 	label := "全体"
@@ -239,10 +238,10 @@ func (s *BattleScene) drawAllTargetBox(screen *ebiten.Image, r tapRect, selected
 
 	if selected {
 		const bw = 2.0
-		ebitenutil.DrawRect(screen, r.x, r.y, r.w, bw, col)
-		ebitenutil.DrawRect(screen, r.x, r.y+r.h-bw, r.w, bw, col)
-		ebitenutil.DrawRect(screen, r.x, r.y, bw, r.h, col)
-		ebitenutil.DrawRect(screen, r.x+r.w-bw, r.y, bw, r.h, col)
+		fillRect(screen, r.x, r.y, r.w, bw, col)
+		fillRect(screen, r.x, r.y+r.h-bw, r.w, bw, col)
+		fillRect(screen, r.x, r.y, bw, r.h, col)
+		fillRect(screen, r.x+r.w-bw, r.y, bw, r.h, col)
 
 		labelW := text.Advance(label, face)
 		arrowOp := &text.DrawOptions{}

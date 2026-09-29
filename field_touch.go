@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -55,29 +54,13 @@ const touchStickNoTouch ebiten.TouchID = -1
 var fieldMobileControlsEnabled bool
 
 func activeTouchPoints() []touchPoint {
-	var pts []touchPoint
-	for _, id := range ebiten.AppendTouchIDs(nil) {
-		x, y := ebiten.TouchPosition(id)
-		pts = append(pts, touchPoint{float64(x), float64(y)})
-	}
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-		x, y := ebiten.CursorPosition()
-		pts = append(pts, touchPoint{float64(x), float64(y)})
-	}
-	return pts
+	touches, mouse := activeTouchAndMousePoints()
+	return append(touches, mouse...)
 }
 
 func justPressedTouchPoints() []touchPoint {
-	var pts []touchPoint
-	for _, id := range inpututil.AppendJustPressedTouchIDs(nil) {
-		x, y := ebiten.TouchPosition(id)
-		pts = append(pts, touchPoint{float64(x), float64(y)})
-	}
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		x, y := ebiten.CursorPosition()
-		pts = append(pts, touchPoint{float64(x), float64(y)})
-	}
-	return pts
+	touches, mouse := justPressedTouchAndMousePoints()
+	return append(touches, mouse...)
 }
 
 func justPressedTouchAndMousePoints() (touches []touchPoint, mouse []touchPoint) {
@@ -358,7 +341,7 @@ func drawActionButton(screen *ebiten.Image, pressed bool) {
 
 func drawHamburgerMenuButton(screen *ebiten.Image, game *Game) {
 	x, y, w, h := touchMenuCenterX-touchMenuSize/2, touchMenuCenterY-touchMenuSize/2, touchMenuSize, touchMenuSize
-	ebitenutil.DrawRect(screen, x, y, w, h, color.NRGBA{0, 0, 0, 170})
+	fillRect(screen, x, y, w, h, color.NRGBA{0, 0, 0, 170})
 	vector.StrokeRect(screen, float32(x), float32(y), float32(w), float32(h), touchMenuBorderWidth, color.White, true)
 
 	barW := touchMenuSize * 0.6
@@ -366,7 +349,7 @@ func drawHamburgerMenuButton(screen *ebiten.Image, game *Game) {
 	barX := touchMenuCenterX - barW/2
 	for _, dy := range []float64{-6, 0, 6} {
 		barY := touchMenuCenterY + dy - barH/2
-		ebitenutil.DrawRect(screen, barX, barY, barW, barH, color.NRGBA{255, 255, 255, 220})
+		fillRect(screen, barX, barY, barW, barH, color.NRGBA{255, 255, 255, 220})
 	}
 
 	if !game.MobileMode {

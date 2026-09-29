@@ -511,6 +511,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 	// Keyboard input always moves at full speed; the touch stick scales
 	// smoothly from a light tap up to full speed as it's pushed further,
 	// giving analog-feeling precision instead of an all-or-nothing snap.
+	prevDir := s.dir
 	moveX, moveY := 0.0, 0.0
 	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
 		moveY = -perFrame
@@ -663,7 +664,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 						}
 					}
 
-					if segmentIntersectsRect(prevPx, prevPy, s.px, s.py, obj.X, obj.Y, obj.Width, obj.Height) {
+					if s.bodySweepHitsRect(prevPx, prevPy, prevDir, obj.X, obj.Y, obj.Width, obj.Height) {
 
 						if hasBossID {
 							s.pendingCutsceneMsg = fmt.Sprintf("%s%d", bossTextPrefix, bossID)
@@ -828,6 +829,21 @@ func segmentIntersectsRect(x1, y1, x2, y2, rx, ry, rw, rh float64) bool {
 		}
 	}
 	return true
+}
+
+// bodySweepHitsRect は、このフレームにプレイヤーの当たり判定矩形が
+// (prevX,prevY)から現在位置まで移動する間に矩形rと重なったかを返す。
+// 足元の1点だけで判定すると、左向きの当たり判定オフセットのせいで壁沿いを
+// 斜め移動したときに通路幅ぴったりのトリガーを1px外れて素通りできてしまう
+// ため、体の矩形ぶんトリガーを広げてから移動線分と交差判定する。
+// 向きで矩形のオフセットが変わるので、前後フレームの向きの和集合を使う。
+func (s *FieldScene) bodySweepHitsRect(prevX, prevY float64, prevDir int, rx, ry, rw, rh float64) bool {
+	l1, t1, r1, b1 := s.playerCfg.CollisionRectForDirAt(prevDir, 0, 0)
+	l2, t2, r2, b2 := s.playerCfg.CollisionRectForDirAt(s.dir, 0, 0)
+	left, top := math.Min(l1, l2), math.Min(t1, t2)
+	right, bottom := math.Max(r1, r2), math.Max(b1, b2)
+	return segmentIntersectsRect(prevX, prevY, s.px, s.py,
+		rx-right, ry-bottom, rw+(right-left), rh+(bottom-top))
 }
 
 func (s *FieldScene) collisionRectAt(x, y float64) (left, top, right, bottom float64) {
@@ -1078,9 +1094,8 @@ func (s *FieldScene) triggerDoorWarp() Scene {
 	return s
 }
 
-// beginMessage は会話を開始する。会話データにbgmキーが指定されている場合のみ
-// BGMを切り替える。指定がなければ、歩行中に流れていたBGMをそのまま継続する
-// (会話のたびに毎回曲が途切れるのを避けるため)。
+// beginMessage は会話を開始する。会話データにBGM操作(STOP_BGM/PLAY_BGM_)が
+// 無ければ、歩行中に流れていたBGMをそのまま継続する(runBGMCommands参照)。
 func (s *FieldScene) beginMessage() {
 	if len(s.msgTexts) == 0 {
 		// 中身の無い会話(全行が空テキストでfilterEmptyCommandsに落とされた
@@ -1090,11 +1105,30 @@ func (s *FieldScene) beginMessage() {
 	}
 	s.msg.Reset()
 	s.isMsgActive = true
+	s.runBGMCommands()
 	s.msg.Start()
-	if s.msgBGM != "" {
-		if path, ok := resolveBGMKey(s.msgBGM); ok {
-			s.game.Audio.FadeOutThenPlay(path, msgBGMFadeOut, msgBGMFadeIn, false)
+}
+
+// runBGMCommands は現在位置にある SYSTEM_COMMAND のBGM操作を消化する。
+// STOP_BGM はフェードアウトして無音に、PLAY_BGM_<キー> はそのBGMへ切り替える
+// (会話終了時はマップBGMへ戻る)。
+func (s *FieldScene) runBGMCommands() {
+	for s.msgIndex < len(s.msgTexts) {
+		cmd := s.msgTexts[s.msgIndex]
+		if cmd.Speaker != systemSpeaker {
+			return
 		}
+		switch {
+		case cmd.Text == cmdStopBGM:
+			s.game.Audio.FadeOutBGM(msgBGMFadeOut)
+		case strings.HasPrefix(cmd.Text, cmdPlayBGMPrefix):
+			if path, ok := resolveBGMKey(strings.TrimPrefix(cmd.Text, cmdPlayBGMPrefix)); ok {
+				s.game.Audio.FadeOutThenPlay(path, msgBGMFadeOut, msgBGMFadeIn, false)
+			}
+		default:
+			return
+		}
+		s.msgIndex++
 	}
 }
 
@@ -1102,7 +1136,6 @@ func (s *FieldScene) endMessage() {
 	s.isMsgActive = false
 	s.msgTexts = nil
 	s.msgIndex = 0
-	s.msgBGM = ""
 	s.msgBackground = ""
 	s.autoMode = false
 	s.autoWaitElapsed = 0
@@ -1110,7 +1143,7 @@ func (s *FieldScene) endMessage() {
 	s.game.Audio.FadeOutThenPlay(s.mapBGM, msgBGMFadeOut, msgBGMFadeIn, false)
 }
 
-// 会話専用BGM(msgBGM)は画面の暗転を伴わないため、音だけで短くクロスフェード
+// 会話中のBGM切り替えは画面の暗転を伴わないため、音だけで短くクロスフェード
 // させて曲の切り替わりを自然に見せる。
 const (
 	msgBGMFadeOut = 0.4
@@ -1128,7 +1161,7 @@ func autoWaitDuration(cmd EventCommand) float64 {
 }
 
 func (s *FieldScene) appendMessageLog(cmd EventCommand) {
-	if cmd.Speaker == "SYSTEM_COMMAND" || cmd.Text == "" {
+	if cmd.Speaker == systemSpeaker || cmd.Text == "" {
 		return
 	}
 	s.msgLog = append(s.msgLog, cmd)
@@ -1141,31 +1174,9 @@ func (s *FieldScene) advanceMessage() Scene {
 	s.appendMessageLog(s.msgTexts[s.msgIndex])
 
 	s.msgIndex++
+	s.runBGMCommands()
 	if s.msgIndex < len(s.msgTexts) {
-		cmd := s.msgTexts[s.msgIndex]
-		if cmd.Speaker == "SYSTEM_COMMAND" && strings.HasPrefix(cmd.Text, "START_BATTLE_") {
-			bossType := strings.TrimPrefix(cmd.Text, "START_BATTLE_")
-
-			s.isMsgActive = false
-			s.msgTexts = nil
-			s.msgIndex = 0
-			s.autoMode = false
-
-			battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
-			s.game.ChangeSceneWithFade(battleScene, fadeTimeBossIn)
-			return s
-		}
-		if cmd.Speaker == "SYSTEM_COMMAND" && cmd.Text == "START_ENDING" {
-			s.isMsgActive = false
-			s.msgTexts = nil
-			s.msgIndex = 0
-			s.autoMode = false
-			thumb := ebiten.NewImage(gameWidth, gameHeight)
-			s.Draw(thumb)
-			s.game.captureMenuEntryThumb(thumb)
-
-			endingScene := NewEndingScene(s.game, s)
-			s.game.ChangeSceneWithFade(endingScene, fadeTimeBossOut)
+		if s.runSceneChangeCommand(s.msgTexts[s.msgIndex]) {
 			return s
 		}
 		s.msg.Start()
@@ -1183,30 +1194,39 @@ func (s *FieldScene) advanceMessage() Scene {
 	return s
 }
 
+// runSceneChangeCommand はcmdが戦闘開始/エンディング開始の命令なら会話を閉じて
+// シーン遷移を始め、trueを返す。それ以外の行なら何もせずfalseを返す。
+func (s *FieldScene) runSceneChangeCommand(cmd EventCommand) bool {
+	if cmd.Speaker != systemSpeaker {
+		return false
+	}
+	bossType, isBattle := strings.CutPrefix(cmd.Text, cmdStartBattlePrefix)
+	if !isBattle && cmd.Text != cmdStartEnding {
+		return false
+	}
+
+	// 先に会話を閉じる(エンディング用サムネイルにメッセージ欄を写さないため)。
+	s.isMsgActive = false
+	s.msgTexts = nil
+	s.msgIndex = 0
+	s.autoMode = false
+
+	if isBattle {
+		battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
+		s.game.ChangeSceneWithFade(battleScene, fadeTimeBossIn)
+		return true
+	}
+	thumb := ebiten.NewImage(gameWidth, gameHeight)
+	s.Draw(thumb)
+	s.game.captureMenuEntryThumb(thumb)
+	s.game.ChangeSceneWithFade(NewEndingScene(s.game, s), fadeTimeBossOut)
+	return true
+}
+
 func (s *FieldScene) skipMessage() Scene {
 	s.autoMode = false
 	for _, cmd := range s.msgTexts {
-		if cmd.Speaker != "SYSTEM_COMMAND" {
-			continue
-		}
-		if strings.HasPrefix(cmd.Text, "START_BATTLE_") {
-			bossType := strings.TrimPrefix(cmd.Text, "START_BATTLE_")
-			s.isMsgActive = false
-			s.msgTexts = nil
-			s.msgIndex = 0
-			battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
-			s.game.ChangeSceneWithFade(battleScene, fadeTimeBossIn)
-			return s
-		}
-		if cmd.Text == "START_ENDING" {
-			s.isMsgActive = false
-			s.msgTexts = nil
-			s.msgIndex = 0
-			thumb := ebiten.NewImage(gameWidth, gameHeight)
-			s.Draw(thumb)
-			s.game.captureMenuEntryThumb(thumb)
-			endingScene := NewEndingScene(s.game, s)
-			s.game.ChangeSceneWithFade(endingScene, fadeTimeBossOut)
+		if s.runSceneChangeCommand(cmd) {
 			return s
 		}
 	}

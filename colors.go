@@ -12,7 +12,7 @@ var (
 	// 未解放のスキルレベル専用（使える/使えないとは無関係）
 	uiColorLocked = color.RGBA{130, 110, 200, 255}
 
-	uiColorDead =color.RGBA{90, 70, 70, 255}
+	uiColorDead = color.RGBA{90, 70, 70, 255}
 
 	uiColorDanger = color.RGBA{255, 100, 100, 255}
 

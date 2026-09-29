@@ -17,7 +17,6 @@ type EventCommand struct {
 
 type BossDialogue struct {
 	Commands []EventCommand
-	BGM      string
 	// SpeakerSides is an optional "who stands on which side" hint
 	// (0=left, 1=right). A speaker with no entry here is placed
 	// automatically (see MessageSystem.UpdateCharaAnim).
@@ -54,9 +53,6 @@ type dialogueCommandJSON struct {
 
 type bossDialogueJSON struct {
 	Commands []dialogueCommandJSON `json:"commands"`
-	// BGM はこの会話中に流すBGMをbgmByKeyのキー名で指定する(任意)。
-	// 省略時はそれまで流れていたBGMをそのまま継続する。
-	BGM string `json:"bgm"`
 	// SpeakerSlots はどの話者を左(0)/右(1)どちらの立ち絵枠に固定するかの
 	// 任意指定。指定が無い話者は「直近喋っていない方の枠」に自動で入る。
 	// 同じ側を2人以上に指定すると、その側の枠だけがその2人の間で
@@ -90,7 +86,7 @@ func buildSpeakerNameMap() map[string]string {
 // ようなキーは既知の名前に変換し、それ以外の文字列はNPCの表示名として
 // そのまま使う(NPCを増やすたびにGoコード側の対応表を増やす必要がないため)。
 func resolveSpeaker(key string) string {
-	if key == "" || key == "SYSTEM_COMMAND" {
+	if key == "" || key == systemSpeaker {
 		return key
 	}
 	if name, ok := speakerNameMap[key]; ok {
@@ -121,7 +117,7 @@ func convertBossDialogue(src *bossDialogueJSON) BossDialogue {
 		}
 	}
 
-	return BossDialogue{Commands: commands, BGM: src.BGM, SpeakerSides: sides, Background: src.Background}
+	return BossDialogue{Commands: commands, SpeakerSides: sides, Background: src.Background}
 }
 
 func LoadDialogues(dir string) error {

@@ -25,7 +25,7 @@ var ItemDatabase = []ItemDef{
 	{
 		ID:             "potion",
 		Name:           "ポーション",
-		Description:    "対象のHPを50回復する",
+		Description:    "対象のHPを50回復します",
 		Target:         TargetSingle,
 		HealHP:         50,
 		UsableInField:  true,
@@ -34,7 +34,7 @@ var ItemDatabase = []ItemDef{
 	{
 		ID:             "hi_potion",
 		Name:           "ハイポーション",
-		Description:    "対象のHPを150回復する",
+		Description:    "対象のHPを150回復します",
 		Target:         TargetSingle,
 		HealHP:         150,
 		UsableInField:  true,
@@ -43,7 +43,7 @@ var ItemDatabase = []ItemDef{
 	{
 		ID:             "ether",
 		Name:           "エーテル",
-		Description:    "対象のMPを30回復する",
+		Description:    "対象のMPを30回復します",
 		Target:         TargetSingle,
 		HealMP:         30,
 		UsableInField:  true,
@@ -52,7 +52,7 @@ var ItemDatabase = []ItemDef{
 	{
 		ID:             "elixir",
 		Name:           "エリクサー",
-		Description:    "対象のHP・MPを全回復する",
+		Description:    "対象のHP・MPを全回復します",
 		Target:         TargetSingle,
 		HealHPPercent:  100,
 		HealMPPercent:  100,
@@ -62,7 +62,7 @@ var ItemDatabase = []ItemDef{
 	{
 		ID:             "phoenix_down",
 		Name:           "フェニックスの尾",
-		Description:    "戦闘不能を回復し、HPを少し回復する",
+		Description:    "戦闘不能を回復し、HPを少し回復します",
 		Target:         TargetSingle,
 		HealHPPercent:  30,
 		Revive:         true,
@@ -72,7 +72,7 @@ var ItemDatabase = []ItemDef{
 	{
 		ID:             "antidote",
 		Name:           "万能薬",
-		Description:    "対象の弱体効果をすべて解除する",
+		Description:    "対象の弱体効果をすべて解除します",
 		Target:         TargetSingle,
 		CureDebuff:     true,
 		UsableInField:  true,
@@ -87,6 +87,20 @@ func GetItemDef(id string) (ItemDef, bool) {
 		}
 	}
 	return ItemDef{}, false
+}
+
+// filterInventory は所持数が1以上で、定義がkeepを満たすスロットだけを返す。
+func filterInventory(inv []InventorySlot, keep func(ItemDef) bool) []InventorySlot {
+	var list []InventorySlot
+	for _, slot := range inv {
+		if slot.Count <= 0 {
+			continue
+		}
+		if def, ok := GetItemDef(slot.ItemID); ok && keep(def) {
+			list = append(list, slot)
+		}
+	}
+	return list
 }
 
 type ItemDrop struct {

@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 func (m *MenuScene) hitTestSkillNameRows(rowCount int) (int, bool) {
 	rects := make([]tapRect, rowCount)
 	for i := 0; i < rowCount; i++ {
@@ -151,7 +149,6 @@ func (m *MenuScene) enterSkillCharacter(idx int) {
 	m.skillLevelSelecting = false
 	m.upgradeProgress = 0
 	m.upgradeHoldArmed = false
-	m.clearNotice()
 	m.menuState = menuStateSkillSub
 }
 
@@ -174,7 +171,6 @@ func (m *MenuScene) trySkillLevelConfirm(skills []SkillDef, skillIdx, lv int) {
 		if m.healTargetIndex < 0 || m.healTargetIndex > partySize {
 			m.healTargetIndex = 0
 		}
-		m.clearNotice()
 		m.menuState = menuStateHealTarget
 	}
 }
@@ -342,7 +338,6 @@ func (m *MenuScene) updateSkillSub() {
 		if m.game.UpgradeSkill(m.skillCharIndex, m.skillSubIndex) {
 			m.skillLevelCursor = m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
 			m.game.LastSkillLevelCursor = m.skillLevelCursor
-			m.showNotice(fmt.Sprintf("%sをLv%dに強化しました", skills[m.skillSubIndex].Name, m.skillLevelCursor))
 			m.game.Audio.PlaySEByKey("decide")
 			m.upgradeHoldArmed = false
 		}

@@ -297,6 +297,87 @@ func (box *battleTutorialBox) toScreen() (x, y, w, h float64) {
 		box.h * tutorialInsetScale
 }
 
+const (
+	tutorialTitleX       = 24.0
+	tutorialTitleY       = 24.0
+	tutorialBodyDefaultX = 40.0
+	tutorialBodyDefaultY = 100.0
+	tutorialBodyGap      = 30.0
+)
+
+// drawTutorialFrame は戦闘/フィールド両方のチュートリアルで共通の枠を描く:
+// 背景のメニュー画像、縮小して中央に置いたシーン、ハイライト枠、見出し。
+// ハイライト枠はシーンを縮小する前ではなく画面座標で描くので、枠の大きさに
+// よらず常に同じ太さ(tutorialBoxBorderWidth)になる。
+func drawTutorialFrame(g *Game, screen, scene *ebiten.Image, box *battleTutorialBox, title string) {
+	if bg := g.MenuBgImg; bg != nil {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(
+			float64(gameWidth)/float64(bg.Bounds().Dx()),
+			float64(gameHeight)/float64(bg.Bounds().Dy()),
+		)
+		screen.DrawImage(bg, op)
+	} else {
+		screen.Fill(color.RGBA{10, 10, 20, 255})
+	}
+
+	insetOp := &ebiten.DrawImageOptions{}
+	insetOp.GeoM.Scale(tutorialInsetScale, tutorialInsetScale)
+	insetOp.GeoM.Translate(tutorialInsetX(), tutorialInsetY)
+	screen.DrawImage(scene, insetOp)
+
+	if box != nil {
+		bx, by, bw, bh := box.toScreen()
+		vector.StrokeRect(screen, float32(bx), float32(by), float32(bw), float32(bh), tutorialBoxBorderWidth, color.White, true)
+	}
+
+	titleOp := &text.DrawOptions{}
+	titleOp.GeoM.Translate(tutorialTitleX, tutorialTitleY)
+	titleOp.ColorScale.ScaleWithColor(color.White)
+	text.Draw(screen, title, g.FontFace(44), titleOp)
+}
+
+func tutorialBodyLineSpacing(face text.Face) float64 {
+	return face.Metrics().HAscent + face.Metrics().HDescent + 6
+}
+
+// tutorialBodyOrigin はチュートリアル本文の描画開始位置を、ハイライト枠と
+// 重ならないように決める。
+//   - 枠が無いページは見出し下の既定位置に統一する(読みやすさはシーンを
+//     常に暗くすることで確保している)。
+//   - 画面上半分の枠(タイムライン、ゲージ)が既定位置にかかるなら枠の下へ。
+//   - 画面下半分の枠(ステータス、コマンド)なら、説明対象から遠く離れない
+//     よう枠の直上へ。
+//   - 枠が画面右寄り(コマンドアイコン等)なら、最長行の左端を枠の右端に
+//     揃えて本文を枠の近くへ寄せる。行ごとに右揃えしないのは、コマンド
+//     ページの「：」の列を揃えたままにするため。
+func tutorialBodyOrigin(box *battleTutorialBox, lines []string, face text.Face, lineSpacing float64) (x, y float64) {
+	x, y = tutorialBodyDefaultX, tutorialBodyDefaultY
+	if box == nil {
+		return x, y
+	}
+	bx, by, bw, bh := box.toScreen()
+	bottom, right := by+bh, bx+bw
+	textHeight := float64(len(lines)) * lineSpacing
+
+	if by+bh/2 < float64(gameHeight)/2 {
+		if by < tutorialBodyDefaultY+textHeight && bottom > tutorialBodyDefaultY {
+			y = bottom + tutorialBodyGap
+		}
+	} else {
+		y = max(by-textHeight-tutorialBodyGap, tutorialBodyDefaultY)
+	}
+
+	if (bx+right)/2 > float64(gameWidth)*0.6 {
+		maxLineWidth := 0.0
+		for _, line := range lines {
+			maxLineWidth = max(maxLineWidth, text.Advance(line, face))
+		}
+		x = right - maxLineWidth
+	}
+	return x, y
+}
+
 func (s *BattleScene) drawBattleTutorial(screen *ebiten.Image) {
 	if s.tutorialSceneImg == nil {
 		s.tutorialSceneImg = ebiten.NewImage(gameWidth, gameHeight)
@@ -342,106 +423,22 @@ func (s *BattleScene) drawBattleTutorial(screen *ebiten.Image) {
 
 	s.dimSceneExceptBox(scene, box)
 
-	if bg := s.game.MenuBgImg; bg != nil {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(
-			float64(gameWidth)/float64(bg.Bounds().Dx()),
-			float64(gameHeight)/float64(bg.Bounds().Dy()),
-		)
-		screen.DrawImage(bg, op)
-	} else {
-		screen.Fill(color.RGBA{10, 10, 20, 255})
-	}
-
-	insetOp := &ebiten.DrawImageOptions{}
-	insetOp.GeoM.Scale(tutorialInsetScale, tutorialInsetScale)
-	insetOp.GeoM.Translate(tutorialInsetX(), tutorialInsetY)
-	screen.DrawImage(scene, insetOp)
-
-	// The highlight box's border is drawn here, directly in screen space,
-	// rather than pre-scale on the scene, so it comes out the same crisp
-	// tutorialBoxBorderWidth on every page regardless of the box's own size.
-	var boxScreenX, boxScreenY, boxScreenW, boxScreenH float64
-	if box != nil {
-		boxScreenX, boxScreenY, boxScreenW, boxScreenH = box.toScreen()
-		vector.StrokeRect(screen, float32(boxScreenX), float32(boxScreenY), float32(boxScreenW), float32(boxScreenH), tutorialBoxBorderWidth, color.White, true)
-	}
-
-	const (
-		tutorialTitleX = 24.0
-		tutorialTitleY = 24.0
-	)
-	titleStr := battleTutorialHeadline(s.tutorialKind)
-	titleFace := s.game.FontFace(44)
-	titleOp := &text.DrawOptions{}
-	titleOp.GeoM.Translate(tutorialTitleX, tutorialTitleY)
-	titleOp.ColorScale.ScaleWithColor(color.White)
-	text.Draw(screen, titleStr, titleFace, titleOp)
+	drawTutorialFrame(s.game, screen, scene, box, battleTutorialHeadline(s.tutorialKind))
 
 	bodyFace := s.game.FontFace(24)
-	lineSpacing := bodyFace.Metrics().HAscent + bodyFace.Metrics().HDescent + 6
+	lineSpacing := tutorialBodyLineSpacing(bodyFace)
 	lines := strings.Split(battleTutorialBody(s.tutorialKind, s.tutorialPage), "\n")
 
-	// A page with no highlight box (each tutorial's intro/conclusion-style
-	// messages) has its text sit at the plain default spot below the title,
-	// unified across every such page instead of some sitting beside the
-	// title and others below it. Legibility against whatever's on screen
-	// there comes from dimImageExceptBox always dimming the scene, box or
-	// no box, rather than from this text's position.
 	isCommandsPage := s.tutorialKind == battleTutorialKindBasics && s.tutorialPage == battleTutorialPageCommands
-	bodyX := 40.0
-	const bodyDefaultY = 100.0
-	bodyY := bodyDefaultY
+	bodyX, bodyY := tutorialBodyOrigin(box, lines, bodyFace, lineSpacing)
 	if box != nil && s.tutorialKind == battleTutorialKindGauge {
 		// The rest of the gauge tutorial always explains the same on-screen
 		// element, so its text stays anchored below the gauge on every page
-		// instead of jumping around with the box placement rules below.
+		// instead of jumping around with the generic box placement rules.
+		bodyX, bodyY = tutorialBodyDefaultX, tutorialBodyDefaultY
 		if gaugeBox := s.gaugeHighlightBox(); gaugeBox != nil {
 			_, gy, _, gh := gaugeBox.toScreen()
-			const gap = 30.0
-			bodyY = gy + gh + gap
-		}
-	} else if box != nil {
-		boxScreenBottom := boxScreenY + boxScreenH
-		boxScreenRight := boxScreenX + boxScreenW
-		textHeight := float64(len(lines)) * lineSpacing
-		const gap = 30.0
-
-		if boxCenterY := boxScreenY + boxScreenH/2; boxCenterY < float64(gameHeight)/2 {
-			// A box in the upper half (timeline, gauge) can reach into the
-			// text's default spot under the title, so push the text below
-			// it instead of letting them overlap.
-			if boxScreenY < bodyDefaultY+textHeight && boxScreenBottom > bodyDefaultY {
-				bodyY = boxScreenBottom + gap
-			}
-		} else {
-			// A box in the lower half (status block, commands) would
-			// otherwise leave the text stranded up at the default position,
-			// far from the thing it's describing, so pull it down to sit
-			// just above the box instead.
-			bodyY = boxScreenY - textHeight - gap
-			if bodyY < bodyDefaultY {
-				bodyY = bodyDefaultY
-			}
-		}
-
-		// A box sitting clearly in the right portion of the screen (like the
-		// command icons) reads better with the text pulled over next to it
-		// instead of staying pinned to the far-left margin; a box that spans
-		// most of the width (like the timeline's) isn't "on a side" so it's
-		// left alone. The block is anchored by its widest line's left edge
-		// (rather than right-aligning every line individually) so that,
-		// combined with the label/colon alignment below, the "：" column
-		// stays put regardless of how long each description happens to be.
-		boxCenterX := (boxScreenX + boxScreenRight) / 2
-		if boxCenterX > float64(gameWidth)*0.6 {
-			maxLineWidth := 0.0
-			for _, line := range lines {
-				if adv := text.Advance(line, bodyFace); adv > maxLineWidth {
-					maxLineWidth = adv
-				}
-			}
-			bodyX = boxScreenRight - maxLineWidth
+			bodyY = gy + gh + tutorialBodyGap
 		}
 	}
 

@@ -43,8 +43,9 @@
 //	speaker     blank = narration, or "player1"/"boss1"/a literal NPC name.
 //	expression  0=通常 1=笑顔 2=怒り 3=驚き (blank = 0).
 //	text        the line.
-//	bgm         optional, applies to the whole group (id+phase, or phase
-//	            for boss tabs).
+//	bgm         per row. A BGM key switches to that BGM from that line on; a
+//	            blank cell means silence. The map BGM returns when the
+//	            conversation ends.
 //	side        optional, 0 (left) or 1 (right); pins that speaker to a
 //	            side for this group (see MessageSystem.SpeakerSides).
 //	background  optional, an assets/images/backgrounds/<key>.png key drawn
@@ -88,7 +89,6 @@ type dialogueCommandJSON struct {
 
 type bossDialogueJSON struct {
 	Commands     []dialogueCommandJSON `json:"commands"`
-	BGM          string                `json:"bgm,omitempty"`
 	SpeakerSlots map[string]int        `json:"speakerSlots,omitempty"`
 	Background   string                `json:"background,omitempty"`
 }
@@ -326,9 +326,22 @@ func cell(row []string, idx int) string {
 
 type dialogueGroup struct {
 	commands   []dialogueCommandJSON
-	bgm        string
 	sides      map[string]int
 	background string
+}
+
+// appendCommand adds one row's line, preceded by its BGM change: a key in the
+// bgm cell switches to that BGM (PLAY_BGM_<key>), a blank cell means silence
+// (STOP_BGM). SYSTEM_COMMAND rows (START_BATTLE_ etc.) never change the BGM.
+func (g *dialogueGroup) appendCommand(bgm string, cmd dialogueCommandJSON) {
+	if cmd.Speaker != "SYSTEM_COMMAND" {
+		text := "STOP_BGM"
+		if bgm != "" {
+			text = "PLAY_BGM_" + bgm
+		}
+		g.commands = append(g.commands, dialogueCommandJSON{Speaker: "SYSTEM_COMMAND", Text: text})
+	}
+	g.commands = append(g.commands, cmd)
 }
 
 // buildFileJSON turns one CSV's rows (header included) into the id ->
@@ -392,11 +405,8 @@ func buildFileJSON(rows [][]string) (map[string]storyDialogueFileJSON, error) {
 			groups[key] = g
 			order = append(order, key)
 		}
-		g.commands = append(g.commands, dialogueCommandJSON{Speaker: speaker, Text: text, Expression: expr})
+		g.appendCommand(cell(row, bgmCol), dialogueCommandJSON{Speaker: speaker, Text: text, Expression: expr})
 
-		if bgm := cell(row, bgmCol); bgm != "" && g.bgm == "" {
-			g.bgm = bgm
-		}
 		if bg := cell(row, bgCol); bg != "" && g.background == "" {
 			g.background = bg
 		}
@@ -421,7 +431,7 @@ func buildFileJSON(rows [][]string) (map[string]storyDialogueFileJSON, error) {
 	for _, key := range order {
 		id, phase := key[0], key[1]
 		g := groups[key]
-		bd := &bossDialogueJSON{Commands: g.commands, BGM: g.bgm, SpeakerSlots: g.sides, Background: g.background}
+		bd := &bossDialogueJSON{Commands: g.commands, SpeakerSlots: g.sides, Background: g.background}
 		entry := out[id]
 		if phase == "first" {
 			entry.First = bd
@@ -481,11 +491,8 @@ func buildBossFileJSON(rows [][]string) (bossDialogueFileJSON, error) {
 			g = &dialogueGroup{}
 			groups[phase] = g
 		}
-		g.commands = append(g.commands, dialogueCommandJSON{Speaker: speaker, Text: text, Expression: expr})
+		g.appendCommand(cell(row, bgmCol), dialogueCommandJSON{Speaker: speaker, Text: text, Expression: expr})
 
-		if bgm := cell(row, bgmCol); bgm != "" && g.bgm == "" {
-			g.bgm = bgm
-		}
 		if bg := cell(row, bgCol); bg != "" && g.background == "" {
 			g.background = bg
 		}
@@ -508,10 +515,10 @@ func buildBossFileJSON(rows [][]string) (bossDialogueFileJSON, error) {
 
 	var out bossDialogueFileJSON
 	if g, ok := groups["battle"]; ok {
-		out.Battle = &bossDialogueJSON{Commands: g.commands, BGM: g.bgm, SpeakerSlots: g.sides, Background: g.background}
+		out.Battle = &bossDialogueJSON{Commands: g.commands, SpeakerSlots: g.sides, Background: g.background}
 	}
 	if g, ok := groups["clear"]; ok {
-		out.Clear = &bossDialogueJSON{Commands: g.commands, BGM: g.bgm, SpeakerSlots: g.sides, Background: g.background}
+		out.Clear = &bossDialogueJSON{Commands: g.commands, SpeakerSlots: g.sides, Background: g.background}
 	}
 	return out, nil
 }

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -62,7 +61,7 @@ type logEntryLayout struct {
 }
 
 func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scrollOffset float64, cursorIndex int) {
-	ebitenutil.DrawRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, 170})
+	fillRect(screen, 0, 0, float64(gameWidth), float64(gameHeight), color.NRGBA{0, 0, 0, 170})
 
 	titleFace := game.FontFace(30)
 	titleOp := &text.DrawOptions{}
@@ -163,7 +162,7 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 
 	if maxScroll > 0 {
 		barX, trackY, trackHeight, thumbH, moveRange := logScrollBarGeometry(game, len(entries))
-		ebitenutil.DrawRect(screen, barX, trackY, scrollBarTrackWidth, trackHeight, scrollBarTrackColor)
+		fillRect(screen, barX, trackY, scrollBarTrackWidth, trackHeight, scrollBarTrackColor)
 
 		ratio := 1 - scrollOffset/maxScroll
 		if ratio < 0 {
@@ -173,7 +172,7 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 		}
 		thumbY := trackY + ratio*moveRange
 
-		ebitenutil.DrawRect(screen, barX, thumbY, scrollBarCursorWidth, thumbH, scrollBarCursorColor)
+		fillRect(screen, barX, thumbY, scrollBarCursorWidth, thumbH, scrollBarCursorColor)
 	}
 }
 

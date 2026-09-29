@@ -7,7 +7,6 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
-	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 // skillUpgradeTutorialPageIntro/SelectSkill/SpendSP/LevelUpEffects/
@@ -283,84 +282,12 @@ func (s *FieldScene) drawSkillUpgradeTutorial(screen *ebiten.Image) {
 	}
 	dimImageExceptBox(scene, s.skillUpgradeTutorialOverlay, s.game.MenuBgImg, box)
 
-	// The inset scene below only covers a shrunken, centered portion of the
-	// screen (see tutorialInsetScale), leaving a margin around it - fill
-	// that margin with the same menu backdrop first so it doesn't show the
-	// raw field map peeking out from behind, matching drawBattleTutorial.
-	if bg := s.game.MenuBgImg; bg != nil {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(
-			float64(gameWidth)/float64(bg.Bounds().Dx()),
-			float64(gameHeight)/float64(bg.Bounds().Dy()),
-		)
-		screen.DrawImage(bg, op)
-	} else {
-		screen.Fill(color.RGBA{10, 10, 20, 255})
-	}
-
-	insetOp := &ebiten.DrawImageOptions{}
-	insetOp.GeoM.Scale(tutorialInsetScale, tutorialInsetScale)
-	insetOp.GeoM.Translate(tutorialInsetX(), tutorialInsetY)
-	screen.DrawImage(scene, insetOp)
-
-	var boxScreenX, boxScreenY, boxScreenW, boxScreenH float64
-	if box != nil {
-		boxScreenX, boxScreenY, boxScreenW, boxScreenH = box.toScreen()
-		vector.StrokeRect(screen, float32(boxScreenX), float32(boxScreenY), float32(boxScreenW), float32(boxScreenH), tutorialBoxBorderWidth, color.White, true)
-	}
-
-	const (
-		titleX = 24.0
-		titleY = 24.0
-	)
-	titleStr := "スキル強化"
-	titleFace := s.game.FontFace(44)
-	titleOp := &text.DrawOptions{}
-	titleOp.GeoM.Translate(titleX, titleY)
-	titleOp.ColorScale.ScaleWithColor(color.White)
-	text.Draw(screen, titleStr, titleFace, titleOp)
+	drawTutorialFrame(s.game, screen, scene, box, "スキル強化")
 
 	bodyFace := s.game.FontFace(24)
-	lineSpacing := bodyFace.Metrics().HAscent + bodyFace.Metrics().HDescent + 6
+	lineSpacing := tutorialBodyLineSpacing(bodyFace)
 	lines := strings.Split(skillUpgradeTutorialBody(s.skillUpgradeTutorialPage), "\n")
-
-	// A page with no highlight box (currently just the intro) has its text
-	// sit at the plain default spot below the title, unified with every
-	// other box-less page instead of sitting beside the title on its own.
-	// Legibility against whatever's on screen there comes from
-	// dimImageExceptBox always dimming the scene, box or no box, rather
-	// than from this text's position.
-	bodyX := 40.0
-	const bodyDefaultY = 100.0
-	bodyY := bodyDefaultY
-	if box != nil {
-		boxScreenBottom := boxScreenY + boxScreenH
-		boxScreenRight := boxScreenX + boxScreenW
-		textHeight := float64(len(lines)) * lineSpacing
-		const gap = 30.0
-
-		if boxCenterY := boxScreenY + boxScreenH/2; boxCenterY < float64(gameHeight)/2 {
-			if boxScreenY < bodyDefaultY+textHeight && boxScreenBottom > bodyDefaultY {
-				bodyY = boxScreenBottom + gap
-			}
-		} else {
-			bodyY = boxScreenY - textHeight - gap
-			if bodyY < bodyDefaultY {
-				bodyY = bodyDefaultY
-			}
-		}
-
-		boxCenterX := (boxScreenX + boxScreenRight) / 2
-		if boxCenterX > float64(gameWidth)*0.6 {
-			maxLineWidth := 0.0
-			for _, line := range lines {
-				if adv := text.Advance(line, bodyFace); adv > maxLineWidth {
-					maxLineWidth = adv
-				}
-			}
-			bodyX = boxScreenRight - maxLineWidth
-		}
-	}
+	bodyX, bodyY := tutorialBodyOrigin(box, lines, bodyFace, lineSpacing)
 
 	for i, line := range lines {
 		op := &text.DrawOptions{}

@@ -1,43 +1,5 @@
 package main
 
-import (
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text/v2"
-)
-
-const menuNoticeTicks = 120
-
-func (m *MenuScene) showNotice(msg string) {
-	m.notice = msg
-	m.noticeTicks = menuNoticeTicks
-}
-
-func (m *MenuScene) tickNotice() {
-	if m.noticeTicks > 0 {
-		m.noticeTicks--
-		if m.noticeTicks == 0 {
-			m.notice = ""
-		}
-	}
-}
-
-func (m *MenuScene) clearNotice() {
-	m.notice = ""
-	m.noticeTicks = 0
-}
-
-func (m *MenuScene) drawNotice(screen *ebiten.Image) bool {
-	if m.noticeTicks <= 0 || m.notice == "" {
-		return false
-	}
-	op := &text.DrawOptions{}
-	op.GeoM.Translate(float64(gameWidth)-menuDescOffsetX, float64(gameHeight)-menuDescOffsetY)
-	op.PrimaryAlign = text.AlignEnd
-	op.ColorScale.ScaleWithColor(uiColorSelect)
-	text.Draw(screen, m.notice, m.game.FontFace(menuDescFontSize), op)
-	return true
-}
-
 type confirmResult int
 
 const (
