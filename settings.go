@@ -108,6 +108,7 @@ func applyDisplayMode(fullscreen bool, winW, winH int) {
 // ショートカットキーのすべてがここを通る。
 func (g *Game) setFullscreen(fullscreen bool) {
 	g.Fullscreen = fullscreen
+	g.webFullscreenPending = false
 	w, h := g.WindowWidth, g.WindowHeight
 	if w <= 0 || h <= 0 {
 		w, h = defaultWindowWidth, defaultWindowHeight
@@ -120,16 +121,97 @@ func (g *Game) setFullscreen(fullscreen bool) {
 	g.fullscreenSyncHold = fullscreenSyncHoldTicks
 }
 
+// initDisplayMode は起動時に保存された画面モードを反映する。Web版の
+// ブラウザはユーザー操作なしのフルスクリーン化を拒否するので、最初の入力
+// まで待つ（updateAutoFullscreen）。スマホは横向きで画面の高さが足りないので、
+// 保存された設定に関係なく起動ごとに最初の操作で全画面にする。
+func (g *Game) initDisplayMode() {
+	if isWebBuild {
+		if (g.Fullscreen || g.MobileMode) && fullscreenSupported() {
+			g.Fullscreen = true
+			g.webFullscreenPending = true
+		}
+		return
+	}
+	g.setFullscreen(g.Fullscreen)
+}
+
+// defaultFullscreenSetting は「初期設定に戻す」で使う画面モード。
+// スマホのWeb版は全画面、それ以外はdefaultFullscreen。
+func (g *Game) defaultFullscreenSetting() bool {
+	if isWebBuild && g.MobileMode {
+		return true
+	}
+	return defaultFullscreen
+}
+
+// displayModeOptionVisible はオプション画面に「画面モード」行を出すか。
+// フルスクリーン非対応のブラウザ(iPhoneのSafariなど)では選んでも何も
+// 起きないので出さない。
+func (g *Game) displayModeOptionVisible() bool {
+	return fullscreenSupported()
+}
+
+// showInstallHint はタイトル画面に「ホーム画面に追加すると全画面で遊べます」
+// を出すか。全画面にできないスマホのブラウザ(主にiPhone)で、まだホーム画面
+// から起動していないときだけ出す。
+func (g *Game) showInstallHint() bool {
+	return isWebBuild && g.MobileMode && !fullscreenSupported() && !runningAsInstalledApp()
+}
+
+// justActivatedByUser はブラウザがフルスクリーン要求を許可する種類の
+// ユーザー操作がこのフレームにあったか。タッチは指を離した時(touchend)で
+// ないとブラウザが操作と認めないので、押した時ではなく離した時を見る。
+func justActivatedByUser() bool {
+	if len(inpututil.AppendJustReleasedTouchIDs(nil)) > 0 ||
+		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		return true
+	}
+	for _, k := range inpututil.AppendJustPressedKeys(nil) {
+		if !isFullscreenShortcutKey(k) && k != ebiten.KeyEscape {
+			return true
+		}
+	}
+	return false
+}
+
+// updateAutoFullscreen はWeb版で、起動後最初のユーザー操作をきっかけに
+// フルスクリーンにする（initDisplayModeで予約したときだけ、1回きり）。
+// その後に全画面を抜けた場合は、オプション画面かショートカットで戻す。
+func (g *Game) updateAutoFullscreen() {
+	if !g.webFullscreenPending {
+		return
+	}
+	if ebiten.IsFullscreen() {
+		g.webFullscreenPending = false
+		return
+	}
+	if justActivatedByUser() {
+		g.setFullscreen(true)
+	}
+}
+
 func isAltKeyDown() bool {
 	return ebiten.IsKeyPressed(ebiten.KeyAlt)
 }
 
-// updateFullscreenShortcut はAlt+EnterかF11で、どの画面からでも
+// isFullscreenShortcutKey はAltと組み合わせずに単独でフルスクリーンを
+// 切り替えるキー。F4はRPGツクール製ゲームでおなじみの操作に合わせたもの。
+func isFullscreenShortcutKey(k ebiten.Key) bool {
+	return k == ebiten.KeyF4 || k == ebiten.KeyF11
+}
+
+// updateFullscreenShortcut はF4・F11・Alt+Enterで、どの画面からでも
 // フルスクリーンを切り替える。
 func (g *Game) updateFullscreenShortcut() {
-	altEnter := isAltKeyDown() && (inpututil.IsKeyJustPressed(ebiten.KeyEnter) ||
+	pressed := isAltKeyDown() && (inpututil.IsKeyJustPressed(ebiten.KeyEnter) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyNumpadEnter))
-	if !altEnter && !inpututil.IsKeyJustPressed(ebiten.KeyF11) {
+	for _, k := range inpututil.AppendJustPressedKeys(nil) {
+		if isFullscreenShortcutKey(k) {
+			pressed = true
+		}
+	}
+	if !pressed || !g.displayModeOptionVisible() {
 		return
 	}
 	g.setFullscreen(!g.Fullscreen)
@@ -140,6 +222,10 @@ func (g *Game) updateFullscreenShortcut() {
 // Web版では、起動時のフルスクリーン要求がブラウザに拒否されたときや、
 // Escなどでブラウザ側からフルスクリーンが解除されたときにずれるため。
 func (g *Game) syncFullscreenState() {
+	if g.webFullscreenPending {
+		// 最初の入力でフルスクリーンにするまでは、設定上の値を保つ。
+		return
+	}
 	actual := ebiten.IsFullscreen()
 	if g.fullscreenSyncHold > 0 {
 		g.fullscreenSyncHold--

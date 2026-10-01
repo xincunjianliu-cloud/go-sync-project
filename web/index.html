@@ -2,7 +2,15 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="七不思議討滅録">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>七不思議討滅録（動作確認用）</title>
 <style>
   html, body {
@@ -12,6 +20,12 @@
     height: 100%;
     overflow: hidden;
     touch-action: none;
+  }
+  /* Ebitenはbodyの大きさを画面サイズとして使い、heightに100%をインラインで
+     指定する。スマホのアドレスバーの出し入れに追従するよう、対応ブラウザでは
+     実際に見えている高さ(dvh)で上書きする。 */
+  @supports (height: 100dvh) {
+    html, body { height: 100dvh !important; }
   }
   #loading {
     position: fixed;
@@ -59,8 +73,6 @@
   }
   canvas {
     display: block;
-    width: 100vw;
-    height: 100vh;
   }
   #rotate-overlay {
     position: fixed;
@@ -102,13 +114,32 @@
 </div>
 <script src="wasm_exec.js"></script>
 <script>
-  function tryLockLandscape() {
+  // フルスクリーンへの切り替え自体はゲーム側(Go)が最初のタップ/キー入力で
+  // 行う。ここでは切り替わった後に効く設定だけをかける。
+  function onFullscreenChange() {
+    const fs = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fs) {
+      return;
+    }
+    // 横向き固定はフルスクリーン中(またはホーム画面から起動したアプリ)でしか効かない。
     if (screen.orientation && screen.orientation.lock) {
       screen.orientation.lock("landscape").catch(() => {});
     }
+    // Chrome/Edge: Escの単押しでフルスクリーンが解除されないようにする
+    // (Escはゲームのキャンセルに使うため)。解除はEsc長押しになる。
+    if (navigator.keyboard && navigator.keyboard.lock) {
+      navigator.keyboard.lock(["Escape"]).catch(() => {});
+    }
   }
-  window.addEventListener("load", tryLockLandscape);
-  document.addEventListener("touchstart", tryLockLandscape, { once: true });
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
+  // ホーム画面から起動したアプリ(PWA)はフルスクリーンAPIを使わなくても
+  // 全画面なので、起動時に横向き固定だけ試す。
+  if (window.matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches &&
+      screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock("landscape").catch(() => {});
+  }
 
   const go = new Go();
   WebAssembly.instantiateStreaming(fetch("game.wasm"), go.importObject).then((result) => {

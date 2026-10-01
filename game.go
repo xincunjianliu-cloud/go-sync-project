@@ -167,6 +167,7 @@ type Game struct {
 	lastWindowH             int
 	windowResizeSettleTimer int
 	fullscreenSyncHold      int
+	webFullscreenPending    bool
 
 	CurrentObjectiveID string
 
@@ -406,7 +407,7 @@ func NewGame() *Game {
 	g.Audio.SetSEVolume(settings.SEVolume)
 	g.Audio.SetMasterVolume(settings.MasterVolume)
 
-	g.setFullscreen(g.Fullscreen)
+	g.initDisplayMode()
 	g.lastWindowW, g.lastWindowH = g.WindowWidth, g.WindowHeight
 
 	// フォント・タイトル背景・タイトルBGMは起動直後の表示に最低限必要な
@@ -501,6 +502,7 @@ func (g *Game) Update() error {
 
 	g.updateMouseCursorVisibility(dt)
 	g.updateFullscreenShortcut()
+	g.updateAutoFullscreen()
 	g.syncFullscreenState()
 	g.updateWindowSizeTracking()
 

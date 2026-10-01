@@ -226,7 +226,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	lineY1 := headerY + 24
 	fillRect(screen, labelX, lineY1, lineW, 1, lineCol)
 
-	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY := optionRowPositions()
+	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY := m.optionRowPositions()
 
 	m.drawVolumeRow(screen, masterBarY, "全体", masterVol, onOptionRow(optionIdxMaster))
 	m.drawVolumeRow(screen, bgmBarY, "BGM", bgmVol, onOptionRow(optionIdxBGM))
@@ -241,55 +241,57 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	lineY2 := dispHeaderY + 24
 	fillRect(screen, labelX, lineY2, lineW, 1, lineCol)
 
-	displayLabelCol := uiColorText
-	onDisplayRow := onOptionRow(optionIdxDisplayMode)
-	adjustingDisplay := onDisplayRow
-	if onDisplayRow {
-		displayLabelCol = uiColorSelect
-	}
-	displayLabelFace := m.game.FontFace(optionItemFontSize)
-	if onDisplayRow {
-		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(optionCtrlLabelX, displayRowY)
-		arrowOp.SecondaryAlign = text.AlignCenter
-		arrowOp.ColorScale.ScaleWithColor(displayLabelCol)
-		text.Draw(screen, "▶", displayLabelFace, arrowOp)
-	}
-	displayLabelOp := &text.DrawOptions{}
-	displayLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", displayLabelFace), displayRowY)
-	displayLabelOp.SecondaryAlign = text.AlignCenter
-	displayLabelOp.ColorScale.ScaleWithColor(displayLabelCol)
-	text.Draw(screen, "画面モード", displayLabelFace, displayLabelOp)
+	if m.game.displayModeOptionVisible() {
+		displayLabelCol := uiColorText
+		onDisplayRow := onOptionRow(optionIdxDisplayMode)
+		adjustingDisplay := onDisplayRow
+		if onDisplayRow {
+			displayLabelCol = uiColorSelect
+		}
+		displayLabelFace := m.game.FontFace(optionItemFontSize)
+		if onDisplayRow {
+			arrowOp := &text.DrawOptions{}
+			arrowOp.GeoM.Translate(optionCtrlLabelX, displayRowY)
+			arrowOp.SecondaryAlign = text.AlignCenter
+			arrowOp.ColorScale.ScaleWithColor(displayLabelCol)
+			text.Draw(screen, "▶", displayLabelFace, arrowOp)
+		}
+		displayLabelOp := &text.DrawOptions{}
+		displayLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", displayLabelFace), displayRowY)
+		displayLabelOp.SecondaryAlign = text.AlignCenter
+		displayLabelOp.ColorScale.ScaleWithColor(displayLabelCol)
+		text.Draw(screen, "画面モード", displayLabelFace, displayLabelOp)
 
-	displayValueX := optionValueX
-	displayArrowCol := uiColorText
-	if adjustingDisplay {
-		displayArrowCol = uiColorSelect
-	}
-	displayValueOp := &text.DrawOptions{}
-	displayValueOp.GeoM.Translate(displayValueX, displayRowY)
-	displayValueOp.SecondaryAlign = text.AlignCenter
-	displayValueOp.PrimaryAlign = text.AlignCenter
-	displayValueOp.ColorScale.ScaleWithColor(uiColorText)
-	displayModeLabel := "ウィンドウ"
-	if m.game.Fullscreen {
-		displayModeLabel = "フルスクリーン"
-	}
-	text.Draw(screen, displayModeLabel, m.game.FontFace(optionItemFontSize), displayValueOp)
+		displayValueX := optionValueX
+		displayArrowCol := uiColorText
+		if adjustingDisplay {
+			displayArrowCol = uiColorSelect
+		}
+		displayValueOp := &text.DrawOptions{}
+		displayValueOp.GeoM.Translate(displayValueX, displayRowY)
+		displayValueOp.SecondaryAlign = text.AlignCenter
+		displayValueOp.PrimaryAlign = text.AlignCenter
+		displayValueOp.ColorScale.ScaleWithColor(uiColorText)
+		displayModeLabel := "ウィンドウ"
+		if m.game.Fullscreen {
+			displayModeLabel = "フルスクリーン"
+		}
+		text.Draw(screen, displayModeLabel, m.game.FontFace(optionItemFontSize), displayValueOp)
 
-	leftOp := &text.DrawOptions{}
-	leftOp.GeoM.Translate(displayValueX-optionDisplayArrowGap, displayRowY)
-	leftOp.SecondaryAlign = text.AlignCenter
-	leftOp.PrimaryAlign = text.AlignCenter
-	leftOp.ColorScale.ScaleWithColor(displayArrowCol)
-	text.Draw(screen, "◀", m.game.FontFace(optionItemFontSize), leftOp)
+		leftOp := &text.DrawOptions{}
+		leftOp.GeoM.Translate(displayValueX-optionDisplayArrowGap, displayRowY)
+		leftOp.SecondaryAlign = text.AlignCenter
+		leftOp.PrimaryAlign = text.AlignCenter
+		leftOp.ColorScale.ScaleWithColor(displayArrowCol)
+		text.Draw(screen, "◀", m.game.FontFace(optionItemFontSize), leftOp)
 
-	rightOp := &text.DrawOptions{}
-	rightOp.GeoM.Translate(displayValueX+optionDisplayArrowGap, displayRowY)
-	rightOp.SecondaryAlign = text.AlignCenter
-	rightOp.PrimaryAlign = text.AlignCenter
-	rightOp.ColorScale.ScaleWithColor(displayArrowCol)
-	text.Draw(screen, "▶", m.game.FontFace(optionItemFontSize), rightOp)
+		rightOp := &text.DrawOptions{}
+		rightOp.GeoM.Translate(displayValueX+optionDisplayArrowGap, displayRowY)
+		rightOp.SecondaryAlign = text.AlignCenter
+		rightOp.PrimaryAlign = text.AlignCenter
+		rightOp.ColorScale.ScaleWithColor(displayArrowCol)
+		text.Draw(screen, "▶", m.game.FontFace(optionItemFontSize), rightOp)
+	}
 
 	speedLabelCol := uiColorText
 	onSpeedLabelRow := onSpeedRow

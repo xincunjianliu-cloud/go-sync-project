@@ -15,18 +15,31 @@ const (
 	optionCount
 )
 
+// nextOptionIndex はカーソルをdir方向(+1/-1)に1行動かす（端でループ）。
+// 表示していない「画面モード」行は飛ばす。
+func (m *MenuScene) nextOptionIndex(from, dir int) int {
+	idx := (from + dir + optionCount) % optionCount
+	if idx == optionIdxDisplayMode && !m.game.displayModeOptionVisible() {
+		idx = (idx + dir + optionCount) % optionCount
+	}
+	return idx
+}
+
 func isVolumeOptionRow(idx int) bool {
 	return idx == optionIdxBGM || idx == optionIdxSE || idx == optionIdxMaster
 }
 
-func optionRowPositions() (masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY float64) {
+func (m *MenuScene) optionRowPositions() (masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, descRowY, sysHeaderY, cursorRowY, resetY float64) {
 	masterBarY = volumePanelY
 	bgmBarY = masterBarY + volumeRowGapY
 	seBarY = bgmBarY + volumeRowGapY
 	dispHeaderY := seBarY + volumeBarH + 25
 	lineY2 := dispHeaderY + 24
 	displayRowY = lineY2 + 33
-	speedRowY = displayRowY + 37
+	speedRowY = displayRowY
+	if m.game.displayModeOptionVisible() {
+		speedRowY += 37
+	}
 	descRowY = speedRowY + 27
 	sysHeaderY = descRowY + 37
 	lineY4 := sysHeaderY + 24
@@ -62,7 +75,7 @@ const optionCtrlLabelX = optionBoxCenterX - controlRowHalfWidth
 const optionValueX = optionCtrlLabelX + controlRowLabelValueOffset
 
 func (m *MenuScene) hitTestOptionList() (int, bool) {
-	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, _, _, cursorRowY, resetY := optionRowPositions()
+	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, _, _, cursorRowY, resetY := m.optionRowPositions()
 	volumeRects := []tapRect{
 		{x: volumeGroupX - 4, y: masterBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
 		{x: volumeGroupX - 4, y: bgmBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
@@ -73,14 +86,18 @@ func (m *MenuScene) hitTestOptionList() (int, bool) {
 	for i, y := range ctrlYs {
 		ctrlRects[i] = tapRect{x: optionCtrlLabelX - 4, y: y - 16, w: controlRowHalfWidth*2 + 4, h: 32}
 	}
+	if !m.game.displayModeOptionVisible() {
+		// 行を出していないときは当たり判定を空にする（並び順=行番号は保つ）。
+		ctrlRects[0] = tapRect{}
+	}
 	resetRect := tapRect{x: volumeGroupX - 4, y: resetY + 10 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32}
 
 	rects := append(append(volumeRects, ctrlRects...), resetRect)
 	return hitTestTapRects(rects)
 }
 
-func optionPanelRect() tapRect {
-	_, _, _, _, _, _, _, _, resetY := optionRowPositions()
+func (m *MenuScene) optionPanelRect() tapRect {
+	_, _, _, _, _, _, _, _, resetY := m.optionRowPositions()
 	top := volumePanelY - 40
 	return tapRect{
 		x: volumeGroupX - 10,
@@ -127,12 +144,15 @@ func (m *MenuScene) updateOption() {
 	}
 
 	if isMenuUpRepeat() {
-		m.optionIndex = (m.optionIndex - 1 + optionCount) % optionCount
+		m.optionIndex = m.nextOptionIndex(m.optionIndex, -1)
 		m.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuDownRepeat() {
-		m.optionIndex = (m.optionIndex + 1) % optionCount
+		m.optionIndex = m.nextOptionIndex(m.optionIndex, +1)
 		m.game.Audio.PlaySEByKey("cursor")
+	}
+	if m.optionIndex == optionIdxDisplayMode && !m.game.displayModeOptionVisible() {
+		m.optionIndex = optionIdxMessageSpeed
 	}
 	tappedIdx, tappedOk := m.hitTestOptionList()
 	tapConfirm := tapSelectOrConfirm(tappedIdx, tappedOk, &m.optionIndex, m.game.Audio)
@@ -166,7 +186,7 @@ func (m *MenuScene) updateOption() {
 		return
 	}
 
-	if !tappedOk && unrelatedTapOutsideRects(optionPanelRect()) {
+	if !tappedOk && unrelatedTapOutsideRects(m.optionPanelRect()) {
 		m.game.Audio.PlaySEByKey("cancel")
 		m.finishVolumeInput()
 		m.menuState = menuStateMain
@@ -174,15 +194,15 @@ func (m *MenuScene) updateOption() {
 }
 
 func (m *MenuScene) hitTestOptionArrows() (int, int, bool) {
-	_, _, _, displayRowY, speedRowY, _, _, cursorRowY, _ := optionRowPositions()
+	_, _, _, displayRowY, speedRowY, _, _, cursorRowY, _ := m.optionRowPositions()
 	type arrow struct {
 		idx, dir int
 		x, y     float64
 		visible  bool
 	}
 	arrows := []arrow{
-		{optionIdxDisplayMode, -1, optionValueX - optionDisplayArrowGap, displayRowY, true},
-		{optionIdxDisplayMode, +1, optionValueX + optionDisplayArrowGap, displayRowY, true},
+		{optionIdxDisplayMode, -1, optionValueX - optionDisplayArrowGap, displayRowY, m.game.displayModeOptionVisible()},
+		{optionIdxDisplayMode, +1, optionValueX + optionDisplayArrowGap, displayRowY, m.game.displayModeOptionVisible()},
 		{optionIdxMessageSpeed, -1, optionValueX - optionSpeedArrowGap, speedRowY, m.game.MessageSpeed > 0},
 		{optionIdxMessageSpeed, +1, optionValueX + optionSpeedArrowGap, speedRowY, m.game.MessageSpeed < 2},
 		{optionIdxCursorMemory, -1, optionValueX - optionCursorArrowGap, cursorRowY, true},
@@ -252,7 +272,9 @@ func (m *MenuScene) performOptionReset() {
 	m.game.WindowWidth = defaultWindowWidth
 	m.game.WindowHeight = defaultWindowHeight
 	m.game.RememberCursor = defaultRememberCursor
-	m.game.setFullscreen(defaultFullscreen)
+	if m.game.displayModeOptionVisible() {
+		m.game.setFullscreen(m.game.defaultFullscreenSetting())
+	}
 	m.persistSettings()
 }
 
@@ -308,7 +330,7 @@ func (m *MenuScene) volumeRowValue(idx int) float64 {
 }
 
 func (m *MenuScene) updateVolumeBarDrag() bool {
-	masterBarY, bgmBarY, seBarY, _, _, _, _, _, _ := optionRowPositions()
+	masterBarY, bgmBarY, seBarY, _, _, _, _, _, _ := m.optionRowPositions()
 	barX := volumeGroupX + volumeLabelBarGap
 	rows := []struct {
 		idx int
@@ -423,7 +445,7 @@ var menuOptionDescriptions = map[int]string{
 	optionIdxBGM:          "BGMの音量を調整できます",
 	optionIdxSE:           "効果音の音量を調整できます",
 	optionIdxMaster:       "ゲーム全体の音量を調整できます",
-	optionIdxDisplayMode:  "フルスクリーンとウィンドウを切り替えられます",
+	optionIdxDisplayMode:  "フルスクリーンとウィンドウを切り替えられます（F4・Alt+Enterでも切り替え可）",
 	optionIdxMessageSpeed: "メッセージの表示速度を変更できます",
 	optionIdxCursorMemory: "ONにすると直前に選択していたコマンドや項目の位置を記憶します",
 	optionIdxReset:        "設定をすべて初期値に戻します",

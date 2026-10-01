@@ -35,7 +35,6 @@ const defaultSEVolume = 0.
 const defaultMasterVolume = 1.
 
 const defaultMessageSpeed = 1
-const defaultFullscreen = false
 const defaultWindowWidth = gameWidth
 const defaultWindowHeight = gameHeight
 const defaultRememberCursor = true

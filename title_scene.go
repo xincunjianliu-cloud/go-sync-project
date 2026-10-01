@@ -154,6 +154,12 @@ func (s *TitleScene) hitTestMainMenu() (int, bool) {
 	return hitTestTapRects(rects)
 }
 
+// タイトル画面下部の「ホーム画面に追加」案内（showInstallHint参照）。
+const (
+	titleInstallHintY        = 498.0
+	titleInstallHintFontSize = 16.0
+)
+
 func (s *TitleScene) Draw(screen *ebiten.Image) {
 	if s.game.TitleBgImg != nil {
 		screen.DrawImage(s.game.TitleBgImg, nil)
@@ -183,6 +189,14 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 	drawTitleMenuOption("はじめから", 355, s.menuIndex == 0)
 	drawTitleMenuOption("つづきから", 400, s.hasSaveFile && s.menuIndex == 1)
 	drawTitleMenuOption("ゲームを終了する", 445, s.menuIndex == 2)
+
+	if s.game.showInstallHint() {
+		hintOp := &text.DrawOptions{}
+		hintOp.GeoM.Translate(float64(gameWidth)/2, titleInstallHintY)
+		hintOp.PrimaryAlign = text.AlignCenter
+		hintOp.ColorScale.ScaleWithColor(uiColorDisabled)
+		text.Draw(screen, "ホーム画面に追加すると全画面で遊べます", s.game.FontFace(titleInstallHintFontSize), hintOp)
+	}
 
 	if s.confirmExit {
 		drawConfirmDialog(screen, s.game, "ゲームを終了しますか？", s.exitConfirmIdx, confirmImageOffsetX)
