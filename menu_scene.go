@@ -538,14 +538,17 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.BlockPositions = d.BlockPositions
 	m.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
-	field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
-	if err != nil {
-		m.game.Audio.PlaySEByKey("error")
-		m.resetSlotDrag()
-		m.menuState = menuStateLoadSlot
-		return
-	}
-	m.game.ChangeSceneWithFade(field, fadeTimeContinue)
+	m.game.ChangeSceneToMap(d.CurrentMap, func() Scene {
+		field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
+		if err != nil {
+			// 暗転していた場合はメニュー画面へ戻る。
+			m.game.Audio.PlaySEByKey("error")
+			m.resetSlotDrag()
+			m.menuState = menuStateLoadSlot
+			return nil
+		}
+		return field
+	}, fadeTimeContinue)
 }
 
 func (m *MenuScene) updateSaveDone() {

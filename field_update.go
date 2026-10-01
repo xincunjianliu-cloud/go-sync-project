@@ -1073,6 +1073,12 @@ func (s *FieldScene) checkDoorProximity() {
 
 			s.nearDoorEvent = true
 			s.pendingDoorMap = targetMap
+			if s.preparedDoorMap != targetMap {
+				// ドアの前に立った時点で行き先の画像とBGMを準備し始め、
+				// 実際に移動するときの暗転が延びないようにする。
+				s.preparedDoorMap = targetMap
+				s.game.prepareMap(targetMap)
+			}
 			s.pendingDoorPoint = targetPoint
 			s.pendingDoorX = s.px
 			s.pendingDoorY = s.py
@@ -1086,12 +1092,20 @@ func (s *FieldScene) triggerDoorWarp() Scene {
 	if !s.nearDoorEvent {
 		return nil
 	}
-	nextRoom, err := NewRoomScene(s.game, s.pendingDoorMap, s.pendingDoorX, s.pendingDoorY, s.pendingDoorPoint, s.pendingDoorDir)
-	if err != nil {
+	targetMap, x, y, point, dir := s.pendingDoorMap, s.pendingDoorX, s.pendingDoorY, s.pendingDoorPoint, s.pendingDoorDir
+	if _, err := loadTiledMap(targetMap); err != nil {
 		return nil
 	}
 	s.game.Audio.PlaySEByKey("door")
-	s.game.ChangeSceneWithFade(nextRoom, fadeTimeDoor)
+	// 行き先のタイルセットはドアに近づいた時点で準備を始めている
+	// (checkDoorProximity)。間に合っていなければ暗転中にそろえる。
+	s.game.ChangeSceneToMap(targetMap, func() Scene {
+		nextRoom, err := NewRoomScene(s.game, targetMap, x, y, point, dir)
+		if err != nil {
+			return nil
+		}
+		return nextRoom
+	}, fadeTimeDoor)
 	return s
 }
 

@@ -43,6 +43,15 @@ func loadTiledMap(path string) (TiledMap, error) {
 	return tmap, nil
 }
 
+// peekTiledMap はパース済みのマップがキャッシュにあれば返す。loadTiledMapと
+// 違って取得しに行かないので、メインゴルーチンから呼んでも待たされない。
+func peekTiledMap(path string) (TiledMap, bool) {
+	tiledMapCacheMu.Lock()
+	defer tiledMapCacheMu.Unlock()
+	m, ok := tiledMapCache[path]
+	return m, ok
+}
+
 // mapTilesetImagePath は.tmjが指すタイルセット画像の実パスを返す。
 func mapTilesetImagePath(tmap TiledMap) (string, bool) {
 	if len(tmap.Tilesets) == 0 || tmap.Tilesets[0].Image == "" {

@@ -369,11 +369,13 @@ type FieldScene struct {
 	nearExamineEvent       bool
 	nearDoorEvent          bool
 	pendingDoorMap         string
-	pendingDoorPoint       string
-	pendingDoorX           float64
-	pendingDoorY           float64
-	pendingDoorDir         int
-	cseFadeInSpeed         float64
+	// preparedDoorMap は近づいたドアの行き先として準備(prepareMap)を始めたマップ。
+	preparedDoorMap  string
+	pendingDoorPoint string
+	pendingDoorX     float64
+	pendingDoorY     float64
+	pendingDoorDir   int
+	cseFadeInSpeed   float64
 
 	objectiveDoorX   float64
 	objectiveDoorY   float64

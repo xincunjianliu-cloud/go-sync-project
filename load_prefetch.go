@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 // 先読み(prefetch)は「もうすぐ使いそう」と分かった時点で、取得だけを
@@ -39,11 +41,7 @@ func (g *Game) prefetchAroundMap(mapPath string, tmap TiledMap) {
 			if p["type"] != "boss" || !hasBossID || isBossDefeated(g, bossID) {
 				continue
 			}
-			if fmt.Sprintf("boss_%d", bossID) == lastBossEventType {
-				paths = append(paths, bgmBattleLastBoss)
-			} else {
-				paths = append(paths, bgmBattleBoss)
-			}
+			paths = append(paths, bossBattleBGM(fmt.Sprintf("boss_%d", bossID)))
 		}
 	}
 	g.Audio.PrefetchBGM(paths...)
@@ -60,19 +58,22 @@ func mapBGMPath(tmap TiledMap) (string, bool) {
 }
 
 // prefetchDialogueAssets は会話が始まるときに呼ばれ、登場する話者の立ち絵・
-// 背景画像と、会話中に切り替えるBGMを先に取得しておく。立ち絵は会話中に
-// 初めて表示する瞬間に読み込まれる(GetCharaImage)ので、先に届いていれば
-// その瞬間の待ちがなくなる。
+// 背景画像を裏でデコードし、会話中に切り替えるBGMを取得しておく。会話の
+// 最後にボス戦が始まる場合は、ボス戦の曲のデコードも始めておく(戦闘開始の
+// 暗転が延びないように)。立ち絵は会話中に初めて表示する瞬間に必要になる
+// (GetCharaImage)ので、先に用意できていればその瞬間の引っかかりがなくなる。
 func (g *Game) prefetchDialogueAssets(bd BossDialogue) {
 	seen := map[string]bool{}
-	var paths []string
 	var bgm []string
 	for _, cmd := range bd.Commands {
 		if cmd.Speaker == systemSpeaker {
-			if strings.HasPrefix(cmd.Text, cmdPlayBGMPrefix) {
+			switch {
+			case strings.HasPrefix(cmd.Text, cmdPlayBGMPrefix):
 				if p, ok := resolveBGMKey(strings.TrimPrefix(cmd.Text, cmdPlayBGMPrefix)); ok {
 					bgm = append(bgm, p)
 				}
+			case strings.HasPrefix(cmd.Text, cmdStartBattlePrefix):
+				g.Audio.Prewarm(prioSoon, bossBattleBGM(strings.TrimPrefix(cmd.Text, cmdStartBattlePrefix)))
 			}
 			continue
 		}
@@ -80,21 +81,58 @@ func (g *Game) prefetchDialogueAssets(bd BossDialogue) {
 			continue
 		}
 		seen[cmd.Speaker] = true
-		sheetPath, basePath := g.charaAssetPaths(cmd.Speaker)
-		if g.needsCharaAsset(cmd.Speaker + "#sheet") {
-			paths = append(paths, sheetPath)
+		g.prepareSpeaker(cmd.Speaker)
+	}
+	if key := bd.Background; key != "" && g.bgImgs[key] == nil && !g.bgImgMissing[key] {
+		g.decodeImageAsync(backgroundImagePath(key), prioSoon, func(img *ebiten.Image) {
+			if _, ok := g.bgImgs[key]; !ok {
+				g.bgImgs[key] = img
+			}
+		}, func() { g.bgImgMissing[key] = true })
+	}
+	g.Audio.PrefetchBGM(bgm...)
+}
+
+// prepareSpeaker は話者の立ち絵がまだ無ければ裏でデコードしてCharaImgsへ
+// 入れる。GetCharaImageと同じく表情差分シートを優先し、シートが無いと
+// 分かったときだけ単一の立ち絵を用意する。ファイルが無ければ無いことを
+// 記録する(lookupCharaAssetと同じ扱い)。
+func (g *Game) prepareSpeaker(speaker string) {
+	sheetPath, basePath := g.charaAssetPaths(speaker)
+	sheetKey := speaker + "#sheet"
+	prepareBase := func() {
+		if !g.needsCharaAsset(speaker) {
+			return
 		}
-		if g.needsCharaAsset(cmd.Speaker) {
-			paths = append(paths, basePath)
+		g.decodeImageAsync(basePath, prioSoon, func(img *ebiten.Image) {
+			if _, ok := g.CharaImgs[speaker]; !ok {
+				g.CharaImgs[speaker] = img
+			}
+		}, func() { g.charaImgMissing[speaker] = true })
+	}
+	if _, ok := g.CharaImgs[sheetKey]; ok {
+		return
+	}
+	if g.charaImgMissing[sheetKey] {
+		prepareBase()
+		return
+	}
+	g.decodeImageAsync(sheetPath, prioSoon, func(img *ebiten.Image) {
+		if _, ok := g.CharaImgs[sheetKey]; !ok {
+			g.CharaImgs[sheetKey] = img
 		}
+	}, func() {
+		g.charaImgMissing[sheetKey] = true
+		prepareBase()
+	})
+}
+
+// bossBattleBGM はボス戦(evTypeは"boss_N")の曲を返す(NewBattleSceneと同じ決め方)。
+func bossBattleBGM(evType string) string {
+	if evType == lastBossEventType {
+		return bgmBattleLastBoss
 	}
-	if bd.Background != "" && g.bgImgs[bd.Background] == nil && !g.bgImgMissing[bd.Background] {
-		paths = append(paths, backgroundImagePath(bd.Background))
-	}
-	requestAssets(paths, prioSoon)
-	if g.Audio != nil {
-		g.Audio.PrefetchBGM(bgm...)
-	}
+	return bgmBattleBoss
 }
 
 // needsCharaAsset はlookupCharaAssetのキーkeyの画像がまだ読み込まれておらず、

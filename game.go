@@ -232,10 +232,17 @@ type Game struct {
 	heavyTierReady [assetTierCount]bool
 	heavyTierTotal [assetTierCount]int
 	heavyTierDone  [assetTierCount]int
-	// pendingTier はChangeSceneWhenTierReadyで、暗転中に待っている段階。
-	pendingTier assetTier
+	// pendingPrep はChangeScenePreparedで、暗転中にそろうのを待っているもの。
+	pendingPrep scenePrep
 	// loadingWaitStart は暗転したまま待ち始めた時刻(計測ログ用)。
 	loadingWaitStart time.Time
+	// loadingWaitTicks は暗転したまま待っているフレーム数(Loading表示の遅延用)。
+	loadingWaitTicks int
+
+	// asyncImagePending/Done はdecodeImageAsyncでバックグラウンドデコード中の
+	// 画像と、その結果の受け渡し口。
+	asyncImagePending map[string]bool
+	asyncImageDone    chan asyncImageResult
 
 	bootDecoded     chan bootResult
 	bootReady       bool
@@ -486,7 +493,7 @@ func (g *Game) pumpBootAssets() {
 		// フィールド・戦闘・メニューなどタイトル画面自体には不要な画像と
 		// データは、タイトル画面を即座に表示できるよう段階的にバックグラウンドで
 		// 読み込む。各画面は必要な段階が終わるまで先へ進まない
-		// (ChangeSceneWhenTierReady)。
+		// (ChangeScenePrepared)。
 		g.heavyDecoded = make(chan decodedHeavyAsset, 32)
 		go g.loadHeavyAssetsAsync()
 
@@ -505,6 +512,7 @@ func (g *Game) Update() error {
 	}
 
 	g.pumpHeavyAssets()
+	g.pumpAsyncImages()
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
 		g.MobileMode = !g.MobileMode
@@ -573,7 +581,7 @@ func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
 }
 
 // ChangeSceneWhenReady は、フィールド段階の画像が読み込み終わっていないと
-// 組み立てられないシーン(ニューゲーム・ロード画面など)へ遷移する。
+// 組み立てられないシーン(ロード画面など)へ遷移する。
 func (g *Game) ChangeSceneWhenReady(build func() Scene, durationSeconds float64) {
 	g.ChangeSceneWhenTierReady(assetTierField, build, durationSeconds)
 }
@@ -585,11 +593,17 @@ func (g *Game) assetTierReady(tier assetTier) bool {
 }
 
 // ChangeSceneWhenTierReady は段階tierの画像が必要なシーンへ遷移する。
-// 読み込み済みなら通常のChangeSceneWithFadeと同じ。まだなら先に暗転させ、
-// 読み込みが終わるまでLoading表示(進捗バーつき)で待ってからbuildを呼ぶ。
-// buildがnilを返した場合(マップ読み込み失敗など)は元のシーンへ戻る。
 func (g *Game) ChangeSceneWhenTierReady(tier assetTier, build func() Scene, durationSeconds float64) {
-	if g.assetTierReady(tier) {
+	g.ChangeScenePrepared(scenePrep{tier: tier}, build, durationSeconds)
+}
+
+// ChangeScenePrepared はprepがそろってから組み立てるシーンへ遷移する
+// (流れはscene_prep.goの先頭を参照)。準備済みなら通常のChangeSceneWithFadeと
+// 同じ。まだなら暗転と同時に準備を始め、そろったところでbuildを呼ぶ。
+// buildがnilを返した場合(マップ読み込み失敗など)は元のシーンへ戻る。
+func (g *Game) ChangeScenePrepared(prep scenePrep, build func() Scene, durationSeconds float64) {
+	g.startScenePrep(prep)
+	if g.scenePrepReady(prep) {
 		if next := build(); next != nil {
 			g.ChangeSceneWithFade(next, durationSeconds)
 		}
@@ -597,7 +611,7 @@ func (g *Game) ChangeSceneWhenTierReady(tier assetTier, build func() Scene, dura
 	}
 	g.pendingScene = nil
 	g.pendingBuild = build
-	g.pendingTier = tier
+	g.pendingPrep = prep
 	g.pendingDuration = durationSeconds
 	g.fadeMode = FadeOut
 	g.fadeAlpha = 0.0
@@ -606,15 +620,16 @@ func (g *Game) ChangeSceneWhenTierReady(tier assetTier, build func() Scene, dura
 
 // updateSceneLoading は暗転中(FadeLoading)に毎フレーム呼ばれ、遷移先の
 // 準備が整ったらシーンを差し替えてフェードインを始める。準備ができるまでは
-// 画面を暗転させたままにし、DrawがLoading表示を出す。以前はシーンの
-// 組み立てやBGMのデコードを1フレーム内で同期的に行っていたため、
+// 画面を暗転させたままにし、待ちが長引けばDrawがLoading表示を出す。
+// 以前はシーンの組み立てやBGMのデコードを1フレーム内で同期的に行っていたため、
 // その間ゲーム全体(Loading表示を含む)が固まっていた。
 func (g *Game) updateSceneLoading() {
-	if g.loadingWaitStart.IsZero() {
+	if g.loadingWaitTicks == 0 {
 		g.loadingWaitStart = time.Now()
 	}
+	g.loadingWaitTicks++
 	if g.pendingBuild != nil {
-		if !g.assetTierReady(g.pendingTier) {
+		if !g.scenePrepReady(g.pendingPrep) {
 			return
 		}
 		build := g.pendingBuild
@@ -637,7 +652,7 @@ func (g *Game) updateSceneLoading() {
 	if waited := time.Since(g.loadingWaitStart); waited >= loadingWaitTraceThreshold {
 		loadTrace("暗転中に%.2f秒待機 (遷移先 %T)", waited.Seconds(), g.pendingScene)
 	}
-	g.loadingWaitStart = time.Time{}
+	g.loadingWaitTicks = 0
 	g.currentScene = g.pendingScene
 	g.pendingScene = nil
 	g.fadeMode = FadeIn
@@ -648,8 +663,12 @@ const loadingWaitTraceThreshold = 100 * time.Millisecond
 
 // isLoading はLoading表示を出すべき状態かを返す。タイトル画面では、
 // 「はじめから」で先へ進めるようになる(フィールド段階の完了)まで出す。
+// 暗転中の待ちは、loadingIndicatorDelayTicksより長引いたときだけ出す。
 func (g *Game) isLoading() bool {
-	return !g.assetTierReady(assetTierField) || g.fadeMode == FadeLoading
+	if !g.assetTierReady(assetTierField) {
+		return true
+	}
+	return g.fadeMode == FadeLoading && g.loadingWaitTicks >= loadingIndicatorDelayTicks
 }
 
 // loadProgress は今待っている段階の読み込み進捗(0〜1)を返す。段階の読み込みを
@@ -657,8 +676,8 @@ func (g *Game) isLoading() bool {
 func (g *Game) loadProgress() (progress float64, ok bool) {
 	var target assetTier
 	switch {
-	case g.fadeMode == FadeLoading && g.pendingBuild != nil:
-		target = g.pendingTier
+	case g.fadeMode == FadeLoading && g.pendingBuild != nil && !g.assetTierReady(g.pendingPrep.tier):
+		target = g.pendingPrep.tier
 	case !g.assetTierReady(assetTierField):
 		target = assetTierField
 	default:
@@ -812,9 +831,6 @@ func (g *Game) GetCharaImage(speaker string, expression int) *ebiten.Image {
 	}
 	sheetPath, basePath := g.charaAssetPaths(speaker)
 	if sheet := g.lookupCharaAsset(speaker+"#sheet", sheetPath); sheet != nil {
-		// 会話の先読み(prefetchDialogueAssets)で単一画像も取得していた場合、
-		// 表情差分シートがあればそちらは使わないので手放す。
-		assetStore.release(basePath)
 		idx := expression
 		if idx < 0 || idx >= charaExprSheetFrames {
 			idx = 0

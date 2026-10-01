@@ -104,9 +104,9 @@ func (s *TitleScene) Update(dt float64) Scene {
 				return s
 			}
 			s.game.Audio.PlaySEByKey("decide")
-			// 画像の読み込みがまだ終わっていなければ、暗転後にLoading表示で
-			// 待ってから組み立てる(ChangeSceneWhenReady参照)。
-			s.game.ChangeSceneWhenReady(func() Scene {
+			// 最初のマップに必要な画像がまだそろっていなければ、暗転中にそろえて
+			// から組み立てる(ChangeSceneToMap参照)。
+			s.game.ChangeSceneToMap(startMapPath, func() Scene {
 				s.game.ResetForNewGame()
 				field, err := NewRoomScene(s.game, startMapPath, 0, 0, "start_point", 0)
 				if err != nil {
@@ -410,11 +410,13 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.BlockPositions = d.BlockPositions
 		s.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
-		field, err := NewRoomScene(s.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
-		if err != nil {
-			return s
-		}
-		s.game.ChangeSceneWithFade(field, fadeTimeContinue)
+		s.game.ChangeSceneToMap(d.CurrentMap, func() Scene {
+			field, err := NewRoomScene(s.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
+			if err != nil {
+				return nil
+			}
+			return field
+		}, fadeTimeContinue)
 		return s
 	}
 

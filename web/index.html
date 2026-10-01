@@ -11,6 +11,11 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- タイトル画面に必要なフォントと背景は、ゲーム本体(game.wasm)のダウンロードと
+     並行して先に取得しておく。ゲームが動き出してから取りに行くと、本体の読み込みの
+     後にさらに待ち時間が足される。パスはgame.goのloadBootAssetsAsyncと合わせること。 -->
+<link rel="preload" href="assets/fonts/k8x12.ttf" as="fetch" crossorigin>
+<link rel="preload" href="assets/images/title/title_bg.png" as="fetch" crossorigin>
 <title>七不思議討滅録</title>
 <style>
   html, body {
