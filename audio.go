@@ -168,8 +168,9 @@ type AudioManager struct {
 	pcmCache   map[string][]byte
 	pcmLoading map[string]bool
 	pcmFailed  map[string]bool
-	// bgmLRU は最近再生したBGMのパス(古い順)。BGMのPCMは1曲あたり数十MBに
-	// なるため、キャッシュする曲数をmaxCachedBGMまでに制限する。
+	// bgmLRU は最近再生(または先読み)したBGMのパス(古い順)。BGMのPCMは
+	// 1曲あたり数十MBになるため、合計がmaxCachedBGMBytesを超えたら古い曲から
+	// キャッシュを外す。
 	bgmLRU []string
 
 	// pendingStart は再生したいBGMのデコード待ち中に、デコード完了後に
@@ -180,8 +181,14 @@ type AudioManager struct {
 	pendingBGM   string
 }
 
-// maxCachedBGM はPCMをメモリに保持しておくBGMの最大曲数。
-const maxCachedBGM = 5
+// maxCachedBGMBytes はPCMをメモリに保持しておくBGMの合計サイズの上限。
+// PCMは44.1kHz・16bitステレオで1分あたり約10MBになる。曲数ではなく容量で
+// 決めるのは、曲の長さがまちまちでも、スマホのメモリ使用量を一定に抑えるため。
+const maxCachedBGMBytes = 96 << 20
+
+// minCachedBGM は容量を超えていても残しておく直近の曲数（イントロ＋ループの
+// ように、2曲を続けて使う場合に備える）。
+const minCachedBGM = 2
 
 var errPCMFailed = errors.New("pcm decode failed")
 
@@ -249,38 +256,69 @@ func (a *AudioManager) decodePCM(path string) (*bytes.Reader, int64, error) {
 // decodePCMData はmp3を丸ごとPCMへデコードする。Web版はブラウザ組み込みの
 // デコーダを使う(pcm_decode_js.go)。
 func decodePCMData(path string) ([]byte, error) {
-	data, err := loadAssetBytesCached(path)
+	return decodePCMDataAt(path, prioUrgent)
+}
+
+// decodePCMDataAt はdecodePCMDataと同じだが、mp3がまだ届いていないときの
+// 取得の優先度をprioにする。デコードが終わったらmp3のバイト列は手放す
+// （PCMをキャッシュから外した後にまた必要になったら、取得し直す。
+// その場合もブラウザのHTTPキャッシュから返ることが多い）。
+func decodePCMDataAt(path string, prio int) ([]byte, error) {
+	fetchStart := time.Now()
+	data, err := assetStore.getAt(path, prio)
 	if err != nil {
 		return nil, err
 	}
+	defer assetStore.release(path)
 	if len(data) == 0 {
 		// assets/se/の未差し替えプレースホルダー(0バイト)。
 		return nil, errPCMFailed
 	}
+	decodeStart := time.Now()
 	pcm, err := decodeMP3ToPCM(data)
 	if err != nil {
 		return nil, err
+	}
+	if strings.HasPrefix(path, "assets/bgm/") {
+		loadTrace("BGM準備完了 %s (取得待ち%.2f秒, デコード%.2f秒, PCM %.1fMiB)",
+			path, decodeStart.Sub(fetchStart).Seconds(), time.Since(decodeStart).Seconds(), mib(int64(len(pcm))))
 	}
 	return trimTrailingSilence(pcm), nil
 }
 
 // requestPCM はpathのPCMがまだ無ければバックグラウンドでデコードを始める。
-// 既にキャッシュ済み・デコード中・失敗済みなら何もしない。
+// 既にキャッシュ済み・失敗済みなら何もしない。今まさに再生を待っている
+// 曲に使うので、mp3の取得は最優先にする。
 func (a *AudioManager) requestPCM(path string) {
+	a.requestPCMAt(path, prioUrgent)
+}
+
+// requestPCMAt はrequestPCMと同じだが、mp3の取得の優先度をprioにする。
+// 低い優先度で先読み中の曲を、後から高い優先度で頼み直すと、取得の順番が
+// 繰り上がる。
+func (a *AudioManager) requestPCMAt(path string, prio int) {
 	if path == "" {
 		return
 	}
 	a.pcmMu.Lock()
 	_, cached := a.pcmCache[path]
-	if cached || a.pcmLoading[path] || a.pcmFailed[path] {
-		a.pcmMu.Unlock()
+	failed := a.pcmFailed[path]
+	loading := a.pcmLoading[path]
+	if !cached && !failed && !loading {
+		a.pcmLoading[path] = true
+	}
+	a.pcmMu.Unlock()
+	if cached || failed {
 		return
 	}
-	a.pcmLoading[path] = true
-	a.pcmMu.Unlock()
+	if loading {
+		// まだ取得待ちなら順番だけ繰り上げる(取得済みなら何も起きない)。
+		assetStore.request(path, prio)
+		return
+	}
 
 	go func() {
-		pcm, err := decodePCMData(path)
+		pcm, err := decodePCMDataAt(path, prio)
 		a.pcmMu.Lock()
 		delete(a.pcmLoading, path)
 		if err != nil {
@@ -292,13 +330,30 @@ func (a *AudioManager) requestPCM(path string) {
 	}()
 }
 
-// Prewarm は次に使いそうな曲・効果音をバックグラウンドで先にデコードしておく。
-func (a *AudioManager) Prewarm(paths ...string) {
+// Prewarm は次に使いそうな曲・効果音を、取得の優先度prioでバックグラウンドで
+// 先にデコードしておく。BGMは容量上限(maxCachedBGMBytes)の管理対象に入れる。
+func (a *AudioManager) Prewarm(prio int, paths ...string) {
 	if a == nil {
 		return
 	}
 	for _, p := range paths {
-		a.requestPCM(p)
+		a.requestPCMAt(p, prio)
+		a.touchBGM(p)
+	}
+}
+
+// PrefetchBGM は曲のmp3を取得だけしておく(デコードはしない)。圧縮された
+// mp3はPCMの約10分の1の大きさなので、使うかもしれない曲を手元に置いても
+// メモリをあまり使わない。実際に流すときはデコードだけで済む。
+func (a *AudioManager) PrefetchBGM(paths ...string) {
+	if a == nil {
+		return
+	}
+	for _, p := range paths {
+		if p == "" || a.pcmSettled(p) {
+			continue
+		}
+		assetStore.request(p, prioAudioPrefetch)
 	}
 }
 
@@ -310,7 +365,7 @@ func (a *AudioManager) pcmSettled(path string) bool {
 	return ok || a.pcmFailed[path]
 }
 
-// touchBGM はBGMのPCMキャッシュの使用順を更新し、上限を超えた古い曲を
+// touchBGM はBGMのPCMキャッシュの使用順を更新し、容量の上限を超えた古い曲を
 // キャッシュから外す(再生中のPlayerは自前のReaderでPCMを参照し続けるので、
 // キャッシュから外しても再生は途切れない)。メインゴルーチン専用。
 func (a *AudioManager) touchBGM(path string) {
@@ -324,13 +379,39 @@ func (a *AudioManager) touchBGM(path string) {
 		}
 	}
 	a.bgmLRU = append(a.bgmLRU, path)
-	for len(a.bgmLRU) > maxCachedBGM {
-		evict := a.bgmLRU[0]
-		a.bgmLRU = a.bgmLRU[1:]
-		a.pcmMu.Lock()
-		delete(a.pcmCache, evict)
-		a.pcmMu.Unlock()
+	a.enforceBGMCacheLimit()
+}
+
+// enforceBGMCacheLimit はBGMのPCMの合計がmaxCachedBGMBytesを超えていれば、
+// 古い曲からキャッシュを外す。直近minCachedBGM曲と、再生開始を待っている曲・
+// デコード中の曲は外さない(外すと待っている再生が始まらなくなる)。
+// デコードはバックグラウンドで終わるので、Updateからも毎フレーム呼ぶ。
+func (a *AudioManager) enforceBGMCacheLimit() {
+	a.pcmMu.Lock()
+	defer a.pcmMu.Unlock()
+	total := 0
+	for _, p := range a.bgmLRU {
+		total += len(a.pcmCache[p])
 	}
+	for i := 0; total > maxCachedBGMBytes && i < len(a.bgmLRU)-minCachedBGM; {
+		p := a.bgmLRU[i]
+		if a.pcmLoading[p] || a.isPendingPath(p) {
+			i++
+			continue
+		}
+		total -= len(a.pcmCache[p])
+		delete(a.pcmCache, p)
+		a.bgmLRU = append(a.bgmLRU[:i], a.bgmLRU[i+1:]...)
+	}
+}
+
+func (a *AudioManager) isPendingPath(path string) bool {
+	for _, p := range a.pendingPaths {
+		if p == path {
+			return true
+		}
+	}
+	return a.fadeOutActive && a.fadeOutNextPath == path
 }
 
 // startWhenDecoded はpathsのPCMが揃った時点でstartを実行する。揃っていれば
@@ -619,6 +700,13 @@ func (a *AudioManager) PlaySE(path string) {
 	if a == nil || path == "" {
 		return
 	}
+	if isWebBuild && !a.pcmSettled(path) {
+		// Web版はまだデコードできていない効果音をその場で待つと、ネットワークと
+		// デコードの待ちで画面が固まる。今回は鳴らさずにデコードだけ始める
+		// (通常はタイトル画面が出た直後に全効果音を先読みし終えている)。
+		a.requestPCMAt(path, prioSoon)
+		return
+	}
 	r, _, err := a.decodePCM(path)
 	if err != nil {
 		return
@@ -647,6 +735,7 @@ func (a *AudioManager) Update(dt float64) {
 		return
 	}
 	a.tryPendingStart()
+	a.enforceBGMCacheLimit()
 	if len(a.sePlayers) > 0 {
 		alive := a.sePlayers[:0]
 		for _, p := range a.sePlayers {

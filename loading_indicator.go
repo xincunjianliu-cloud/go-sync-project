@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image/color"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -18,6 +19,15 @@ const (
 	loadingBounceHeight = 8.0
 	loadingBouncePeriod = 0.7
 	loadingDotStagger   = 0.15
+
+	// 進捗バーは"Loading..."の幅いっぱいに、文字のすぐ上へ描く。
+	loadingBarH    = 4.0
+	loadingBarGapY = 4.0
+)
+
+var (
+	loadingBarBgColor = color.NRGBA{255, 255, 255, 50}
+	loadingBarFgColor = color.NRGBA{255, 255, 255, 220}
 )
 
 // loadingGlyphBuf はDebugPrintの6x16px文字を拡大して描くための作業用画像。
@@ -30,7 +40,8 @@ var loadingGlyphBuf *ebiten.Image
 // まだ読み込まれていない起動直後でも描画できるよう、独自フォントの
 // text.Drawではなくebitenutil.DebugPrintAtの組み込みビットマップフォント
 // (ASCII専用、6x16px)を整数倍に拡大して使う。
-func drawLoadingIndicator(screen *ebiten.Image, t float64) {
+// showProgressなら、文字の上に進捗バー(progressは0〜1)も描く。
+func drawLoadingIndicator(screen *ebiten.Image, t float64, progress float64, showProgress bool) {
 	if loadingGlyphBuf == nil {
 		loadingGlyphBuf = ebiten.NewImage((len(loadingLabel)+loadingDotCount)*loadingCharW, loadingCharH)
 	}
@@ -50,6 +61,12 @@ func drawLoadingIndicator(screen *ebiten.Image, t float64) {
 	}
 
 	drawText(loadingLabel, x0, y0+loadingBounceHeight)
+
+	if showProgress {
+		barY := y0 - loadingBarGapY - loadingBarH
+		fillRect(screen, x0, barY, totalW, loadingBarH, loadingBarBgColor)
+		fillRect(screen, x0, barY, totalW*math.Max(0, math.Min(progress, 1)), loadingBarH, loadingBarFgColor)
+	}
 
 	for i := 0; i < loadingDotCount; i++ {
 		phase := t - float64(i)*loadingDotStagger

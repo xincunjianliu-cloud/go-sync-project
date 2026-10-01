@@ -30,7 +30,10 @@ func loadTiledMap(path string) (TiledMap, error) {
 		return TiledMap{}, err
 	}
 	var tmap TiledMap
-	if err := json.Unmarshal(data, &tmap); err != nil {
+	err = json.Unmarshal(data, &tmap)
+	// パース結果はキャッシュするので、元のJSONのバイト列は手放す。
+	assetStore.release(path)
+	if err != nil {
 		return TiledMap{}, fmt.Errorf("マップ解析失敗 %s: %w", path, err)
 	}
 

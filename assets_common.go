@@ -5,67 +5,31 @@ import (
 	"fmt"
 	"image"
 	_ "image/png"
-	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-var (
-	assetBytesCache   = map[string][]byte{}
-	assetBytesCacheMu sync.Mutex
-)
-
-// loadAssetBytesCached はloadAssetBytesの結果をパスごとにキャッシュする。
-// Web版は1回のfetchにネットワーク往復が丸ごとかかるため、同じ画像を
-// 複数箇所から読み込んでも2回目以降はキャッシュから即座に返す。
+// loadAssetBytesCached はpathのバイト列を返す。取得はassetStore経由で行い、
+// まだ届いていなければ最優先に繰り上げて待つ。先読み済み(prefetch/request)
+// なら手元のバイト列をそのまま返す。
 func loadAssetBytesCached(path string) ([]byte, error) {
-	assetBytesCacheMu.Lock()
-	if data, ok := assetBytesCache[path]; ok {
-		assetBytesCacheMu.Unlock()
-		return data, nil
-	}
-	assetBytesCacheMu.Unlock()
-
-	data, err := loadAssetBytes(path)
-	if err != nil {
-		return nil, err
-	}
-
-	assetBytesCacheMu.Lock()
-	assetBytesCache[path] = data
-	assetBytesCacheMu.Unlock()
-	return data, nil
+	return assetStore.get(path)
 }
 
-// prefetchAssetBytes は起動時に必要なアセットのバイト列をまとめて並列に
-// 先読みし、キャッシュへ詰めておく。Web版は1件ずつ順番にfetchすると
-// ネットワーク往復時間がファイル数だけ積み重なって起動が遅くなるため、
-// goroutineで同時にfetchを走らせて待ち時間を重ね合わせる。
-// 実際の画像デコード・エラー処理は呼び出し元のloadAssetImageに任せる
-// (ここで失敗したパスはキャッシュに入らず、後段で通常どおりリトライ
-// されてエラーメッセージが出る)。
+// prefetchAssetBytes はpathsをまとめて最優先で取得し、全部届くまで待つ。
+// Web版は1件ずつ順番に取得するとネットワーク往復がファイル数だけ積み重なる
+// ため、同時に走らせて待ち時間を重ね合わせる。実際のデコード・エラー処理は
+// 呼び出し元に任せる。
 func prefetchAssetBytes(paths []string) {
-	seen := make(map[string]bool, len(paths))
-	var wg sync.WaitGroup
-	for _, p := range paths {
-		if seen[p] {
-			continue
-		}
-		seen[p] = true
+	requestAssets(paths, prioUrgent)
+	assetStore.wait(paths)
+}
 
-		wg.Add(1)
-		go func(path string) {
-			defer wg.Done()
-			data, err := loadAssetBytes(path)
-			if err != nil {
-				return
-			}
-			assetBytesCacheMu.Lock()
-			assetBytesCache[path] = data
-			assetBytesCacheMu.Unlock()
-		}(p)
+// requestAssets はpathsの取得を優先度prioで依頼し、待たずに戻る。
+func requestAssets(paths []string, prio int) {
+	for _, p := range paths {
+		assetStore.request(p, prio)
 	}
-	wg.Wait()
 }
 
 func loadAssetImage(path string) (*ebiten.Image, error) {
@@ -80,12 +44,15 @@ func loadAssetImage(path string) (*ebiten.Image, error) {
 // ebiten.Imageは生成しない。ebiten.NewImageFromImage等のグラフィックス系
 // APIはメインゴルーチン以外からの呼び出しが保証されていないため、
 // バックグラウンドgoroutineでの先読みにはこちらを使う。
+// デコードが終わったら元のPNGのバイト列は手放す（画像は呼び出し側が
+// ebiten.Imageとして保持するので、同じPNGを再デコードすることはない）。
 func decodeAssetImage(path string) (image.Image, error) {
 	data, err := loadAssetBytesCached(path)
 	if err != nil {
 		return nil, err
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
+	assetStore.release(path)
 	if err != nil {
 		return nil, fmt.Errorf("画像デコード失敗 %s: %w", path, err)
 	}

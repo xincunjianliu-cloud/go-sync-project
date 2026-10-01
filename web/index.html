@@ -42,6 +42,18 @@
     font-size: 14px;
     text-align: center;
   }
+  #loading-bar {
+    width: 220px;
+    height: 4px;
+    margin: 12px auto 0;
+    background: rgba(255, 255, 255, 0.2);
+    visibility: hidden;
+  }
+  #loading-bar-fill {
+    width: 0;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+  }
   #loading-label {
     position: fixed;
     right: 16px;
@@ -105,7 +117,10 @@
 </head>
 <body>
 <div id="loading">
-  <div id="loading-status">読み込み中...(初回は少し時間がかかります)</div>
+  <div id="loading-status">
+    <div id="loading-text">読み込み中...(初回は少し時間がかかります)</div>
+    <div id="loading-bar"><div id="loading-bar-fill"></div></div>
+  </div>
   <div id="loading-label">Loading<span id="loading-dots"></span></div>
 </div>
 <div id="rotate-overlay">
@@ -141,8 +156,68 @@
     screen.orientation.lock("landscape").catch(() => {});
   }
 
+  // ゲーム本体(game.wasm)のダウンロード進捗を表示する。
+  // サーバーが圧縮して送るとContent-Lengthは圧縮後の大きさになり、届く量(展開後)と
+  // 比べられないので、本来の大きさはビルド時にGitHub Actionsが下の値へ書き込む。
+  // 書き込まれていない(ローカルの確認用サーバーなど)ときは、圧縮されていない
+  // 場合に限りContent-Lengthを使い、それも無ければ届いた量(MB)だけを出す。
+  const WASM_SIZE = Number("__WASM_SIZE__") || 0;
+  const loadStartedAt = performance.now();
+
+  function showWasmProgress(loaded, total) {
+    const text = document.getElementById("loading-text");
+    const bar = document.getElementById("loading-bar");
+    const fill = document.getElementById("loading-bar-fill");
+    if (!text) {
+      return;
+    }
+    if (total > 0) {
+      const ratio = Math.min(loaded / total, 1);
+      text.textContent = "読み込み中... " + Math.floor(ratio * 100) + "%";
+      bar.style.visibility = "visible";
+      fill.style.width = (ratio * 100) + "%";
+    } else {
+      text.textContent = "読み込み中... " + (loaded / 1048576).toFixed(1) + "MB";
+    }
+  }
+
+  async function fetchWasmWithProgress() {
+    const resp = await fetch("game.wasm");
+    if (!resp.ok) {
+      throw new Error("game.wasm: HTTP " + resp.status);
+    }
+    let total = WASM_SIZE;
+    if (!total && !resp.headers.get("Content-Encoding")) {
+      total = Number(resp.headers.get("Content-Length")) || 0;
+    }
+    if (!resp.body || typeof TransformStream === "undefined") {
+      return resp;
+    }
+    let loaded = 0;
+    const counter = new TransformStream({
+      transform(chunk, controller) {
+        loaded += chunk.byteLength;
+        showWasmProgress(loaded, total);
+        controller.enqueue(chunk);
+      },
+    });
+    return new Response(resp.body.pipeThrough(counter), {
+      headers: { "Content-Type": "application/wasm" },
+    });
+  }
+
+  async function instantiateGame(importObject) {
+    const resp = await fetchWasmWithProgress();
+    if (WebAssembly.instantiateStreaming) {
+      // ダウンロードしながらコンパイルも進める。
+      return WebAssembly.instantiateStreaming(resp, importObject);
+    }
+    return WebAssembly.instantiate(await resp.arrayBuffer(), importObject);
+  }
+
   const go = new Go();
-  WebAssembly.instantiateStreaming(fetch("game.wasm"), go.importObject).then((result) => {
+  instantiateGame(go.importObject).then((result) => {
+    console.log("[load] game.wasm ready in " + ((performance.now() - loadStartedAt) / 1000).toFixed(2) + "s");
     document.getElementById("loading").remove();
     go.run(result.instance);
   }).catch((err) => {

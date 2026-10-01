@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"log"
 	"math"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -226,6 +227,15 @@ type Game struct {
 	heavyDecoded     chan decodedHeavyAsset
 	heavyAssetsReady bool
 	heavyAssetsErr   error
+	// heavyTierReady/Total/Done は段階読み込み(assetTier)の進み具合。
+	// Readyは段階ごとの完了、Total/Doneは画像の枚数(Loadingの進捗バー用)。
+	heavyTierReady [assetTierCount]bool
+	heavyTierTotal [assetTierCount]int
+	heavyTierDone  [assetTierCount]int
+	// pendingTier はChangeSceneWhenTierReadyで、暗転中に待っている段階。
+	pendingTier assetTier
+	// loadingWaitStart は暗転したまま待ち始めた時刻(計測ログ用)。
+	loadingWaitStart time.Time
 
 	bootDecoded     chan bootResult
 	bootReady       bool
@@ -410,30 +420,29 @@ func NewGame() *Game {
 	g.initDisplayMode()
 	g.lastWindowW, g.lastWindowH = g.WindowWidth, g.WindowHeight
 
-	// フォント・タイトル背景・タイトルBGMは起動直後の表示に最低限必要な
-	// アセットだが、Web版はすべてネットワーク取得になる。順番に待つと
-	// フェッチ回数分の往復時間が積み重なって初回表示が遅くなるため、
-	// 3つとも並列にバックグラウンドで取得する。完了までのUpdate/Drawは
-	// pumpBootAssets/drawLoadingIndicatorがローディング表示だけを進める。
+	// フォント・タイトル背景は起動直後の表示に最低限必要なアセットだが、
+	// Web版はすべてネットワーク取得になる。順番に待つとフェッチ回数分の
+	// 往復時間が積み重なって初回表示が遅くなるため、並列にバックグラウンドで
+	// 取得する。完了までのUpdate/DrawはpumpBootAssets/drawLoadingIndicatorが
+	// ローディング表示だけを進める。
 	g.bootDecoded = make(chan bootResult, 1)
 	go g.loadBootAssetsAsync()
 
 	return g
 }
 
-// loadBootAssetsAsync は起動直後に必要なフォント・タイトル背景・タイトルBGMを
-// 並列に先読みし、フォントソースの生成(CPUのみで完結しGPUテクスチャを
-// 作らないためメインゴルーチン以外でも安全)まで済ませてbootDecodedへ送る。
-// タイトルBGMはここではまだ再生しない(AudioManager.PlayBGMFadeInの再生開始は
-// pumpBootAssets側、メインゴルーチンで行う)が、バイト列だけprefetchAssetBytes
-// 経由でキャッシュしておくことで、再生時にネットワーク待ちが発生しなくなる。
+// loadBootAssetsAsync は起動直後に必要なフォント・タイトル背景を並列に
+// 先読みし、フォントソースの生成(CPUのみで完結しGPUテクスチャを作らないため
+// メインゴルーチン以外でも安全)まで済ませてbootDecodedへ送る。
 func (g *Game) loadBootAssetsAsync() {
 	defer close(g.bootDecoded)
 
+	// タイトルBGMは画面の表示を待たせないよう、取得だけ並行して始めておき、
+	// 届いてデコードできた時点でフェードインさせる(pumpBootAssets)。
+	assetStore.request(bgmTitle, prioSoon)
 	prefetchAssetBytes([]string{
 		"assets/fonts/k8x12.ttf",
 		"assets/images/title/title_bg.png",
-		bgmTitle,
 	})
 
 	fontData, err := loadAssetBytesCached("assets/fonts/k8x12.ttf")
@@ -469,11 +478,15 @@ func (g *Game) pumpBootAssets() {
 		}
 
 		g.currentScene = NewTitleScene(g)
+		// 曲がまだ届いていなければ、届いてデコードでき次第フェードインする。
 		g.Audio.PlayBGMFadeIn(bgmTitle, 2.0)
+		g.prewarmSE()
+		loadTrace("タイトル画面を表示 (累計取得%.1fMiB)", mib(assetStore.totalFetchedBytes()))
 
-		// ボス・敵・メニューなどタイトル画面自体には不要な画像とデータは、
-		// タイトル画面を即座に表示できるようバックグラウンドで読み込む。
-		// 完了まではTitleScene側でheavyAssetsReadyを見て先の画面に進ませない。
+		// フィールド・戦闘・メニューなどタイトル画面自体には不要な画像と
+		// データは、タイトル画面を即座に表示できるよう段階的にバックグラウンドで
+		// 読み込む。各画面は必要な段階が終わるまで先へ進まない
+		// (ChangeSceneWhenTierReady)。
 		g.heavyDecoded = make(chan decodedHeavyAsset, 32)
 		go g.loadHeavyAssetsAsync()
 
@@ -559,13 +572,24 @@ func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
 	}
 }
 
-// ChangeSceneWhenReady は、戦闘・メニュー用画像のバックグラウンド読み込みが
-// 終わっていないと組み立てられないシーン(ニューゲーム・ロード画面など)へ
-// 遷移する。読み込み済みなら通常のChangeSceneWithFadeと同じ。まだなら先に
-// 暗転させ、読み込みが終わるまでLoading表示で待ってからbuildを呼ぶ。
-// buildがnilを返した場合(マップ読み込み失敗など)は元のシーンへ戻る。
+// ChangeSceneWhenReady は、フィールド段階の画像が読み込み終わっていないと
+// 組み立てられないシーン(ニューゲーム・ロード画面など)へ遷移する。
 func (g *Game) ChangeSceneWhenReady(build func() Scene, durationSeconds float64) {
-	if g.heavyAssetsReady {
+	g.ChangeSceneWhenTierReady(assetTierField, build, durationSeconds)
+}
+
+// assetTierReady は段階tierまでの画像が読み込み終わっているかを返す。
+// 段階は小さい順に読み込むので、tierが終わっていればそれより前も終わっている。
+func (g *Game) assetTierReady(tier assetTier) bool {
+	return g.heavyAssetsReady || g.heavyTierReady[tier]
+}
+
+// ChangeSceneWhenTierReady は段階tierの画像が必要なシーンへ遷移する。
+// 読み込み済みなら通常のChangeSceneWithFadeと同じ。まだなら先に暗転させ、
+// 読み込みが終わるまでLoading表示(進捗バーつき)で待ってからbuildを呼ぶ。
+// buildがnilを返した場合(マップ読み込み失敗など)は元のシーンへ戻る。
+func (g *Game) ChangeSceneWhenTierReady(tier assetTier, build func() Scene, durationSeconds float64) {
+	if g.assetTierReady(tier) {
 		if next := build(); next != nil {
 			g.ChangeSceneWithFade(next, durationSeconds)
 		}
@@ -573,6 +597,7 @@ func (g *Game) ChangeSceneWhenReady(build func() Scene, durationSeconds float64)
 	}
 	g.pendingScene = nil
 	g.pendingBuild = build
+	g.pendingTier = tier
 	g.pendingDuration = durationSeconds
 	g.fadeMode = FadeOut
 	g.fadeAlpha = 0.0
@@ -585,8 +610,11 @@ func (g *Game) ChangeSceneWhenReady(build func() Scene, durationSeconds float64)
 // 組み立てやBGMのデコードを1フレーム内で同期的に行っていたため、
 // その間ゲーム全体(Loading表示を含む)が固まっていた。
 func (g *Game) updateSceneLoading() {
+	if g.loadingWaitStart.IsZero() {
+		g.loadingWaitStart = time.Now()
+	}
 	if g.pendingBuild != nil {
-		if !g.heavyAssetsReady {
+		if !g.assetTierReady(g.pendingTier) {
 			return
 		}
 		build := g.pendingBuild
@@ -605,20 +633,53 @@ func (g *Game) updateSceneLoading() {
 	if g.Audio.IsLoading() {
 		return
 	}
+	// 暗転しきってから画面が明けるまでに目立つ待ちがあれば記録する。
+	if waited := time.Since(g.loadingWaitStart); waited >= loadingWaitTraceThreshold {
+		loadTrace("暗転中に%.2f秒待機 (遷移先 %T)", waited.Seconds(), g.pendingScene)
+	}
+	g.loadingWaitStart = time.Time{}
 	g.currentScene = g.pendingScene
 	g.pendingScene = nil
 	g.fadeMode = FadeIn
 }
 
-// isLoading はLoading表示を出すべき状態かを返す。
+// loadingWaitTraceThreshold より短い暗転中の待ちはログに出さない。
+const loadingWaitTraceThreshold = 100 * time.Millisecond
+
+// isLoading はLoading表示を出すべき状態かを返す。タイトル画面では、
+// 「はじめから」で先へ進めるようになる(フィールド段階の完了)まで出す。
 func (g *Game) isLoading() bool {
-	return !g.heavyAssetsReady || g.fadeMode == FadeLoading
+	return !g.assetTierReady(assetTierField) || g.fadeMode == FadeLoading
+}
+
+// loadProgress は今待っている段階の読み込み進捗(0〜1)を返す。段階の読み込みを
+// 待っていない(BGMのデコード待ちなど、進み具合が分からない)ときはok=false。
+func (g *Game) loadProgress() (progress float64, ok bool) {
+	var target assetTier
+	switch {
+	case g.fadeMode == FadeLoading && g.pendingBuild != nil:
+		target = g.pendingTier
+	case !g.assetTierReady(assetTierField):
+		target = assetTierField
+	default:
+		return 0, false
+	}
+	total, done := 0, 0
+	for t := assetTier(0); t <= target; t++ {
+		total += g.heavyTierTotal[t]
+		done += g.heavyTierDone[t]
+	}
+	if total == 0 {
+		// 枚数がまだ分からない(マップの解析中)。
+		return 0, true
+	}
+	return min(float64(done)/float64(total), 1), true
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	if !g.bootReady {
 		screen.Fill(color.RGBA{10, 10, 30, 255})
-		drawLoadingIndicator(screen, g.loadingAnimTime)
+		drawLoadingIndicator(screen, g.loadingAnimTime, 0, false)
 		return
 	}
 
@@ -631,7 +692,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	if g.isLoading() {
-		drawLoadingIndicator(screen, g.loadingAnimTime)
+		progress, ok := g.loadProgress()
+		drawLoadingIndicator(screen, g.loadingAnimTime, progress, ok)
 	}
 }
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -748,13 +810,11 @@ func (g *Game) GetCharaImage(speaker string, expression int) *ebiten.Image {
 	if speaker == "" {
 		return nil
 	}
-	slug, ok := g.charaSlugs[speaker]
-	if !ok {
-		slug = speaker
-	}
-
-	sheetPath := fmt.Sprintf("assets/images/common/chara_%s_sheet.png", slug)
+	sheetPath, basePath := g.charaAssetPaths(speaker)
 	if sheet := g.lookupCharaAsset(speaker+"#sheet", sheetPath); sheet != nil {
+		// 会話の先読み(prefetchDialogueAssets)で単一画像も取得していた場合、
+		// 表情差分シートがあればそちらは使わないので手放す。
+		assetStore.release(basePath)
 		idx := expression
 		if idx < 0 || idx >= charaExprSheetFrames {
 			idx = 0
@@ -764,8 +824,17 @@ func (g *Game) GetCharaImage(speaker string, expression int) *ebiten.Image {
 		return sheet.SubImage(rect).(*ebiten.Image)
 	}
 
-	basePath := fmt.Sprintf("assets/images/common/chara_%s.png", slug)
 	return g.lookupCharaAsset(speaker, basePath)
+}
+
+// charaAssetPaths は話者の表情差分シートと単一の立ち絵のパスを返す。
+func (g *Game) charaAssetPaths(speaker string) (sheetPath, basePath string) {
+	slug, ok := g.charaSlugs[speaker]
+	if !ok {
+		slug = speaker
+	}
+	return fmt.Sprintf("assets/images/common/chara_%s_sheet.png", slug),
+		fmt.Sprintf("assets/images/common/chara_%s.png", slug)
 }
 
 func (g *Game) lookupCharaAsset(key, path string) *ebiten.Image {
@@ -799,12 +868,15 @@ func (g *Game) GetBackgroundImage(key string) *ebiten.Image {
 		return nil
 	}
 
-	path := fmt.Sprintf("assets/images/backgrounds/%s.png", key)
-	img, err := loadAssetImage(path)
+	img, err := loadAssetImage(backgroundImagePath(key))
 	if err != nil {
 		g.bgImgMissing[key] = true
 		return nil
 	}
 	g.bgImgs[key] = img
 	return img
+}
+
+func backgroundImagePath(key string) string {
+	return fmt.Sprintf("assets/images/backgrounds/%s.png", key)
 }

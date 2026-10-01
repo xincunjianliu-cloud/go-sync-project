@@ -222,6 +222,7 @@ func (s *FieldScene) applyDialogue(bd BossDialogue) {
 	s.msgTexts = bd.Commands
 	s.msg.SpeakerSides = bd.SpeakerSides
 	s.msgBackground = bd.Background
+	s.game.prefetchDialogueAssets(bd)
 }
 
 func (s *FieldScene) applyCutsceneMessage() {
@@ -565,13 +566,8 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 
 	scene.msg.WindowImg = game.WindowImg
 
-	mapBGM := bgmField1
-	if key, ok := tmap.mapBGMKey(); ok {
-		if path, found := resolveBGMKey(key); found {
-			mapBGM = path
-		}
-	}
-	scene.mapBGM = mapBGM
+	scene.mapBGM, _ = mapBGMPath(tmap)
+	game.prefetchAroundMap(mapPath, tmap)
 
 	if name, ok := tmap.mapDisplayName(); ok {
 		scene.mapNameBannerActive = true

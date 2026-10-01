@@ -754,7 +754,8 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if moved && actualMovedDist > 0 {
 		if s.safetyDistance > 0 {
 			s.safetyDistance -= encounterMovedDist
-		} else if targetEnemiesStr != "" {
+		} else if targetEnemiesStr != "" && s.game.assetTierReady(assetTierBattle) {
+			// 戦闘の画像を読み込み終わるまで(起動直後の数秒)はエンカウントしない。
 			s.walkCooldown += encounterMovedDist
 			if s.walkCooldown >= 32.0 {
 				s.walkCooldown = 0
@@ -1212,8 +1213,10 @@ func (s *FieldScene) runSceneChangeCommand(cmd EventCommand) bool {
 	s.autoMode = false
 
 	if isBattle {
-		battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
-		s.game.ChangeSceneWithFade(battleScene, fadeTimeBossIn)
+		// 戦闘の画像がまだ読み込み中なら、暗転したまま待ってから始める。
+		s.game.ChangeSceneWhenTierReady(assetTierBattle, func() Scene {
+			return NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
+		}, fadeTimeBossIn)
 		return true
 	}
 	thumb := ebiten.NewImage(gameWidth, gameHeight)

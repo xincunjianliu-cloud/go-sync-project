@@ -33,6 +33,10 @@ jobs:
           sudo apt-get update && sudo apt-get install -y binaryen
           wasm-opt -Oz --enable-bulk-memory --enable-sign-ext --enable-nontrapping-float-to-int \
             -o web/game.wasm web/game.wasm
+      - name: Write wasm size for the download progress bar
+        # GitHub Pagesはwasmを圧縮して送るので、ブラウザ側では本来の大きさが
+        # 分からない。index.htmlの__WASM_SIZE__を最終的なファイルサイズに置き換える。
+        run: sed -i "s/__WASM_SIZE__/$(stat -c%s web/game.wasm)/" web/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
