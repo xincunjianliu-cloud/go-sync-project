@@ -526,6 +526,9 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 			mpCost = sk.Levels[lv-1].MPCost
 			if lv > curLv {
 				descText = descText + "　長押しで強化"
+				if bonus := statBonusText(sk.Levels[lv-1].StatBonus); bonus != "" {
+					descText += "（" + bonus + "）"
+				}
 			}
 		}
 

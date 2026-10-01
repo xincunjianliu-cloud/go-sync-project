@@ -66,6 +66,8 @@ type pendingPlayerHit struct {
 	slot int
 	dmg  int
 	crit bool
+	// nonLethal hits never take the enemy below 1 HP.
+	nonLethal bool
 }
 
 const (
@@ -91,7 +93,7 @@ const (
 	trackX         = 20.0
 	trackY         = 53.0
 	trackH         = 8.0
-	iconSize       = 40.0
+	iconSize       = 58.0 // must match timeline icon PNG width; atbIconSpacing uses it
 	timelineStartX = trackX + 10.0
 
 	logPanelY = 400.0
@@ -394,6 +396,8 @@ type EnemyUnit struct {
 	Skills            []EnemySkill
 	Drops             []ItemDrop
 	Debuffs           []Debuff
+	// Scanned is set once みやぶる reveals this enemy's HP and weaknesses.
+	Scanned bool
 
 	Image *ebiten.Image
 
@@ -425,6 +429,10 @@ type BattleScene struct {
 	itemButtonArmed   bool
 	skillIndex        int
 	activePlayer      int
+
+	// minActorSpd/maxActorSpd are the Spd range across every actor at
+	// battle start, used to scale each actor's return-position bonus.
+	minActorSpd, maxActorSpd float64
 
 	atbGauge        [partySize + maxEnemies]float64
 	waitStance      [partySize]bool
@@ -547,6 +555,26 @@ type BattleScene struct {
 	PlayerDebuffs [partySize][]Debuff
 	PlayerBuffs   [partySize][]Buff
 
+	// coverCount is how many more single-target enemy attacks on allies
+	// this party member will take in their place (かばう).
+	coverCount [partySize]int
+	// counterTimer is the remaining counter-stance time (カウンター) and
+	// counterBonus its extra damage percent.
+	counterTimer [partySize]float64
+	counterBonus [partySize]int
+	// guardHPPercent/guardCount are 守りの祈り's threshold and remaining
+	// charges on each party member.
+	guardHPPercent [partySize]int
+	guardCount     [partySize]int
+
+	// forceCrit makes the next rollDamage a guaranteed critical hit.
+	forceCrit bool
+	// pendingDrain* describe the MP drain (ドレインアックス) of the player
+	// attack whose hits are pending; pendingDrainDivisor 0 means none.
+	pendingDrainActor   int
+	pendingDrainDivisor int
+	pendingDrainMax     int
+
 	// debugStatIconTest tracks whether applyDebugCheats' Shift+B test
 	// buffs/debuffs are currently applied, so pressing it again clears them.
 	debugStatIconTest bool
@@ -584,6 +612,8 @@ type DamagePop struct {
 	IsMP   bool // MP recovery; drawn blue, combined with IsHeal for motion
 	IsCrit bool
 	IsMiss bool
+	// Label, when set, is drawn instead of the number (e.g. "無敵").
+	Label string
 }
 
 type DeathParticle struct {
@@ -704,14 +734,7 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 		s.preBattlePlayerMP[i] = game.PlayerMP[i]
 	}
 
-	headStartSpeeds := make([]int, partySize+len(s.enemies))
-	for i := 0; i < partySize; i++ {
-		headStartSpeeds[i] = game.PlayerSpd[i]
-	}
-	for i := range s.enemies {
-		headStartSpeeds[s.enemyActorIndex(i)] = int(s.enemies[i].Speed)
-	}
-	copy(s.atbGauge[:], atbHeadStarts(headStartSpeeds))
+	s.initTimelinePositions()
 
 	if evType == lastBossEventType {
 		s.bgmPath = bgmBattleLastBoss

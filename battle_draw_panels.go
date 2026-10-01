@@ -45,8 +45,11 @@ func (s *BattleScene) drawTargetSelectUI(screen *ebiten.Image) {
 
 func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 	isAll := s.healTargetIndex == partySize
+	data, _ := s.pendingSkillData()
 
-	s.drawAllTargetRow(screen, isAll)
+	if data.Target == TargetAll || data.Target == TargetBoth {
+		s.drawAllTargetRow(screen, isAll)
+	}
 
 	for i := 0; i < partySize; i++ {
 		centerX := s.partyScreenX[i]
@@ -54,7 +57,7 @@ func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 
 		showArrow := false
 		if isAll {
-			showArrow = s.game.PlayerHP[i] > 0
+			showArrow = s.allyTargetValid(data, i)
 		} else {
 			showArrow = s.healTargetIndex == i
 		}

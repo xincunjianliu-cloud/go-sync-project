@@ -124,13 +124,31 @@ const drawAllTargetRowBoxW = 180.0
 // (the slot a 5th party row would take); smaller values move it down.
 const drawAllTargetRowYOffset = 6.0
 
+// allTargetRowBox returns the menu "全体" box (also used by the 全快 button,
+// which takes the same slot while the "全体" row is hidden): drawAllTargetRowBoxW
+// wide, centered on the span from the party icon's left edge to the right end
+// of the HP/MP bars drawn by drawStatusBox. centerY is the row's text line.
+func (m *MenuScene) allTargetRowBox(statusX float64) (box tapRect, centerY float64) {
+	y := menuStatusStartY + partySize*menuStatusSpacingY - drawAllTargetRowYOffset
+	iconW := float64(m.game.PartyIconImgs[0].Bounds().Dx())
+	spanLeft := statusX - iconW + menuStatusIconOffsetX
+	spanRight := statusX + statusBlockW
+	boxW := drawAllTargetRowBoxW
+	return tapRect{
+		x: (spanLeft+spanRight)/2 - boxW/2,
+		y: y - drawAllTargetRowBoxH/2,
+		w: boxW,
+		h: drawAllTargetRowBoxH,
+	}, y
+}
+
 func (m *MenuScene) drawAllTargetRow(screen *ebiten.Image, statusX float64) {
 	allowed, selected := m.allTargetRowState()
 	if !allowed {
 		return
 	}
 
-	y := menuStatusStartY + partySize*menuStatusSpacingY - drawAllTargetRowYOffset
+	box, y := m.allTargetRowBox(statusX)
 
 	interactive := m.menuState == menuStateHealTarget || m.menuState == menuStateItemTarget
 
@@ -144,14 +162,7 @@ func (m *MenuScene) drawAllTargetRow(screen *ebiten.Image, statusX float64) {
 		boxFillCol = color.RGBA{41, 58, 94, 220}
 	}
 
-	// drawAllTargetRowBoxW wide, centered on the span from the party icon's
-	// left edge to the right end of the HP/MP bars drawn by drawStatusBox.
-	iconW := float64(m.game.PartyIconImgs[0].Bounds().Dx())
-	spanLeft := statusX - iconW + menuStatusIconOffsetX
-	spanRight := statusX + statusBlockW
-	boxW := drawAllTargetRowBoxW
-	boxX := (spanLeft+spanRight)/2 - boxW/2
-	boxY := y - drawAllTargetRowBoxH/2
+	boxX, boxY, boxW := box.x, box.y, box.w
 
 	fillRect(screen, boxX, boxY, boxW, drawAllTargetRowBoxH, boxFillCol)
 
@@ -336,6 +347,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 	}
 
 	m.drawAllTargetRow(screen, statusX)
+	m.drawAutoHealButton(screen, statusX)
 
 	skillPanelVisible := m.menuState == menuStateSkillSub || m.menuState == menuStateHealTarget
 	itemPanelVisible := m.menuState == menuStateItemList || m.menuState == menuStateItemTarget
@@ -477,7 +489,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 
 			if lv > curLv {
 				requiredSP := "-"
-				if cost := SkillUpgradeCost(lv - 1); cost > 0 {
+				if cost := SkillUpgradeCost(sk, lv-1); cost > 0 {
 					requiredSP = fmt.Sprintf("%d", cost)
 				}
 				spOp := &text.DrawOptions{}

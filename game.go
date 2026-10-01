@@ -166,6 +166,7 @@ type Game struct {
 	lastWindowW             int
 	lastWindowH             int
 	windowResizeSettleTimer int
+	fullscreenSyncHold      int
 
 	CurrentObjectiveID string
 
@@ -405,10 +406,7 @@ func NewGame() *Game {
 	g.Audio.SetSEVolume(settings.SEVolume)
 	g.Audio.SetMasterVolume(settings.MasterVolume)
 
-	applyDisplayMode(g.Fullscreen, g.WindowWidth, g.WindowHeight)
-	if !g.Fullscreen {
-		g.WindowWidth, g.WindowHeight = ebiten.WindowSize()
-	}
+	g.setFullscreen(g.Fullscreen)
 	g.lastWindowW, g.lastWindowH = g.WindowWidth, g.WindowHeight
 
 	// フォント・タイトル背景・タイトルBGMは起動直後の表示に最低限必要な
@@ -502,6 +500,8 @@ func (g *Game) Update() error {
 	uiMobileArrowsEnabled = g.MobileMode
 
 	g.updateMouseCursorVisibility(dt)
+	g.updateFullscreenShortcut()
+	g.syncFullscreenState()
 	g.updateWindowSizeTracking()
 
 	g.TotalPlayTime += dt

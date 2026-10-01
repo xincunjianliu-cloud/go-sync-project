@@ -314,8 +314,8 @@ func (s *BattleScene) partyPortraitPixelHit(i int, p touchPoint) bool {
 	return lx >= minX && lx <= maxX
 }
 
-func (s *BattleScene) hitTestHealTargets() (int, bool) {
-	return s.hitTestPartyTargets(true)
+func (s *BattleScene) hitTestHealTargets(allowAll bool) (int, bool) {
+	return s.hitTestPartyTargets(allowAll)
 }
 
 func (s *BattleScene) hitTestItemTargets(allowAll bool) (int, bool) {
@@ -408,16 +408,11 @@ func (s *BattleScene) drawEnemyAllTargetRow(screen *ebiten.Image, selected bool)
 }
 
 func (s *BattleScene) currentSkillTargetType() SkillTarget {
-	p := s.waitingActor
-	if p < 0 || p >= partySize || s.pendingSkill < 1 {
+	data, ok := s.pendingSkillData()
+	if !ok {
 		return TargetSingle
 	}
-	skillIdx := s.pendingSkill - 1
-	skills := s.game.CharacterSkills(p)
-	if skillIdx < 0 || skillIdx >= len(skills) {
-		return TargetSingle
-	}
-	return s.game.CurrentSkillLevelData(p, skillIdx).Target
+	return data.Target
 }
 
 func (s *BattleScene) currentTargetAllowsAll() bool {

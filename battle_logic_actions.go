@@ -42,8 +42,6 @@ func (s *BattleScene) rollNormalDamage(target int) int {
 
 func (s *BattleScene) finishPlayerTurn(returnPos float64) {
 	if s.waitingActor >= 0 && s.waitingActor < partySize {
-		s.tickDebuffs(s.waitingActor, false)
-		s.tickBuffs(s.waitingActor)
 		s.resetPlayerGaugeTo(s.waitingActor, returnPos)
 	}
 	s.waitingActor = -1
@@ -183,7 +181,7 @@ func (s *BattleScene) rollEnemyAction() {
 }
 
 func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
-	target := aliveList[rand.Intn(len(aliveList))]
+	target := s.coverRedirect(aliveList[rand.Intn(len(aliveList))])
 
 	s.pendingEnemySkillName = ""
 	s.pendingEnemySkillEffects = nil
@@ -201,7 +199,7 @@ func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
 	if def < 1 {
 		def = 1
 	}
-	dmg := s.rollDamage(float64(s.enemies[s.actingEnemySlot].PhysAtk), 100.0, float64(def), 1.0, 0)
+	dmg := s.rollDamage(float64(s.effectiveEnemyAtk(s.actingEnemySlot, false)), 100.0, float64(def), 1.0, 0)
 
 	s.pendingEnemyHits = []pendingEnemyHit{{target: target, dmg: dmg}}
 	s.pendingEnemyHitTier = hitTierWeak
@@ -213,7 +211,7 @@ func (s *BattleScene) rollEnemySkill(skill EnemySkill, aliveList []int) {
 	if skill.Target == TargetAll {
 		targets = aliveList
 	} else {
-		targets = []int{aliveList[rand.Intn(len(aliveList))]}
+		targets = []int{s.coverRedirect(aliveList[rand.Intn(len(aliveList))])}
 	}
 
 	s.pendingEnemySkillName = skill.Name
@@ -281,6 +279,20 @@ func (s *BattleScene) applyEnemyPendingHits() {
 		prevHP := s.game.PlayerHP[target]
 		s.lastEnemyAttackTarget = target
 		s.lastEnemyAttackPrevHP = prevHP
+
+		if s.tryGuard(target, dmg) {
+			s.lastEnemyAttackDamage = 0
+			s.game.Audio.PlaySEByKey("evade")
+			s.spawnDamagePop(DamagePop{
+				X:      targetX,
+				Y:      targetY,
+				Vy:     -180.0,
+				IsMiss: true,
+				Label:  "無敵",
+			})
+			continue
+		}
+
 		s.lastEnemyAttackDamage = dmg
 		s.game.Audio.PlaySEByKey("damage")
 
@@ -300,6 +312,8 @@ func (s *BattleScene) applyEnemyPendingHits() {
 			s.playerFlashTimer[target] = spriteFlashDuration
 		} else {
 			s.game.PlayerHP[target] = 0
+			s.coverCount[target] = 0
+			s.counterTimer[target] = 0
 
 			if s.countWaitStance() > 0 {
 				s.cancelWaitAfterDeath()
@@ -308,6 +322,17 @@ func (s *BattleScene) applyEnemyPendingHits() {
 
 		if s.pendingEnemySkillEffects != nil {
 			s.applySkillEffects(s.pendingEnemySkillEffects, s.actingEnemySlot, false, target, s.pendingEnemyIsAll)
+		}
+
+		if dmg > 0 && s.game.PlayerHP[target] > 0 && s.counterTimer[target] > 0 {
+			s.counterAttack(target, s.actingEnemySlot)
+		}
+	}
+
+	// かばう's buffs stay through the last covered hit, then go.
+	for i := 0; i < partySize; i++ {
+		if s.coverCount[i] <= 0 {
+			s.PlayerBuffs[i] = withoutCoverBuffs(s.PlayerBuffs[i])
 		}
 	}
 
@@ -323,7 +348,6 @@ func (s *BattleScene) applyEnemyPendingHits() {
 	s.enemyActionWaitTimer = enemyActionDuration
 
 	s.waitingActor = -1
-	s.tickDebuffs(s.actingEnemySlot, true)
 	s.checkBattleEnd()
 }
 
@@ -450,14 +474,15 @@ func (s *BattleScene) exitBattleToField() {
 	s.game.ChangeSceneWithFade(field, 0.5)
 }
 
-// partyHasEnoughSPToUpgrade reports whether any party member has reached the
-// SP cost of the first skill upgrade (SkillUpgradeCost(1) == 100), i.e.
-// whether skill enhancement in the menu has just become possible.
+// partyHasEnoughSPToUpgrade reports whether any party member can afford to
+// upgrade one of their unlocked skills, i.e. whether skill enhancement in
+// the menu has just become possible.
 func partyHasEnoughSPToUpgrade(game *Game) bool {
-	cost := SkillUpgradeCost(1)
 	for i := 0; i < partySize; i++ {
-		if game.PlayerSP[i] >= cost {
-			return true
+		for j := range game.CharacterSkills(i) {
+			if game.IsSkillUnlocked(i, j) && game.CanUpgradeSkill(i, j) {
+				return true
+			}
 		}
 	}
 	return false
@@ -541,7 +566,7 @@ func (s *BattleScene) updateTargetSelect() {
 		isAll := s.currentAttackIsAllTarget()
 		targets := s.enemyTargetsForAttack(isAll)
 
-		if data.Element == ElemPhysicalNone {
+		if data.usesPhysical() {
 			s.attackAnimType = animCharge
 		} else {
 			s.attackAnimType = animFireMagic
@@ -550,7 +575,7 @@ func (s *BattleScene) updateTargetSelect() {
 		hits := make([]pendingPlayerHit, 0, len(targets))
 		for _, slot := range targets {
 			dmg := s.rollSkillDamage(p, skillIdx, lv, isAll, slot)
-			hits = append(hits, pendingPlayerHit{slot: slot, dmg: dmg, crit: s.lastRollWasCrit})
+			hits = append(hits, pendingPlayerHit{slot: slot, dmg: dmg, crit: s.lastRollWasCrit, nonLethal: data.NonLethal})
 		}
 		s.pendingPlayerHits = hits
 
@@ -558,7 +583,7 @@ func (s *BattleScene) updateTargetSelect() {
 			hits2 := make([]pendingPlayerHit, 0, len(targets))
 			for _, slot := range targets {
 				dmg2 := s.rollSkillDamage(p, skillIdx, lv, isAll, slot)
-				hits2 = append(hits2, pendingPlayerHit{slot: slot, dmg: dmg2, crit: s.lastRollWasCrit})
+				hits2 = append(hits2, pendingPlayerHit{slot: slot, dmg: dmg2, crit: s.lastRollWasCrit, nonLethal: data.NonLethal})
 			}
 			s.pendingPlayerHits2 = hits2
 			s.pendingDamage2Scheduled = true
@@ -571,12 +596,25 @@ func (s *BattleScene) updateTargetSelect() {
 		s.battleLog = skills[skillIdx].Name
 		s.battleLogTimer = skillActionLogDuration
 
+		knockback := 0.0
+		if data.Knockback > 0 {
+			knockback = data.Knockback + data.KnockbackPerTG*float64(s.tgLevel()-1)
+		}
 		for _, slot := range targets {
 			s.applySkillEffects(data.Effects, p, true, slot, isAll)
 			if s.rewindActive {
 				s.applySkillEffects(data.Effects, p, true, slot, isAll)
 			}
+			if knockback > 0 {
+				s.reduceAtb(true, slot, knockback)
+			}
+			if data.Scan {
+				s.enemies[slot].Scanned = true
+			}
 		}
+		s.pendingDrainDivisor = data.DrainDivisor
+		s.pendingDrainMax = data.DrainMax
+		s.pendingDrainActor = p
 		s.addGaugePoint(data.GaugePoint)
 
 		s.activeAttacker = p
@@ -587,6 +625,7 @@ func (s *BattleScene) updateTargetSelect() {
 	}
 
 	s.attackAnimType = animNormal
+	s.pendingDrainDivisor = 0
 	s.game.Audio.PlaySEByKey("attack_normal")
 	targets := s.enemyTargetsForAttack(false)
 	target := targets[0]
@@ -611,20 +650,105 @@ func (s *BattleScene) updateTargetSelect() {
 	s.battlePhase = phaseATB
 }
 
+// pendingSkillData is the level data of the skill s.pendingSkill at the
+// level the acting party member picked for it.
+func (s *BattleScene) pendingSkillData() (SkillLevelData, bool) {
+	p := s.waitingActor
+	if p < 0 || p >= partySize || s.pendingSkill < 1 {
+		return SkillLevelData{}, false
+	}
+	skillIdx := s.pendingSkill - 1
+	skills := s.game.CharacterSkills(p)
+	if skillIdx >= len(skills) {
+		return SkillLevelData{}, false
+	}
+	lv := s.lastSkillLevel[p][skillIdx]
+	if lv < 1 || lv > len(skills[skillIdx].Levels) {
+		lv = 1
+	}
+	return skills[skillIdx].Levels[lv-1], true
+}
+
+// allyTargetValid reports whether party member i can receive data: fallen
+// members for revives, living ones for everything else.
+func (s *BattleScene) allyTargetValid(data SkillLevelData, i int) bool {
+	if data.ReviveHPPercent > 0 {
+		return s.game.PlayerHP[i] <= 0
+	}
+	return s.game.PlayerHP[i] > 0
+}
+
+func (s *BattleScene) allyAllTargets(data SkillLevelData) []int {
+	var targets []int
+	for i := 0; i < partySize; i++ {
+		if s.allyTargetValid(data, i) {
+			targets = append(targets, i)
+		}
+	}
+	return targets
+}
+
+// allyTargetOptions lists the healTargetIndex values the cursor can move
+// between for data: the four party slots unless the skill always hits
+// everyone, plus the "全員" row (partySize) when the skill can.
+func allyTargetOptions(data SkillLevelData) []int {
+	var options []int
+	if data.Target != TargetAll {
+		for i := 0; i < partySize; i++ {
+			options = append(options, i)
+		}
+	}
+	if data.Target == TargetAll || data.Target == TargetBoth {
+		options = append(options, partySize)
+	}
+	return options
+}
+
+// firstAllyTarget is where the ally target cursor starts for data.
+func (s *BattleScene) firstAllyTarget(data SkillLevelData) int {
+	if data.Target == TargetAll {
+		return partySize
+	}
+	for i := 0; i < partySize; i++ {
+		if s.allyTargetValid(data, i) {
+			return i
+		}
+	}
+	return 0
+}
+
 func (s *BattleScene) updateHealTargetSelect() {
 	p := s.waitingActor
-
-	const cycleLen = partySize + 1
-	if isMenuUpPressed() {
-		s.healTargetIndex = (s.healTargetIndex - 1 + cycleLen) % cycleLen
-		s.game.Audio.PlaySEByKey("cursor")
-	}
-	if isMenuDownPressed() {
-		s.healTargetIndex = (s.healTargetIndex + 1) % cycleLen
-		s.game.Audio.PlaySEByKey("cursor")
+	data, ok := s.pendingSkillData()
+	if !ok {
+		s.battlePhase = phaseSkillMenu
+		return
 	}
 
-	tappedIdx, tappedOk := s.hitTestHealTargets()
+	options := allyTargetOptions(data)
+	if isMenuUpPressed() || isMenuDownPressed() {
+		curPos := 0
+		for i, idx := range options {
+			if idx == s.healTargetIndex {
+				curPos = i
+				break
+			}
+		}
+		if isMenuDownPressed() {
+			curPos = (curPos + 1) % len(options)
+		} else {
+			curPos = (curPos - 1 + len(options)) % len(options)
+		}
+		if len(options) > 1 {
+			s.game.Audio.PlaySEByKey("cursor")
+		}
+		s.healTargetIndex = options[curPos]
+	}
+
+	tappedIdx, tappedOk := s.hitTestHealTargets(data.Target != TargetSingle)
+	if tappedOk && data.Target == TargetAll {
+		tappedIdx = partySize
+	}
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.healTargetIndex, s.game.Audio)
 
 	hadTouch := len(justPressedTouchPoints()) > 0
@@ -638,32 +762,21 @@ func (s *BattleScene) updateHealTargetSelect() {
 	}
 
 	skillIdx := s.pendingSkill - 1
-	if skillIdx < 0 {
-		s.battlePhase = phaseSkillMenu
-		return
-	}
 	lv := s.lastSkillLevel[p][skillIdx]
 	if lv < 1 {
 		lv = 1
 	}
 	skills := s.game.CharacterSkills(p)
-	data := skills[skillIdx].Levels[lv-1]
 	cost := s.effectiveMPCost(data.MPCost)
 
 	isAll := s.healTargetIndex == partySize
 	targets := []int{s.healTargetIndex}
 	if isAll {
-		targets = targets[:0]
-		for i := 0; i < partySize; i++ {
-			if s.game.PlayerHP[i] > 0 {
-				targets = append(targets, i)
-			}
-		}
-	} else if s.game.PlayerHP[s.healTargetIndex] <= 0 {
-		s.game.Audio.PlaySEByKey("error")
-		return
+		targets = s.allyAllTargets(data)
+	} else if !s.allyTargetValid(data, s.healTargetIndex) {
+		targets = nil
 	}
-	if s.game.PlayerMP[p] < cost {
+	if len(targets) == 0 || s.game.PlayerMP[p] < cost {
 		s.game.Audio.PlaySEByKey("error")
 		return
 	}
@@ -671,14 +784,39 @@ func (s *BattleScene) updateHealTargetSelect() {
 	s.startCast(p)
 	s.game.PlayerMP[p] -= cost
 
+	mpHeal := 0
+	if data.TGMPHealLevel > 0 && s.tgLevel() >= data.TGMPHealLevel {
+		mpHeal = data.MPHealSingle
+		if isAll {
+			mpHeal = data.MPHealAll
+		}
+	}
+
 	// 全体回復は1回だけ回復量を振って全員に同じ量を配る。巻き戻し中の
 	// 2回目の回復は、全体/単体とも対象ごとに振り直す。
-	healAmount := s.rollSkillHeal(p, skillIdx, lv, isAll)
+	healAmount := 0
+	if data.IsHeal {
+		healAmount = s.rollSkillHeal(p, skillIdx, lv, isAll)
+	}
 	for _, target := range targets {
-		s.applySkillHeal(target, healAmount, false)
+		if data.ReviveHPPercent > 0 {
+			s.revivePlayer(target, data.ReviveHPPercent)
+		}
+		if data.IsHeal {
+			s.applySkillHeal(target, healAmount, false)
+		}
+		if mpHeal > 0 {
+			s.applySkillMPHeal(target, mpHeal)
+		}
+		if data.GuardHPPercent > 0 {
+			s.guardHPPercent[target] = data.GuardHPPercent
+			s.guardCount[target] = data.GuardCount
+		}
 		s.applySkillEffects(data.Effects, p, false, target, isAll)
 		if s.rewindActive {
-			s.applySkillHeal(target, s.rollSkillHeal(p, skillIdx, lv, isAll), true)
+			if data.IsHeal {
+				s.applySkillHeal(target, s.rollSkillHeal(p, skillIdx, lv, isAll), true)
+			}
 			s.applySkillEffects(data.Effects, p, false, target, isAll)
 		}
 	}
@@ -691,6 +829,132 @@ func (s *BattleScene) updateHealTargetSelect() {
 	s.addGaugePoint(data.GaugePoint)
 
 	s.finishPlayerTurn(s.pendingActionReturnPosition())
+}
+
+// executeSelfSkill uses the pending TargetSelf skill (かばう, カウンター)
+// on the acting party member right away.
+func (s *BattleScene) executeSelfSkill() {
+	p := s.waitingActor
+	data, ok := s.pendingSkillData()
+	if !ok {
+		return
+	}
+	s.game.Audio.PlaySEByKey("heal")
+	s.startCast(p)
+	s.game.PlayerMP[p] -= s.effectiveMPCost(data.MPCost)
+
+	if data.CoverCount > 0 {
+		s.coverCount[p] = data.CoverCount
+		s.PlayerBuffs[p] = withoutCoverBuffs(s.PlayerBuffs[p])
+		for _, e := range data.Effects {
+			stats, isBuff, ok := effectStats(e.Type)
+			if !ok || !isBuff {
+				continue
+			}
+			for _, st := range stats {
+				s.PlayerBuffs[p] = append(s.PlayerBuffs[p], Buff{Type: st, Percent: e.Percent, Cover: true})
+			}
+		}
+	} else {
+		s.applySkillEffects(data.Effects, p, false, p, false)
+	}
+	if data.CounterSeconds > 0 {
+		s.counterTimer[p] = data.CounterSeconds
+		s.counterBonus[p] = data.CounterBonus
+	}
+
+	s.healingAnimTimer[p] = 1.5
+	s.battleLog = s.game.CharacterSkills(p)[s.pendingSkill-1].Name
+	s.battleLogTimer = battleLogDuration
+	s.addGaugePoint(data.GaugePoint)
+
+	s.finishPlayerTurn(s.pendingActionReturnPosition())
+}
+
+// revivePlayer brings fallen party member i back with percent% of max HP.
+func (s *BattleScene) revivePlayer(i, percent int) {
+	if s.game.PlayerHP[i] > 0 {
+		return
+	}
+	hp := max(s.game.PlayerMaxHP[i]*percent/100, 1)
+	s.game.PlayerHP[i] = hp
+	s.deadWaitStuck[i] = false
+	s.placeOnTimeline(i, 0)
+	s.playerPose[i] = poseIdle
+	s.playerAnimTimer[i] = 0
+	s.spawnDamagePop(DamagePop{
+		Value:  hp,
+		X:      s.partyScreenX[i] + spriteFrameW/2,
+		Y:      s.partyScreenY[i] - partyDamagePopOffsetY,
+		Vy:     -45.0,
+		IsHeal: true,
+	})
+}
+
+// applySkillMPHeal restores amount MP to target (capped at max MP) and
+// shows it just below the HP heal popup.
+func (s *BattleScene) applySkillMPHeal(target, amount int) {
+	s.game.PlayerMP[target] = min(s.game.PlayerMP[target]+amount, s.game.PlayerMaxMP[target])
+	s.spawnDamagePop(DamagePop{
+		Value:  amount,
+		X:      s.partyScreenX[target] + spriteFrameW/2,
+		Y:      s.partyScreenY[target] - partyDamagePopOffsetY + 30.0,
+		Vy:     -45.0,
+		Timer:  -0.12,
+		IsHeal: true,
+		IsMP:   true,
+	})
+}
+
+// coverRedirect returns the party member who takes a single-target enemy
+// attack aimed at target: a living ally with かばう charges left (spending
+// one), or target itself.
+func (s *BattleScene) coverRedirect(target int) int {
+	for c := 0; c < partySize; c++ {
+		if c == target || s.coverCount[c] <= 0 || s.game.PlayerHP[c] <= 0 {
+			continue
+		}
+		s.coverCount[c]--
+		return c
+	}
+	return target
+}
+
+// tryGuard spends one 守りの祈り charge on target if dmg would leave them at
+// or below the guard's HP threshold, reporting whether the hit is nullified.
+func (s *BattleScene) tryGuard(target, dmg int) bool {
+	if dmg <= 0 || s.guardCount[target] <= 0 {
+		return false
+	}
+	threshold := s.game.PlayerMaxHP[target] * s.guardHPPercent[target] / 100
+	if s.game.PlayerHP[target]-dmg > threshold {
+		return false
+	}
+	s.guardCount[target]--
+	return true
+}
+
+// counterAttack answers an enemy hit on party member p (in カウンター stance)
+// with a normal attack on the enemy in slot.
+func (s *BattleScene) counterAttack(p, slot int) {
+	if slot < 0 || slot >= len(s.enemies) || s.enemies[slot].HP <= 0 {
+		return
+	}
+	def := max(s.effectiveEnemyDef(slot, false), 1)
+	power := (100.0 + float64(s.gaugeAtkBonus())) * (1.0 + float64(s.counterBonus[p])/100.0)
+	dmg := s.rollDamage(float64(s.effectiveAtk(p)), power, float64(def), 1.0, s.game.PlayerLuck[p])
+	crit := s.lastRollWasCrit
+	s.applyDamageToEnemySlot(slot, dmg)
+	s.game.Audio.PlaySEByKey("attack_normal")
+	x, y, w, eh := s.enemyDrawRect(slot)
+	s.spawnDamagePop(DamagePop{
+		Value:  dmg,
+		X:      x + w/2,
+		Y:      y - eh*damagePopHeadOffsetRatio,
+		Vy:     -180.0,
+		Timer:  -0.2,
+		IsCrit: crit,
+	})
 }
 
 // applySkillHeal はtargetのHPを最大HPを上限にamount回復し、回復量を表示する。

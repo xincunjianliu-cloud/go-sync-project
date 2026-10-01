@@ -104,6 +104,11 @@ func (m *MenuScene) Update(dt float64) Scene {
 	m.nextScene = nil
 	m.previewTicks++
 
+	if m.isAutoHealPressed() {
+		m.tryAutoHeal()
+		return m
+	}
+
 	if !m.isModalMenuState() && m.menuState != menuStateMain {
 		if idx, ok := m.hitTestMainCommandList(); ok {
 			if idx != m.menuIndex {

@@ -90,6 +90,9 @@ func (s *BattleScene) drawEnemyHeader(screen *ebiten.Image) {
 			intensity = r * r
 		}
 		drawWithHitFlash(screen, e.Image, g, intensity)
+		if e.Scanned {
+			s.drawEnemyScanInfo(screen, i)
+		}
 	}
 
 	for _, p := range s.deathParticles {
@@ -249,7 +252,9 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 		numFontSize := 52.0
 		base := damagePopColor(pop)
 		mainColor := color.RGBA{base.R, base.G, base.B, alpha}
-		if pop.IsMiss {
+		if pop.Label != "" {
+			msg = pop.Label
+		} else if pop.IsMiss {
 			msg = "MISS"
 		} else if pop.IsCrit && !pop.IsHeal {
 			numFontSize = 62.0
@@ -384,4 +389,40 @@ func damagePopColor(pop DamagePop) color.RGBA {
 		return popColorCrit
 	}
 	return popColorDamage
+}
+
+var elementNames = [elementalTypeCount]string{"炎", "雷", "氷", "風"}
+
+// drawEnemyScanInfo shows the HP and elemental weaknesses (negative
+// resistances) みやぶる revealed, centered above the enemy in slot.
+func (s *BattleScene) drawEnemyScanInfo(screen *ebiten.Image, slot int) {
+	e := &s.enemies[slot]
+	x, y, w, _ := s.enemyDrawRect(slot)
+	weak := ""
+	for i, r := range e.ElementResist {
+		if r < 0 {
+			weak += elementNames[i]
+		}
+	}
+	if weak == "" {
+		weak = "なし"
+	}
+	msg := fmt.Sprintf("HP %d/%d\n弱点:%s", e.HP, e.MaxHP, weak)
+	face := s.game.FontFace(15)
+	for _, off := range [][2]float64{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+		op := &text.DrawOptions{}
+		op.PrimaryAlign = text.AlignCenter
+		op.SecondaryAlign = text.AlignEnd
+		op.LineSpacing = 17
+		op.GeoM.Translate(x+w/2+off[0]+s.shakeX, y-4+off[1]+s.shakeY)
+		op.ColorScale.ScaleWithColor(color.Black)
+		text.Draw(screen, msg, face, op)
+	}
+	op := &text.DrawOptions{}
+	op.PrimaryAlign = text.AlignCenter
+	op.SecondaryAlign = text.AlignEnd
+	op.LineSpacing = 17
+	op.GeoM.Translate(x+w/2+s.shakeX, y-4+s.shakeY)
+	op.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, msg, face, op)
 }

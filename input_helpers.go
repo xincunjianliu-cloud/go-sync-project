@@ -61,9 +61,12 @@ func repeatFires(ticks, delay, every int) bool {
 	return (ticks-delay)%every == 0
 }
 
+// Alt+Enterはフルスクリーン切り替え(updateFullscreenShortcut)に使うので、
+// Altを押している間のEnterは決定にしない。
 func isConfirmKeyPressed() bool {
-	return inpututil.IsKeyJustPressed(ebiten.KeyEnter) ||
-		inpututil.IsKeyJustPressed(ebiten.KeyNumpadEnter) ||
+	enter := !isAltKeyDown() && (inpututil.IsKeyJustPressed(ebiten.KeyEnter) ||
+		inpututil.IsKeyJustPressed(ebiten.KeyNumpadEnter))
+	return enter ||
 		inpututil.IsKeyJustPressed(ebiten.KeySpace) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyZ) ||
 		fieldTouchActionPressed()

@@ -163,20 +163,20 @@ func (s *BattleScene) applyDebugCheats() {
 			s.debugStatIconTest = false
 			s.battleLog = "ステータスアイコンのテスト表示を解除（デバッグ）"
 		} else {
-			const testTurns = 999
-			s.PlayerBuffs[0] = []Buff{{Type: StatAtk, Percent: 20, Turns: testTurns}}
+			const testSeconds = 9999
+			s.PlayerBuffs[0] = []Buff{{Type: StatAtk, Percent: 20, Seconds: testSeconds}}
 			s.PlayerBuffs[1] = []Buff{
-				{Type: StatAtk, Percent: 20, Turns: testTurns},
-				{Type: StatDef, Percent: 20, Turns: testTurns},
-				{Type: StatLuk, Percent: 20, Turns: testTurns},
+				{Type: StatAtk, Percent: 20, Seconds: testSeconds},
+				{Type: StatDef, Percent: 20, Seconds: testSeconds},
+				{Type: StatLuk, Percent: 20, Seconds: testSeconds},
 			}
 			s.PlayerDebuffs[1] = []Debuff{
-				{Type: StatMat, Percent: 20, Turns: testTurns},
-				{Type: StatMdf, Percent: 20, Turns: testTurns},
+				{Type: StatMat, Percent: 20, Seconds: testSeconds},
+				{Type: StatMdf, Percent: 20, Seconds: testSeconds},
 			}
-			s.PlayerDebuffs[2] = []Debuff{{Type: StatDef, Percent: 20, Turns: testTurns}}
-			s.PlayerBuffs[3] = []Buff{{Type: StatLuk, Percent: 20, Turns: testTurns}}
-			s.PlayerDebuffs[3] = []Debuff{{Type: StatDef, Percent: 20, Turns: testTurns}}
+			s.PlayerDebuffs[2] = []Debuff{{Type: StatDef, Percent: 20, Seconds: testSeconds}}
+			s.PlayerBuffs[3] = []Buff{{Type: StatLuk, Percent: 20, Seconds: testSeconds}}
+			s.PlayerDebuffs[3] = []Debuff{{Type: StatDef, Percent: 20, Seconds: testSeconds}}
 			s.debugStatIconTest = true
 			s.battleLog = "ステータスアイコンのテスト表示（デバッグ）"
 		}
@@ -362,7 +362,14 @@ func (s *BattleScene) Update(dt float64) Scene {
 			}
 
 			maxDmg := 0
+			totalDmg := 0
 			for _, hit := range s.pendingPlayerHits {
+				if hit.slot >= 0 && hit.slot < len(s.enemies) && s.enemies[hit.slot].HP > 0 {
+					if hit.nonLethal {
+						hit.dmg = min(hit.dmg, s.enemies[hit.slot].HP-1)
+					}
+					totalDmg += max(hit.dmg, 0)
+				}
 				s.applyDamageToEnemySlot(hit.slot, hit.dmg)
 				if hit.dmg > maxDmg {
 					maxDmg = hit.dmg
@@ -384,6 +391,11 @@ func (s *BattleScene) Update(dt float64) Scene {
 					Timer:  initialTimer,
 					IsCrit: hit.crit,
 				})
+			}
+
+			if s.pendingDrainDivisor > 0 && totalDmg > 0 {
+				gain := min(max(totalDmg/s.pendingDrainDivisor, 1), s.pendingDrainMax)
+				s.applySkillMPHeal(s.pendingDrainActor, gain)
 			}
 
 			if maxDmg > 0 {
@@ -603,6 +615,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 	case phaseATB:
 		if s.battleLogTimer <= 0 && !s.anyActorHolding() {
 			s.tickATB(dt)
+			s.tickTimedStatus(dt)
 		}
 		s.tryStartNextActor()
 

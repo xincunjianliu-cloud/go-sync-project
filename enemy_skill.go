@@ -60,7 +60,7 @@ var SkillCrushingBlow = EnemySkill{
 	Element:     ElemPhysicalNone,
 	Power:       150,
 	Effects: []SkillEffect{
-		{Type: EffectDebuffPhysicalDef, Percent: 10, Turns: 3},
+		{Type: EffectDebuffPhysicalDef, Percent: 10, Seconds: 10},
 	},
 	ReturnPosition: 5,
 }

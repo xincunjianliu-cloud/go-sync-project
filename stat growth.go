@@ -11,7 +11,8 @@ func (g *Game) ApplyLevelUpGrowth(actor int) {
 	if lv > maxPlayerLevel {
 		lv = maxPlayerLevel
 	}
-	st := PlayerStatsByLevel[lv-1][actor]
+	// Skill upgrades raise stats on top of the level table, so re-add them.
+	st := PlayerStatsByLevel[lv-1][actor].add(g.SkillStatBonus(actor))
 
 	hpGain := st.HP - g.PlayerMaxHP[actor]
 	g.PlayerMaxHP[actor] = st.HP

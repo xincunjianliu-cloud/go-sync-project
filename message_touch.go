@@ -151,8 +151,9 @@ func ctrlIconHit(game *Game, index int, label string, touches, mouse []touchPoin
 }
 
 func isMessageAdvancePressed() bool {
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) ||
-		inpututil.IsKeyJustPressed(ebiten.KeyNumpadEnter) ||
+	enter := !isAltKeyDown() && (inpututil.IsKeyJustPressed(ebiten.KeyEnter) ||
+		inpututil.IsKeyJustPressed(ebiten.KeyNumpadEnter))
+	if enter ||
 		inpututil.IsKeyJustPressed(ebiten.KeySpace) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyZ) {
 		return true

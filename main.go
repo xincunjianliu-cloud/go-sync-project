@@ -9,7 +9,8 @@ import (
 func main() {
 	ebiten.SetWindowTitle("七不思議討滅録")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetWindowSize(960, 540)
+	ebiten.SetWindowSize(gameWidth, gameHeight)
+	ebiten.SetWindowSizeLimits(windowMinWidth, windowMinHeight, -1, -1)
 	ebiten.SetTPS(60)
 
 	// フォントやタイトル画面の画像はNewGame内でバックグラウンド読み込みが

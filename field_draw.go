@@ -556,9 +556,9 @@ const (
 	mapNameBannerFontSize = 32.0
 )
 
-// drawMapNameBanner はバナー画像を左右反転し、画像の(反転前の)左端が
-// 画面右端にぴったり重なる位置に描画する。丸い不透明端が画面右端付近に
-// 来て、そこからフェードしながら画面内へ伸びる見た目になる。
+// drawMapNameBanner はバナー画像を反転せずそのまま、左端を画面左端に
+// そろえて描画する。濃い端が画面左端に接し、そこから右へ伸びて丸く
+// フェードしていく見た目になる。地名は左寄せで重ねる。
 func (s *FieldScene) drawMapNameBanner(screen *ebiten.Image) {
 	alpha := s.mapNameBannerAlpha()
 	banner := s.game.MapNameBannerImg
@@ -569,17 +569,16 @@ func (s *FieldScene) drawMapNameBanner(screen *ebiten.Image) {
 	boxY := mapNameBannerMarginY
 
 	imgOp := &ebiten.DrawImageOptions{}
-	imgOp.GeoM.Scale(-1, 1)
-	imgOp.GeoM.Translate(float64(gameWidth), boxY)
+	imgOp.GeoM.Translate(0, boxY)
 	imgOp.ColorScale.ScaleAlpha(float32(alpha))
 	screen.DrawImage(banner, imgOp)
 
 	bannerH := float64(banner.Bounds().Dy())
 	face := s.game.FontFace(mapNameBannerFontSize)
-	textW, textH := text.Measure(s.mapNameBannerText, face, 0)
+	_, textH := text.Measure(s.mapNameBannerText, face, 0)
 
 	op := &text.DrawOptions{}
-	op.GeoM.Translate(float64(gameWidth)-mapNameBannerPadX-textW, boxY+(bannerH-textH)/2)
+	op.GeoM.Translate(mapNameBannerPadX, boxY+(bannerH-textH)/2)
 	op.ColorScale.ScaleWithColor(uiColorText)
 	op.ColorScale.ScaleAlpha(float32(alpha))
 	text.Draw(screen, s.mapNameBannerText, face, op)

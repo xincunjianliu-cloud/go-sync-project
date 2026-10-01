@@ -238,16 +238,7 @@ func (m *MenuScene) activateOption(idx int) bool {
 }
 
 func (m *MenuScene) toggleDisplayMode() {
-	m.game.Fullscreen = !m.game.Fullscreen
-	w, h := m.game.WindowWidth, m.game.WindowHeight
-	if w <= 0 || h <= 0 {
-		w, h = defaultWindowWidth, defaultWindowHeight
-	}
-	applyDisplayMode(m.game.Fullscreen, w, h)
-	if !m.game.Fullscreen {
-		m.game.WindowWidth, m.game.WindowHeight = ebiten.WindowSize()
-		m.game.lastWindowW, m.game.lastWindowH = m.game.WindowWidth, m.game.WindowHeight
-	}
+	m.game.setFullscreen(!m.game.Fullscreen)
 	m.persistSettings()
 }
 
@@ -258,12 +249,10 @@ func (m *MenuScene) performOptionReset() {
 		m.game.Audio.SetMasterVolume(defaultMasterVolume)
 	}
 	m.game.MessageSpeed = defaultMessageSpeed
-	m.game.Fullscreen = defaultFullscreen
 	m.game.WindowWidth = defaultWindowWidth
 	m.game.WindowHeight = defaultWindowHeight
 	m.game.RememberCursor = defaultRememberCursor
-	applyDisplayMode(defaultFullscreen, defaultWindowWidth, defaultWindowHeight)
-	m.game.lastWindowW, m.game.lastWindowH = defaultWindowWidth, defaultWindowHeight
+	m.game.setFullscreen(defaultFullscreen)
 	m.persistSettings()
 }
 

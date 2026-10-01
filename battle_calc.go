@@ -191,12 +191,19 @@ func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll boo
 	if isAll {
 		power = data.PowerAll
 	}
+	if data.TGPowerLevel > 0 && s.tgLevel() >= data.TGPowerLevel {
+		if isAll && data.TGPowerAll > 0 {
+			power = data.TGPowerAll
+		} else if !isAll && data.TGPowerSingle > 0 {
+			power = data.TGPowerSingle
+		}
+	}
 	if power <= 0 {
 		return 0
 	}
 
 	var atkStat, defStat float64
-	if data.Element == ElemPhysicalNone {
+	if data.usesPhysical() {
 		atkStat = float64(s.effectiveAtk(actor))
 		defStat = float64(s.effectiveEnemyDef(targetSlot, false))
 	} else {
@@ -213,6 +220,7 @@ func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll boo
 	resist := [elementalTypeCount]int{}
 	if targetSlot >= 0 && targetSlot < len(s.enemies) {
 		resist = s.enemies[targetSlot].ElementResist
+		s.forceCrit = data.CritVsDefDown && SumDebuffPercent(s.enemies[targetSlot].Debuffs, StatDef) > 0
 	}
 	return s.rollDamage(atkStat, float64(power), defStat, elementalDamageMultiplier(data.Element, resist), luck)
 }
@@ -225,7 +233,9 @@ func (s *BattleScene) rollDamage(atk float64, power float64, def float64, elemen
 	damage *= float64(90+rand.Intn(21)) / 100.0
 	damage *= elementMultiplier
 	s.lastRollWasCrit = false
-	if s.rollIsCrit(luck) {
+	forceCrit := s.forceCrit
+	s.forceCrit = false
+	if forceCrit || s.rollIsCrit(luck) {
 		damage *= critDamageMultiply
 		s.lastRollWasCrit = true
 	}
@@ -253,15 +263,9 @@ func (s *BattleScene) rollEnemySkillDamage(power int, element Element, target in
 	if power <= 0 {
 		return 0
 	}
-	acting := &s.enemies[s.actingEnemySlot]
-	var atkStat, defStat float64
-	if element == ElemPhysicalNone {
-		atkStat = float64(acting.PhysAtk)
-		defStat = float64(s.effectivePlayerDef(target, false))
-	} else {
-		atkStat = float64(acting.MagicAtk)
-		defStat = float64(s.effectivePlayerDef(target, true))
-	}
+	magic := element != ElemPhysicalNone
+	atkStat := float64(s.effectiveEnemyAtk(s.actingEnemySlot, magic))
+	defStat := float64(s.effectivePlayerDef(target, magic))
 	if defStat < 1 {
 		defStat = 1
 	}
@@ -290,19 +294,24 @@ func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool)
 }
 
 func (s *BattleScene) effectiveAtk(actor int) int {
-	return s.applyAtkBuffs(actor, s.game.PlayerAtk[actor])
+	return s.applyPlayerStatMods(actor, StatAtk, s.game.PlayerAtk[actor])
 }
 
 func (s *BattleScene) effectiveMagicAtk(actor int) int {
-	return s.applyAtkBuffs(actor, s.game.PlayerMagicAtk[actor])
+	return s.applyPlayerStatMods(actor, StatMat, s.game.PlayerMagicAtk[actor])
 }
 
-// applyAtkBuffs は物理/魔法攻撃力の共通補正。バフ・デバフとも攻撃系は
-// StatAtkひとつで管理しているので、どちらの攻撃力にも同じ倍率がかかる。
-func (s *BattleScene) applyAtkBuffs(actor, base int) int {
-	down := SumDebuffPercent(s.PlayerDebuffs[actor], StatAtk)
-	up := SumBuffPercent(s.PlayerBuffs[actor], StatAtk)
+// applyPlayerStatMods applies party member actor's buffs and debuffs on
+// stat to base.
+func (s *BattleScene) applyPlayerStatMods(actor int, stat StatKind, base int) int {
+	down := SumDebuffPercent(s.PlayerDebuffs[actor], stat)
+	up := SumBuffPercent(s.PlayerBuffs[actor], stat)
 	return int(float64(base) * (1.0 + float64(up)/100.0 - float64(down)/100.0))
+}
+
+// tgLevel is the synergy gauge level (1-5) as shown to the player.
+func (s *BattleScene) tgLevel() int {
+	return s.gaugeStage + 1
 }
 
 // reduceAtb は対象のATBゲージをamount減らす(0未満にはしない)。
@@ -314,7 +323,7 @@ func (s *BattleScene) reduceAtb(targetIsEnemy bool, targetIdx int, amount float6
 		}
 		actor = s.enemyActorIndex(targetIdx)
 	}
-	s.atbGauge[actor] = max(s.atbGauge[actor]-amount, 0)
+	s.placeOnTimeline(actor, s.atbGauge[actor]-amount)
 }
 
 func (s *BattleScene) effectiveEnemyDef(slot int, magic bool) int {
@@ -335,14 +344,27 @@ func (s *BattleScene) effectiveEnemyDef(slot int, magic bool) int {
 	return int(float64(base) * (1.0 - float64(down)/100.0))
 }
 
+func (s *BattleScene) effectiveEnemyAtk(slot int, magic bool) int {
+	if slot < 0 || slot >= len(s.enemies) {
+		return 0
+	}
+	e := &s.enemies[slot]
+	base, t := e.PhysAtk, StatAtk
+	if magic {
+		base, t = e.MagicAtk, StatMat
+	}
+	down := SumDebuffPercent(e.Debuffs, t)
+	return int(float64(base) * (1.0 - float64(down)/100.0))
+}
+
 func (s *BattleScene) effectivePlayerDef(target int, magic bool) int {
 	if target < 0 || target >= partySize {
 		return 0
 	}
 	if magic {
-		return s.game.PlayerMagicDef[target]
+		return s.applyPlayerStatMods(target, StatMdf, s.game.PlayerMagicDef[target])
 	}
-	return s.game.PlayerDef[target]
+	return s.applyPlayerStatMods(target, StatDef, s.game.PlayerDef[target])
 }
 
 func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, targetIsEnemy bool, targetIdx int, isAll bool) {
@@ -350,57 +372,58 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 		switch e.Type {
 		case EffectAtbDownSmall:
 			s.reduceAtb(targetIsEnemy, targetIdx, 15)
+			continue
 		case EffectAtbDownLarge:
 			s.reduceAtb(targetIsEnemy, targetIdx, 35)
-		case EffectDebuffDefBoth:
-			d1 := Debuff{Type: StatDef, Percent: e.Percent, Turns: e.Turns}
-			d2 := Debuff{Type: StatMdf, Percent: e.Percent, Turns: e.Turns}
-			if targetIsEnemy {
-				if targetIdx < 0 || targetIdx >= len(s.enemies) {
-					continue
-				}
-				s.enemies[targetIdx].Debuffs = append(s.enemies[targetIdx].Debuffs, d1, d2)
+			continue
+		}
+		stats, isBuff, ok := effectStats(e.Type)
+		if !ok {
+			continue
+		}
+		percent := e.Percent
+		if isAll && e.PercentAll > 0 {
+			percent = e.PercentAll
+		}
+		if targetIsEnemy {
+			if targetIdx < 0 || targetIdx >= len(s.enemies) || isBuff {
+				continue
+			}
+			for _, st := range stats {
+				s.enemies[targetIdx].Debuffs = append(s.enemies[targetIdx].Debuffs,
+					Debuff{Type: st, Percent: percent, Seconds: e.Seconds})
+			}
+			continue
+		}
+		if targetIdx < 0 || targetIdx >= partySize {
+			continue
+		}
+		for _, st := range stats {
+			if isBuff {
+				s.PlayerBuffs[targetIdx] = append(s.PlayerBuffs[targetIdx],
+					Buff{Type: st, Percent: percent, Seconds: e.Seconds})
 			} else {
-				s.PlayerDebuffs[targetIdx] = append(s.PlayerDebuffs[targetIdx], d1, d2)
-			}
-		case EffectBuffAtkUp:
-			percent := e.Percent
-			if isAll {
-				percent = e.PercentAll
-			}
-			if !targetIsEnemy && targetIdx >= 0 && targetIdx < partySize {
-				s.PlayerBuffs[targetIdx] = append(s.PlayerBuffs[targetIdx], Buff{Type: StatAtk, Percent: percent, Turns: e.Turns})
-			}
-		default:
-			d := Debuff{Type: mapEffectToDebuff(e.Type), Percent: e.Percent, Turns: e.Turns}
-			if targetIsEnemy {
-				if targetIdx < 0 || targetIdx >= len(s.enemies) {
-					continue
-				}
-				s.enemies[targetIdx].Debuffs = append(s.enemies[targetIdx].Debuffs, d)
-			} else {
-				s.PlayerDebuffs[targetIdx] = append(s.PlayerDebuffs[targetIdx], d)
+				s.PlayerDebuffs[targetIdx] = append(s.PlayerDebuffs[targetIdx],
+					Debuff{Type: st, Percent: percent, Seconds: e.Seconds})
 			}
 		}
 	}
 }
 
-func (s *BattleScene) tickDebuffs(actorIdx int, isEnemy bool) {
-	if isEnemy {
-		if actorIdx < 0 || actorIdx >= len(s.enemies) {
-			return
+// tickTimedStatus counts down everything that lasts a number of seconds
+// (timed buffs/debuffs, counter stance). It runs only while the ATB
+// timeline itself is moving.
+func (s *BattleScene) tickTimedStatus(dt float64) {
+	for i := 0; i < partySize; i++ {
+		s.PlayerBuffs[i] = TickBuffSeconds(s.PlayerBuffs[i], dt)
+		s.PlayerDebuffs[i] = TickDebuffSeconds(s.PlayerDebuffs[i], dt)
+		if s.counterTimer[i] > 0 {
+			s.counterTimer[i] = max(s.counterTimer[i]-dt, 0)
 		}
-		s.enemies[actorIdx].Debuffs = TickDebuffList(s.enemies[actorIdx].Debuffs)
-	} else {
-		s.PlayerDebuffs[actorIdx] = TickDebuffList(s.PlayerDebuffs[actorIdx])
 	}
-}
-
-func (s *BattleScene) tickBuffs(actorIdx int) {
-	if actorIdx < 0 || actorIdx >= partySize {
-		return
+	for i := range s.enemies {
+		s.enemies[i].Debuffs = TickDebuffSeconds(s.enemies[i].Debuffs, dt)
 	}
-	s.PlayerBuffs[actorIdx] = TickBuffList(s.PlayerBuffs[actorIdx])
 }
 
 func (s *BattleScene) anyActorHolding() bool {

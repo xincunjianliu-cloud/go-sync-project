@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -123,45 +124,26 @@ const (
 // adds. Skill uses instead add their own SkillLevelData.GaugePoint.
 const normalAttackGaugePoint = 1
 
-// atbHeadStartSpacing is the minimum gap, in the same 0-100 units as
-// atbGauge, between two adjacent head-start icons so they don't overlap
-// on the timeline.
-func atbHeadStartSpacing() float64 {
+// spdReturnBonusMax is the extra return position (0-100 units) the fastest
+// actor in a battle gets on top of every return position; the slowest gets
+// 0 and everyone else is interpolated linearly by Spd. Since every gauge
+// fills at the same atbBaseSpeed, this is what makes Spd matter each turn.
+const spdReturnBonusMax = 10.0
+
+// spdStartBonusMax is the same idea for the battle-start position: the
+// fastest actor starts this far along, the slowest at 0. It is much wider
+// than spdReturnBonusMax so Spd gaps stay visible at the start instead of
+// being swallowed by the atbIconSpacing push-apart (~7 units per icon).
+const spdStartBonusMax = 40.0
+
+// atbIconSpacing is the minimum gap, in the same 0-100 units as atbGauge,
+// between two icons on the timeline so they don't overlap.
+func atbIconSpacing() float64 {
 	trackLen := goalAnchorLayout.X - timelineStartX
 	if trackLen <= 0 {
 		return 0
 	}
 	return iconSize / trackLen * atbMax
-}
-
-// atbHeadStarts determines the timeline positions (0-100) every actor
-// starts battle at, based on their Spd stat. It is not used for the
-// return position after subsequent actions.
-//
-// Actors are ranked by speed ascending; the slowest starts at position 0,
-// and each faster actor is placed exactly atbHeadStartSpacing further
-// along than the previous one. This keeps speed ordering intact while
-// guaranteeing icons never overlap, even when actual speed values are
-// close together.
-func atbHeadStarts(speeds []int) []float64 {
-	positions := make([]float64, len(speeds))
-	order := make([]int, len(speeds))
-	for i := range order {
-		order[i] = i
-	}
-	sort.SliceStable(order, func(a, b int) bool {
-		return speeds[order[a]] < speeds[order[b]]
-	})
-
-	spacing := atbHeadStartSpacing()
-	pos := 0.0
-	for rank, idx := range order {
-		if rank > 0 {
-			pos += spacing
-		}
-		positions[idx] = clampAtbPosition(pos)
-	}
-	return positions
 }
 
 func clampAtbPosition(pos float64) float64 {
@@ -174,18 +156,133 @@ func clampAtbPosition(pos float64) float64 {
 	return pos
 }
 
+// spdBonus maps spd linearly onto 0..bonusMax across [minSpd, maxSpd].
+func spdBonus(spd, minSpd, maxSpd, bonusMax float64) float64 {
+	if maxSpd <= minSpd {
+		return 0
+	}
+	r := (spd - minSpd) / (maxSpd - minSpd)
+	return bonusMax * min(max(r, 0), 1)
+}
+
+// timelineOccupant is another actor's icon already sitting on the track.
+type timelineOccupant struct {
+	pos, spd float64
+}
+
+// resolveTimelinePos returns where an actor with the given spd should land
+// when placed at pos, so its icon doesn't overlap any occupant. If pos is
+// taken, the newcomer slots in front (right) of the occupant when it is
+// strictly faster and behind (left) otherwise, continuing in that direction
+// past any further occupants until it finds a free spot. If that runs off
+// the track it tries the opposite direction, and failing both keeps pos.
+// Landing at atbMax is never resolved: the goal is a queue, not the track.
+func resolveTimelinePos(pos, spd float64, others []timelineOccupant, spacing float64) float64 {
+	pos = clampAtbPosition(pos)
+	if pos >= atbMax || spacing <= 0 {
+		return pos
+	}
+	const eps = 1e-6
+	blocker := func(p float64) (timelineOccupant, bool) {
+		for _, o := range others {
+			if math.Abs(o.pos-p) < spacing-eps {
+				return o, true
+			}
+		}
+		return timelineOccupant{}, false
+	}
+	first, hit := blocker(pos)
+	if !hit {
+		return pos
+	}
+	dir := -1.0
+	if spd > first.spd {
+		dir = 1.0
+	}
+	for _, d := range []float64{dir, -dir} {
+		p, o := pos, first
+		for range len(others) + 1 {
+			p = o.pos + d*spacing
+			if p < 0 || p >= atbMax {
+				break
+			}
+			var blocked bool
+			if o, blocked = blocker(p); !blocked {
+				return p
+			}
+		}
+	}
+	return pos
+}
+
+// actorOnTrack reports whether actor's icon is currently drawn on the
+// timeline track (as opposed to dead, at the goal, or in the wait rows).
+func (s *BattleScene) actorOnTrack(actor int) bool {
+	if actor < partySize {
+		if s.game.PlayerHP[actor] <= 0 || s.deadWaitStuck[actor] ||
+			s.waitStance[actor] || s.waitCancelHold[actor] > 0 {
+			return false
+		}
+	} else if s.enemies[enemySlotFromActor(actor)].HP <= 0 {
+		return false
+	}
+	return s.atbGauge[actor] < atbMax
+}
+
+// placeOnTimeline sets actor's gauge to pos, nudged by resolveTimelinePos
+// so it doesn't land on top of another icon already on the track.
+func (s *BattleScene) placeOnTimeline(actor int, pos float64) {
+	var others []timelineOccupant
+	for a := 0; a < partySize+len(s.enemies); a++ {
+		if a != actor && s.actorOnTrack(a) {
+			others = append(others, timelineOccupant{s.atbGauge[a], s.actorSpd(a)})
+		}
+	}
+	s.atbGauge[actor] = resolveTimelinePos(pos, s.actorSpd(actor), others, atbIconSpacing())
+}
+
+// actorReturnBonus is actor's Spd-based bonus added to return positions.
+func (s *BattleScene) actorReturnBonus(actor int) float64 {
+	return spdBonus(s.actorSpd(actor), s.minActorSpd, s.maxActorSpd, spdReturnBonusMax)
+}
+
 func (s *BattleScene) resetPlayerGaugeTo(actor int, pos float64) {
 	if actor < 0 || actor >= partySize {
 		return
 	}
-	s.atbGauge[actor] = clampAtbPosition(pos)
+	s.placeOnTimeline(actor, pos+s.actorReturnBonus(actor))
 }
 
 func (s *BattleScene) resetEnemyGaugeTo(slot int, pos float64) {
 	if slot < 0 || slot >= len(s.enemies) {
 		return
 	}
-	s.atbGauge[s.enemyActorIndex(slot)] = clampAtbPosition(pos)
+	actor := s.enemyActorIndex(slot)
+	s.placeOnTimeline(actor, pos+s.actorReturnBonus(actor))
+}
+
+// initTimelinePositions sets every actor's starting gauge to their
+// spdStartBonusMax-scaled Spd bonus, placing slowest first so faster actors
+// slot in front on ties.
+func (s *BattleScene) initTimelinePositions() {
+	n := partySize + len(s.enemies)
+	s.minActorSpd, s.maxActorSpd = math.Inf(1), math.Inf(-1)
+	order := make([]int, n)
+	for a := range order {
+		order[a] = a
+		spd := s.actorSpd(a)
+		s.minActorSpd = min(s.minActorSpd, spd)
+		s.maxActorSpd = max(s.maxActorSpd, spd)
+		// Park everyone at the goal so unplaced actors don't count as
+		// occupants while the others are being placed.
+		s.atbGauge[a] = atbMax
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		return s.actorSpd(order[i]) < s.actorSpd(order[j])
+	})
+	for _, a := range order {
+		s.placeOnTimeline(a, spdBonus(s.actorSpd(a), s.minActorSpd, s.maxActorSpd, spdStartBonusMax))
+	}
 }
 
 // pendingActionReturnPosition resolves the return position for whatever
@@ -234,7 +331,7 @@ func (s *BattleScene) tryStartNextActor() {
 		if !s.isActorReady(i) || s.waitStance[i] {
 			continue
 		}
-		if best < 0 || s.atbGauge[i] > s.atbGauge[best] {
+		if best < 0 || s.actsBefore(i, best) {
 			best = i
 		}
 	}
@@ -251,7 +348,7 @@ func (s *BattleScene) tryStartNextActor() {
 		if !s.isActorReady(actor) {
 			continue
 		}
-		if bestEnemy < 0 || s.atbGauge[actor] > s.atbGauge[s.enemyActorIndex(bestEnemy)] {
+		if bestEnemy < 0 || s.actsBefore(actor, s.enemyActorIndex(bestEnemy)) {
 			bestEnemy = i
 		}
 	}
@@ -261,6 +358,24 @@ func (s *BattleScene) tryStartNextActor() {
 		s.enemyIsActing = true
 		s.enemyWindupTimer = enemyWindupDuration
 	}
+}
+
+// actorSpd returns the Spd stat of a party member or enemy actor index.
+func (s *BattleScene) actorSpd(actor int) float64 {
+	if actor < partySize {
+		return float64(s.game.PlayerSpd[actor])
+	}
+	return s.enemies[enemySlotFromActor(actor)].Speed
+}
+
+// actsBefore reports whether actor a should take its turn before b: the
+// higher gauge wins, and on a tie (e.g. both capped at atbMax) the higher
+// Spd goes first. Remaining ties keep the existing index order.
+func (s *BattleScene) actsBefore(a, b int) bool {
+	if s.atbGauge[a] != s.atbGauge[b] {
+		return s.atbGauge[a] > s.atbGauge[b]
+	}
+	return s.actorSpd(a) > s.actorSpd(b)
 }
 
 func (s *BattleScene) openPlayerMenu(actor int) {
@@ -527,6 +642,11 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		s.game.Audio.PlaySEByKey("error")
 		return
 	}
+	if data.targetsAlly() && data.Target != TargetSelf && len(s.allyAllTargets(data)) == 0 {
+		// e.g. レイズ with nobody down.
+		s.game.Audio.PlaySEByKey("error")
+		return
+	}
 	s.game.Audio.PlaySEByKey("decide")
 	s.pendingSkill = s.skillIndex + 1
 
@@ -534,8 +654,12 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		s.lastSkillLevel[p][s.skillIndex] = lv
 	}
 
-	if data.IsHeal {
-		s.healTargetIndex = 0
+	if data.Target == TargetSelf {
+		s.executeSelfSkill()
+		return
+	}
+	if data.targetsAlly() {
+		s.healTargetIndex = s.firstAllyTarget(data)
 		s.battlePhase = phaseHealSelect
 		return
 	}
