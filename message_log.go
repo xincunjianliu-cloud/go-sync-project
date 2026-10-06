@@ -80,10 +80,7 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 	}
 
 	maxTextLinesF := (imgH - logTextOffsetY) / logTextLineH
-	maxTextLines := int(maxTextLinesF)
-	if maxTextLines < 1 {
-		maxTextLines = 1
-	}
+	maxTextLines := max(int(maxTextLinesF), 1)
 
 	entries := make([]logEntryLayout, 0, len(log))
 	for _, cmd := range log {
@@ -220,7 +217,7 @@ func hitTestLogEntries(game *Game, entryCount int, scrollOffset, tapX, tapY floa
 	startIndex := endIndex - logVisibleCount
 
 	p := touchPoint{tapX, tapY}
-	for dispIdx := 0; dispIdx < logVisibleCount; dispIdx++ {
+	for dispIdx := range logVisibleCount {
 		idx := startIndex + dispIdx
 		if idx < 0 || idx >= entryCount {
 			continue

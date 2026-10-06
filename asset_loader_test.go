@@ -70,7 +70,7 @@ func TestAssetLoaderDedupesAndReleases(t *testing.T) {
 	close(f.gate)
 	l := newAssetLoader(2, f.fetch)
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		data, err := l.get("a.png")
 		if err != nil || string(data) != "a.png" {
 			t.Fatalf("get = %q, %v", data, err)

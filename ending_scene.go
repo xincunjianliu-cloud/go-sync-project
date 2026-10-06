@@ -172,7 +172,7 @@ func (s *EndingScene) updateAskSave() {
 		s.askSaveIndex = 1 - s.askSaveIndex
 		s.game.Audio.PlaySEByKey("cursor")
 	}
-	tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
+	tappedIdx, tappedOk := hitTestConfirmDialog(confirmImageOffsetX)
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.askSaveIndex, s.game.Audio)
 	if !isConfirmKeyPressed() && !tapped {
 		return
@@ -190,7 +190,7 @@ func (s *EndingScene) updateAskSave() {
 }
 
 func (s *EndingScene) reloadSlotData() {
-	for i := 0; i < maxSaveSlots; i++ {
+	for i := range maxSaveSlots {
 		s.slotData[i], _ = LoadGame(i + 1)
 		s.slotThumbs[i] = LoadThumb(i + 1)
 	}
@@ -267,7 +267,7 @@ func (s *EndingScene) updateSlotConfirm() {
 		s.phase = endingPhaseSaveSlot
 		return
 	}
-	tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
+	tappedIdx, tappedOk := hitTestConfirmDialog(confirmImageOffsetX)
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.confirmIndex, s.game.Audio)
 	if !isConfirmKeyPressed() && !tapped {
 		return
@@ -320,14 +320,14 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		drawConfirmDialog(screen, s.game, "クリアデータを保存しますか？", s.askSaveIndex, confirmImageOffsetX)
 		return
 	case endingPhaseSaveSlot:
-		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
+		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 		return
 	case endingPhaseSlotConfirm:
-		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
+		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 		drawConfirmDialog(screen, s.game, "セーブしますか？", s.confirmIndex, confirmImageOffsetX)
 		return
 	case endingPhaseSaveDone:
-		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, true, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
+		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 		drawConfirmDialog(screen, s.game, s.saveResultMsg, 0, confirmImageOffsetX, false)
 		return
 	}

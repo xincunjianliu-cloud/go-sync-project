@@ -113,7 +113,7 @@ func (g *Game) loadHeavyAssetsAsync() {
 	}
 	g.heavyDecoded <- decodedHeavyAsset{kind: heavyMsgTotals, totals: totals}
 
-	for tier := assetTier(0); tier < assetTierCount; tier++ {
+	for tier := range assetTierCount {
 		for _, a := range byTier[tier] {
 			img, err := decodeAssetImage(a.path)
 			msg := decodedHeavyAsset{kind: heavyMsgImage, tier: tier, assign: a.assign, img: img, err: err, label: a.path}
@@ -223,7 +223,7 @@ func (g *Game) applyHeavyMsg(item decodedHeavyAsset) {
 // 呼び出し側が判断する）。
 func (g *Game) finishHeavyAssets() {
 	g.heavyAssetsReady = true
-	for t := assetTier(0); t < assetTierCount; t++ {
+	for t := range assetTierCount {
 		if !g.heavyTierReady[t] {
 			g.heavyTierReady[t] = true
 			g.onTierReady(t)
@@ -343,7 +343,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		g.SpriteSheet = img
 		preloadedPlayerSprites["assets/images/field/player_walk.png"] = img
 	})
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		add(assetTierField, fmt.Sprintf("assets/images/field/bossスプライト_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.BossSpriteSheets[i] = img })
 	}
 	add(assetTierField, "assets/images/field/map_name_banner.png", func(g *Game, img *ebiten.Image) { g.MapNameBannerImg = img })
@@ -364,18 +364,18 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	add(assetTierField, "assets/images/field/push_block.png", func(g *Game, img *ebiten.Image) { g.BlockImg = img })
 	add(assetTierField, "assets/images/field/push_block_spot.png", func(g *Game, img *ebiten.Image) { g.BlockSpotImg = img })
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		bossName := BossNames[i]
 		add(assetTierField, fmt.Sprintf("assets/images/common/chara_boss%d.png", i+1), func(g *Game, img *ebiten.Image) { g.CharaImgs[bossName] = img })
 	}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		playerName := PlayerNames[i]
 		add(assetTierField, fmt.Sprintf("assets/images/common/chara_player_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.CharaImgs[playerName] = img })
 	}
 
 	add(assetTierField, "assets/images/menu/メニュー画面.png", func(g *Game, img *ebiten.Image) { g.MenuBgImg = img })
 	add(assetTierField, "assets/images/menu/メニュー画面拡張.png", func(g *Game, img *ebiten.Image) { g.MenuSkillPanelImg = img })
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		add(assetTierField, fmt.Sprintf("assets/images/menu/party_icon_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.PartyIconImgs[i] = img })
 	}
 	add(assetTierField, "assets/images/menu/セーブスロット選択中.png", func(g *Game, img *ebiten.Image) { g.SaveThumbFrameSelImg = img })
@@ -393,7 +393,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/enemy_%s_icon_large.png", name), func(g *Game, img *ebiten.Image) { g.EnemyIconLargeImgs[name] = img })
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/player_attack_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.PlayerAttackSprites[i] = img })
 	}
 
@@ -403,7 +403,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/%s_selected.png", name), func(g *Game, img *ebiten.Image) { g.CommandIconsSelected[i] = img })
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/timeline_p%d.png", i+1), func(g *Game, img *ebiten.Image) { g.TimelineIcons[i] = img })
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/timeline_p%d_large.png", i+1), func(g *Game, img *ebiten.Image) { g.TimelineIconsLarge[i] = img })
 	}

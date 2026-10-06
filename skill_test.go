@@ -9,7 +9,7 @@ import (
 // 変換に使う legacySkillOrder と、名前の組み合わせが一致していること。
 func TestCharacterSkillSetsValid(t *testing.T) {
 	g := &Game{}
-	for c := 0; c < partySize; c++ {
+	for c := range partySize {
 		skills := g.CharacterSkills(c)
 		if len(skills) == 0 || len(skills) > len(g.PlayerSkillLv[c]) {
 			t.Fatalf("char %d has %d skills, want 1..%d", c, len(skills), len(g.PlayerSkillLv[c]))
@@ -84,7 +84,7 @@ func TestTimedAndCoverBuffTicking(t *testing.T) {
 
 func TestCoverRedirectAndGuard(t *testing.T) {
 	g := &Game{}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		g.PlayerHP[i] = 100
 		g.PlayerMaxHP[i] = 100
 	}
@@ -114,7 +114,7 @@ func TestCoverRedirectAndGuard(t *testing.T) {
 func TestApplySkillEffectsBothStats(t *testing.T) {
 	g := &Game{}
 	s := &BattleScene{game: g, enemies: []EnemyUnit{{HP: 10, MaxHP: 10, Def: 100, MagicDef: 100}}}
-	s.applySkillEffects([]SkillEffect{{Type: EffectDebuffDefBoth, Percent: 30, PercentAll: 10, Seconds: 30}}, 0, true, 0, true)
+	s.applySkillEffects([]SkillEffect{{Type: EffectDebuffDefBoth, Percent: 30, PercentAll: 10, Seconds: 30}}, true, 0, true)
 	if got := s.effectiveEnemyDef(0, false); got != 90 {
 		t.Fatalf("physical def = %d, want 90 (PercentAll used for all-target)", got)
 	}
@@ -123,7 +123,7 @@ func TestApplySkillEffectsBothStats(t *testing.T) {
 	}
 
 	g.PlayerAtk[1], g.PlayerMagicAtk[1] = 100, 100
-	s.applySkillEffects([]SkillEffect{{Type: EffectBuffPhysAtkUp, Percent: 20, Seconds: 20}}, 0, false, 1, false)
+	s.applySkillEffects([]SkillEffect{{Type: EffectBuffPhysAtkUp, Percent: 20, Seconds: 20}}, false, 1, false)
 	if s.effectiveAtk(1) != 120 || s.effectiveMagicAtk(1) != 100 {
 		t.Fatalf("物攻 buff: atk=%d mat=%d, want 120/100", s.effectiveAtk(1), s.effectiveMagicAtk(1))
 	}

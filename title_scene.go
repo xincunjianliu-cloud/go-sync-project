@@ -70,7 +70,7 @@ func (s *TitleScene) Update(dt float64) Scene {
 			s.confirmExit = false
 			return s
 		}
-		tappedIdx, tappedOk := hitTestConfirmDialog(s.game, confirmImageOffsetX)
+		tappedIdx, tappedOk := hitTestConfirmDialog(confirmImageOffsetX)
 		confirmTapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.exitConfirmIdx, s.game.Audio)
 		if isConfirmKeyPressed() || confirmTapped {
 			if s.exitConfirmIdx == 0 {
@@ -98,7 +98,8 @@ func (s *TitleScene) Update(dt float64) Scene {
 	}
 
 	if isConfirmKeyPressed() || tapped {
-		if s.menuIndex == 0 {
+		switch s.menuIndex {
+		case 0:
 			if s.game.heavyAssetsErr != nil {
 				s.game.Audio.PlaySEByKey("error")
 				return s
@@ -118,7 +119,7 @@ func (s *TitleScene) Update(dt float64) Scene {
 			}, fadeTimeNewGame)
 			return s
 
-		} else if s.menuIndex == 1 {
+		case 1:
 			if !s.hasSaveFile {
 				s.game.Audio.PlaySEByKey("error")
 				return s
@@ -132,7 +133,7 @@ func (s *TitleScene) Update(dt float64) Scene {
 				return NewLoadSlotScene(s.game, s)
 			}, fadeTimeBattleOut)
 			return s
-		} else if s.menuIndex == 2 {
+		case 2:
 			s.game.Audio.PlaySEByKey("decide")
 			s.confirmExit = true
 			s.exitConfirmIdx = 1
@@ -267,7 +268,7 @@ func LoadGame(slot int) (*SaveData, error) {
 		return nil, err
 	}
 	if _, ok := raw["player_magic_atk"]; !ok {
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			level := data.PlayerLv[i]
 			if level < 1 || level > len(PlayerStatsByLevel) {
 				level = 1
@@ -281,8 +282,8 @@ func LoadGame(slot int) (*SaveData, error) {
 		}
 	}
 	if _, ok := raw["player_skill_lv"]; !ok {
-		for i := 0; i < partySize; i++ {
-			for j := 0; j < len(data.PlayerSkillLv[i]); j++ {
+		for i := range partySize {
+			for j := range len(data.PlayerSkillLv[i]) {
 				data.PlayerSkillLv[i][j] = 1
 			}
 		}
@@ -322,11 +323,11 @@ func NewLoadSlotScene(game *Game, backScene Scene) *LoadSlotScene {
 		backScene: backScene,
 		slotIndex: 0,
 	}
-	for i := 0; i < maxSaveSlots; i++ {
+	for i := range maxSaveSlots {
 		s.slotData[i], _ = LoadGame(i + 1)
 		s.slotThumbs[i] = LoadThumb(i + 1)
 	}
-	for i := 0; i < maxSaveSlots; i++ {
+	for i := range maxSaveSlots {
 		if s.slotData[i] != nil {
 			s.slotIndex = i
 			break
@@ -440,7 +441,7 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 
 func (s *LoadSlotScene) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{10, 10, 30, 255})
-	drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, false, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
+	drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 	drawBackButton(screen, s.game)
 
 	desc := menuCommandDescriptions["ロード"]

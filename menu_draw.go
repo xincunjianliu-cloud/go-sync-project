@@ -217,7 +217,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 
 	case menuStateSaveConfirm, menuStateLoadConfirm:
 		m.drawCommandList(screen)
-		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
+		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
 
 		line := "ロードしますか？\n※現在までの進行状況は失われます。"
 		if m.menuState == menuStateSaveConfirm {
@@ -230,14 +230,14 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 
 	case menuStateSaveDone:
 		m.drawCommandList(screen)
-		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
+		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
 		drawConfirmDialog(screen, m.game, m.saveResultMsg, 0, confirmImageOffsetX, false)
 		m.drawMenuDescription(screen)
 		return
 
 	case menuStateSaveSlot, menuStateLoadSlot:
 		m.drawCommandList(screen)
-		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.saveMode, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
+		drawSlotList(screen, m.game, m.slotIndex, m.slotData, m.slotThumbs, m.slotScrollTop, slotCardStartX, slotCardStartY, m.slotDragAccum)
 		if m.showReturnTitleConfirm {
 			drawConfirmDialog(screen, m.game, "タイトル画面に戻りますか？\n※現在までの進行状況は失われます。", m.confirmIndex, confirmImageOffsetX)
 		}
@@ -263,7 +263,7 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 	statusX := menuStatusOffsetX
 	m.drawCommandList(screen)
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		itemY := menuStatusStartY + float64(i)*menuStatusSpacingY
 
 		isDead := m.game.PlayerHP[i] <= 0
@@ -410,13 +410,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 		if !m.game.IsSkillUnlocked(m.skillCharIndex, i) {
 			continue
 		}
-		curLv := m.game.PlayerSkillLv[m.skillCharIndex][i]
-		if curLv < 1 {
-			curLv = 1
-		}
-		if curLv > len(sk.Levels) {
-			curLv = len(sk.Levels)
-		}
+		curLv := min(max(m.game.PlayerSkillLv[m.skillCharIndex][i], 1), len(sk.Levels))
 
 		rowCenterY := skillRowStartY + float64(m.game.SkillDisplayRow(m.skillCharIndex, i))*skillRowGapY
 		rowSelected := i == m.skillSubIndex

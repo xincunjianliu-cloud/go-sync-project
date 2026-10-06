@@ -146,9 +146,9 @@ type TiledPoint struct {
 }
 
 type TiledProperty struct {
-	Name  string      `json:"name"`
-	Type  string      `json:"type"`
-	Value interface{} `json:"value"`
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Value any    `json:"value"`
 }
 
 func objProps(obj TiledObject) map[string]string {
@@ -741,7 +741,7 @@ func (s *FieldScene) cameraPosition() (camX, camY float64) {
 }
 
 func (s *FieldScene) healParty() {
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
 		s.game.PlayerMP[i] = s.game.PlayerMaxMP[i]
 	}

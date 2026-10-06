@@ -2,7 +2,7 @@ package main
 
 func (m *MenuScene) hitTestItemListRows(rowCount int) (int, bool) {
 	rects := make([]tapRect, rowCount)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		y := skillRowStartY + float64(i)*itemRowGapY
 		rects[i] = tapRect{
 			x: skillNameX - 4,
@@ -153,7 +153,7 @@ func (m *MenuScene) updateItemTarget() {
 
 	used := false
 	if m.itemTargetIndex == partySize {
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			if _, _, ok := applyItemEffect(m.game, def, i); ok {
 				used = true
 			}

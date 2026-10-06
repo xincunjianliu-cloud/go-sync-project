@@ -166,12 +166,12 @@ func (f *triangleGlyphFace) Glyph(dot fixed.Point26_6, r rune) (image.Rectangle,
 	iw, ih := int(math.Ceil(w))+1, int(math.Ceil(h))+1
 	mask := image.NewAlpha(image.Rect(0, 0, iw, ih))
 	const ss = triSuperSample
-	for y := 0; y < ih; y++ {
-		for x := 0; x < iw; x++ {
+	for y := range ih {
+		for x := range iw {
 			var hits int
-			for sy := 0; sy < ss; sy++ {
+			for sy := range ss {
 				fy := float64(y) + (float64(sy)+0.5)/ss
-				for sx := 0; sx < ss; sx++ {
+				for sx := range ss {
 					fx := float64(x) + (float64(sx)+0.5)/ss
 					if triangleLit(r, fx, fy, w, h) {
 						hits++

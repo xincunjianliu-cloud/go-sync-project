@@ -73,9 +73,9 @@ func main() {
 		d := font.Drawer{Dst: img, Src: image.White, Face: face, Dot: fixed.P(0, ascent)}
 		d.DrawString(string(r))
 		fmt.Fprintf(&buf, "\t%q: {\n", r)
-		for y := 0; y < height; y++ {
+		for y := range height {
 			var row strings.Builder
-			for x := 0; x < w; x++ {
+			for x := range w {
 				if img.AlphaAt(x, y).A >= 0x80 {
 					row.WriteByte('#')
 				} else {

@@ -86,7 +86,7 @@ func decodeMP3ToPCM(data []byte) ([]byte, error) {
 		copyFloat32Chunk(u8Ctor, left, off, n, lbuf)
 		copyFloat32Chunk(u8Ctor, right, off, n, rbuf)
 		out := pcm[off*4 : (off+n)*4]
-		for i := 0; i < n; i++ {
+		for i := range n {
 			binary.LittleEndian.PutUint16(out[i*4:], uint16(floatToPCM16(lbuf[i*4:])))
 			binary.LittleEndian.PutUint16(out[i*4+2:], uint16(floatToPCM16(rbuf[i*4:])))
 		}

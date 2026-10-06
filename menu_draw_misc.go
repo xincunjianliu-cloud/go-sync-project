@@ -505,24 +505,12 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 
 		if !m.skillLevelSelecting {
 			descText = skillShortDescription(sk.Name)
-			curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
-			if curLv < 1 {
-				curLv = 1
-			}
+			curLv := max(m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex], 1)
 			mpCost = sk.Levels[curLv-1].MPCost
 		} else {
-			lv := m.skillLevelCursor
-			if lv < 1 {
-				lv = 1
-			}
-			if lv > len(sk.Levels) {
-				lv = len(sk.Levels)
-			}
+			lv := min(max(m.skillLevelCursor, 1), len(sk.Levels))
 
-			curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
-			if curLv < 1 {
-				curLv = 1
-			}
+			curLv := max(m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex], 1)
 
 			descText = sk.Levels[lv-1].Description
 			mpCost = sk.Levels[lv-1].MPCost

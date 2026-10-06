@@ -34,7 +34,7 @@ func (s *BattleScene) gaugeAtkBonus() int {
 }
 
 func (s *BattleScene) hasFullPartyForSynergy() bool {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.game.PlayerHP[i] <= 0 {
 			return false
 		}
@@ -228,10 +228,7 @@ func (s *BattleScene) rollDamage(atk float64, power float64, def float64, elemen
 		damage *= critDamageMultiply
 		s.lastRollWasCrit = true
 	}
-	result := int(math.Round(damage))
-	if result < 1 {
-		result = 1
-	}
+	result := max(int(math.Round(damage)), 1)
 	return result
 }
 
@@ -275,10 +272,7 @@ func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool)
 		power = data.PowerAll
 	}
 	magicAtk := float64(s.effectiveMagicAtk(actor))
-	heal := int(magicAtk * float64(power) / 100.0 * 10)
-	if heal < 1 {
-		heal = 1
-	}
+	heal := max(int(magicAtk*float64(power)/100.0*10), 1)
 	return heal
 }
 
@@ -356,7 +350,7 @@ func (s *BattleScene) effectivePlayerDef(target int, magic bool) int {
 	return s.applyPlayerStatMods(target, StatDef, s.game.PlayerDef[target])
 }
 
-func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, targetIsEnemy bool, targetIdx int, isAll bool) {
+func (s *BattleScene) applySkillEffects(effects []SkillEffect, targetIsEnemy bool, targetIdx int, isAll bool) {
 	for _, e := range effects {
 		switch e.Type {
 		case EffectAtbDownSmall:
@@ -403,7 +397,7 @@ func (s *BattleScene) applySkillEffects(effects []SkillEffect, casterIdx int, ta
 // (timed buffs/debuffs, counter stance). It runs only while the ATB
 // timeline itself is moving.
 func (s *BattleScene) tickTimedStatus(dt float64) {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		s.PlayerBuffs[i] = TickBuffSeconds(s.PlayerBuffs[i], dt)
 		s.PlayerDebuffs[i] = TickDebuffSeconds(s.PlayerDebuffs[i], dt)
 		if s.counterTimer[i] > 0 {
@@ -416,7 +410,7 @@ func (s *BattleScene) tickTimedStatus(dt float64) {
 }
 
 func (s *BattleScene) anyActorHolding() bool {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.readySlideX[i] < -0.5 {
 			return true
 		}

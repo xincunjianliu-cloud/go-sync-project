@@ -38,7 +38,7 @@ func drawWithHitFlash(dst *ebiten.Image, src *ebiten.Image, g ebiten.GeoM, inten
 	op := &ebiten.DrawRectShaderOptions{}
 	op.GeoM = g
 	op.Images[0] = src
-	op.Uniforms = map[string]interface{}{"Intensity": float32(intensity)}
+	op.Uniforms = map[string]any{"Intensity": float32(intensity)}
 
 	w := src.Bounds().Dx()
 	h := src.Bounds().Dy()

@@ -449,8 +449,8 @@ func (s *BattleScene) drawBattleTutorial(screen *ebiten.Image) {
 	if isCommandsPage {
 		maxLabelAdvance := 0.0
 		for _, line := range lines {
-			if idx := strings.Index(line, "："); idx >= 0 {
-				if adv := text.Advance(line[:idx], bodyFace); adv > maxLabelAdvance {
+			if before, _, ok := strings.Cut(line, "："); ok {
+				if adv := text.Advance(before, bodyFace); adv > maxLabelAdvance {
 					maxLabelAdvance = adv
 				}
 			}

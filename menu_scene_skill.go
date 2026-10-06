@@ -1,10 +1,12 @@
 package main
 
+import "slices"
+
 // hitTestSkillNameRows はタップされたスキル名の行を、スキルの添字で返す。
 // 一覧は覚えているスキルだけを上から詰めて並べている。
 func (m *MenuScene) hitTestSkillNameRows(rowCount int) (int, bool) {
 	rects := make([]tapRect, rowCount)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		y := skillRowStartY + float64(i)*skillRowGapY
 		rects[i] = tapRect{
 			x: skillNameX - 4,
@@ -50,12 +52,7 @@ func (m *MenuScene) hitTestAnySkillLevelCell(skills []SkillDef) (int, int, bool)
 
 func (m *MenuScene) isSkillLevelCellHeld(rowIndex, lv int) bool {
 	r := m.skillLevelCellRect(rowIndex, lv)
-	for _, p := range activeTouchPoints() {
-		if r.contains(p) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(activeTouchPoints(), r.contains)
 }
 
 func (m *MenuScene) isSkillRowUnlocked(skillIdx int) bool {
@@ -67,7 +64,7 @@ func (m *MenuScene) isSkillRowUnlocked(skillIdx int) bool {
 // cursor can never land on a hidden skill.
 func (m *MenuScene) nextUnlockedSkillIndex(from, dir, n int) int {
 	idx := from
-	for i := 0; i < n; i++ {
+	for range n {
 		idx = (idx + dir + n) % n
 		if m.isSkillRowUnlocked(idx) {
 			return idx
@@ -90,15 +87,9 @@ func (m *MenuScene) reachableSkillLevel(charIdx, skillIdx int) int {
 	if skillIdx < 0 || skillIdx >= len(skills) {
 		return 1
 	}
-	curLv := m.game.PlayerSkillLv[charIdx][skillIdx]
-	if curLv < 1 {
-		curLv = 1
-	}
+	curLv := max(m.game.PlayerSkillLv[charIdx][skillIdx], 1)
 	maxLv := len(skills[skillIdx].Levels)
-	reachable := curLv + 1
-	if reachable > maxLv {
-		reachable = maxLv
-	}
+	reachable := min(curLv+1, maxLv)
 	return reachable
 }
 
@@ -147,10 +138,7 @@ func (m *MenuScene) enterSkillCharacter(idx int) {
 	if m.skillSubIndex < 0 || m.skillSubIndex >= len(skills) || !m.game.IsSkillUnlocked(m.skillCharIndex, m.skillSubIndex) {
 		m.skillSubIndex = m.firstUnlockedSkillIndex(m.skillCharIndex, skills)
 	}
-	curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
-	if curLv < 1 {
-		curLv = 1
-	}
+	curLv := max(m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex], 1)
 	m.skillLevelCursor = m.game.rememberedIndex(m.game.LastSkillLevelCursor)
 	reachable := m.reachableSkillLevel(m.skillCharIndex, m.skillSubIndex)
 	if m.skillLevelCursor < 1 || m.skillLevelCursor > reachable {
@@ -206,15 +194,9 @@ func (m *MenuScene) updateSkillSub() {
 		return
 	}
 
-	curLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
-	if curLv < 1 {
-		curLv = 1
-	}
+	curLv := max(m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex], 1)
 	maxLv := len(skills[m.skillSubIndex].Levels)
-	reachable := curLv + 1
-	if reachable > maxLv {
-		reachable = maxLv
-	}
+	reachable := min(curLv+1, maxLv)
 
 	if m.skillLevelSelecting {
 		tappedLvConfirm := false
@@ -245,10 +227,7 @@ func (m *MenuScene) updateSkillSub() {
 			levelAreaTapped = true
 			if rowT != m.skillSubIndex {
 				m.skillSubIndex = rowT
-				newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][rowT]
-				if newCurLv < 1 {
-					newCurLv = 1
-				}
+				newCurLv := max(m.game.PlayerSkillLv[m.skillCharIndex][rowT], 1)
 				m.skillLevelCursor = newCurLv
 				m.upgradeProgress = 0
 				m.upgradeHoldArmed = false
@@ -282,10 +261,7 @@ func (m *MenuScene) updateSkillSub() {
 			} else {
 				m.skillSubIndex = m.nextUnlockedSkillIndex(m.skillSubIndex, 1, n)
 			}
-			newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
-			if newCurLv < 1 {
-				newCurLv = 1
-			}
+			newCurLv := max(m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex], 1)
 			m.skillLevelCursor = newCurLv
 			m.upgradeProgress = 0
 			m.upgradeHoldArmed = false
@@ -390,10 +366,7 @@ func (m *MenuScene) updateSkillSub() {
 	}
 	tapConfirmed := tapSelectOrConfirm(tappedIdx, tappedOk, &m.skillSubIndex, m.game.Audio)
 	if m.skillSubIndex != prevIndex {
-		newCurLv := m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex]
-		if newCurLv < 1 {
-			newCurLv = 1
-		}
+		newCurLv := max(m.game.PlayerSkillLv[m.skillCharIndex][m.skillSubIndex], 1)
 		m.skillLevelCursor = newCurLv
 
 		m.game.LastSkillSubIndex = m.skillSubIndex
@@ -450,10 +423,7 @@ func (m *MenuScene) updateHealTarget() {
 
 	if m.pendingSkill > 0 {
 		skillIdx := m.pendingSkill - 1
-		lv := m.pendingSkillLevel
-		if lv < 1 {
-			lv = 1
-		}
+		lv := max(m.pendingSkillLevel, 1)
 		skills := m.game.CharacterSkills(caster)
 		data := skills[skillIdx].Levels[lv-1]
 		cost := data.MPCost
@@ -475,7 +445,7 @@ func (m *MenuScene) updateHealTarget() {
 		m.game.PlayerMP[caster] -= cost
 		if m.healTargetIndex == partySize {
 			healAmount := m.game.menuHealAmount(caster, data.PowerAll)
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				m.game.healPartyMember(i, healAmount)
 			}
 		} else {

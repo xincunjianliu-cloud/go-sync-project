@@ -14,7 +14,7 @@ import (
 // 忘れると、存在しないマスを切り出してしまう）。
 func TestPartySpriteSheetsMatchLayout(t *testing.T) {
 	skillLists := [partySize][]SkillDef{Player1Skills, Player2Skills, Player3Skills, Player4Skills}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		path := fmt.Sprintf("assets/images/battle/player_attack_%d.png", i+1)
 		raw, err := embeddedAssets.ReadFile(path)
 		if err != nil {

@@ -173,7 +173,7 @@ var characterSkillSets = [partySize][]SkillDef{
 // skillIdx番目のスキルが何行目に来るか。
 func (g *Game) SkillDisplayRow(charIdx, skillIdx int) int {
 	row := 0
-	for j := 0; j < skillIdx; j++ {
+	for j := range skillIdx {
 		if g.IsSkillUnlocked(charIdx, j) {
 			row++
 		}
@@ -363,13 +363,7 @@ func (g *Game) CurrentSkillLevelData(charIdx, skillIdx int) SkillLevelData {
 	if len(levels) == 0 {
 		return SkillLevelData{}
 	}
-	lv := g.PlayerSkillLv[charIdx][skillIdx]
-	if lv < 1 {
-		lv = 1
-	}
-	if lv > len(levels) {
-		lv = len(levels)
-	}
+	lv := min(max(g.PlayerSkillLv[charIdx][skillIdx], 1), len(levels))
 	return levels[lv-1]
 }
 

@@ -73,7 +73,7 @@ func (s *BattleScene) drawItemTargetUI(screen *ebiten.Image) {
 		s.drawAllTargetRow(screen, isAll)
 	}
 
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		centerX := s.partyScreenX[i]
 		centerY := s.partyScreenY[i]
 

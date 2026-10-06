@@ -51,7 +51,7 @@ func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 		s.drawAllTargetRow(screen, isAll)
 	}
 
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		centerX := s.partyScreenX[i]
 		centerY := s.partyScreenY[i]
 
@@ -84,13 +84,7 @@ func (s *BattleScene) targetSelectDescription() string {
 	if skillIdx < 0 || skillIdx >= len(skills) {
 		return ""
 	}
-	lv := s.lastSkillLevel[p][skillIdx]
-	if lv < 1 {
-		lv = 1
-	}
-	if lv > len(skills[skillIdx].Levels) {
-		lv = len(skills[skillIdx].Levels)
-	}
+	lv := min(max(s.lastSkillLevel[p][skillIdx], 1), len(skills[skillIdx].Levels))
 	return skills[skillIdx].Levels[lv-1].Description
 }
 
@@ -147,7 +141,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 
 	barW := resultBarWAbs
 
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		nameColor := uiColorText
 		if s.game.PlayerHP[i] <= 0 {
 			nameColor = uiColorDead
@@ -344,7 +338,7 @@ func drawSlantedQuad(screen *ebiten.Image, x, y, w, h, slant float64, c color.RG
 	path.Close()
 	fillSlantedPath(screen, &path, c)
 }
-func drawSlantedStatusBar(screen *ebiten.Image, x, y, w, h, slant, ratio float64, fill, empty, edge color.RGBA) {
+func drawSlantedStatusBar(screen *ebiten.Image, x, y, w, h, slant, ratio float64, fill, empty color.RGBA) {
 	drawSlantedQuad(screen, x-1, y-1, w+2, h+2, slant, color.RGBA{0, 0, 0, empty.A})
 
 	innerSpan := w - slant
@@ -401,7 +395,7 @@ func drawStatusGaugeRow(screen *ebiten.Image, g *Game, sx, textY, barY float64, 
 	drawStatusValue(screen, sx+statusValueOffsetX, textY, cur, maxVal,
 		g.FontFace(statusValueFontSizeLarge), g.FontFace(statusValueFontSizeSmall), alpha, valueColor)
 	drawSlantedStatusBar(screen, sx, barY, statusBlockW, statusBarH, statusBarSlant, ratio,
-		scaleAlpha(pal.fill, alpha), scaleAlpha(pal.empty, alpha), scaleAlpha(pal.edge, alpha))
+		scaleAlpha(pal.fill, alpha), scaleAlpha(pal.empty, alpha))
 }
 
 // partyNamePosition returns the i-th party member's name draw position

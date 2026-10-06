@@ -465,10 +465,7 @@ func (m *MenuScene) previewRevealCount() int {
 		return 0
 	}
 	pos := m.previewTicks % cycleLen
-	count := pos / speedTicks
-	if count > len(runes) {
-		count = len(runes)
-	}
+	count := min(pos/speedTicks, len(runes))
 	return count
 }
 

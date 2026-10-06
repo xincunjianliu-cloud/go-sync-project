@@ -8,7 +8,7 @@ var wallKeyGroupsCache map[string][]string
 
 func splitKeyNames(raw string) []string {
 	var names []string
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part != "" {
 			names = append(names, part)

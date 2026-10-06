@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"math/rand"
+	"slices"
 	"strings"
 )
 
@@ -193,10 +194,8 @@ func (s *FieldScene) spotBelongsToOpenDoor(spotID string) bool {
 			if !isBlockDoorObj(p) || !s.blockDoorIsOpen(obj) {
 				continue
 			}
-			for _, id := range splitKeyNames(p["spots"]) {
-				if id == spotID {
-					return true
-				}
+			if slices.Contains(splitKeyNames(p["spots"]), spotID) {
+				return true
 			}
 		}
 	}

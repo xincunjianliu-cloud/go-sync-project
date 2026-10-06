@@ -62,10 +62,7 @@ func (m *MenuScene) drawAutoHealButton(screen *ebiten.Image, statusX float64) {
 
 // menuHealAmount はメニューで回復スキルを使ったときの回復量。
 func (g *Game) menuHealAmount(caster, power int) int {
-	amount := int(float64(g.PlayerMagicAtk[caster]) * float64(power) / 100.0 * 10)
-	if amount < 1 {
-		amount = 1
-	}
+	amount := max(int(float64(g.PlayerMagicAtk[caster])*float64(power)/100.0*10), 1)
 	return amount
 }
 
@@ -112,7 +109,7 @@ func (g *Game) bestAutoHealCast() (autoHealCast, bool) {
 		}
 	}
 
-	for caster := 0; caster < partySize; caster++ {
+	for caster := range partySize {
 		if g.PlayerHP[caster] <= 0 {
 			continue
 		}
@@ -134,7 +131,7 @@ func (g *Game) bestAutoHealCast() (autoHealCast, bool) {
 				if (data.Target == TargetAll || data.Target == TargetBoth) && data.PowerAll > 0 {
 					amount := g.menuHealAmount(caster, data.PowerAll)
 					gain := 0
-					for i := 0; i < partySize; i++ {
+					for i := range partySize {
 						gain += min(amount, missing(i))
 					}
 					consider(autoHealCast{caster: caster, cost: data.MPCost, amount: amount,
@@ -157,14 +154,14 @@ func (g *Game) healPartyMember(i, amount int) {
 // 1回でも回復したら true を返す。
 func (g *Game) AutoHealParty() bool {
 	healed := false
-	for n := 0; n < autoHealMaxCasts; n++ {
+	for range autoHealMaxCasts {
 		c, ok := g.bestAutoHealCast()
 		if !ok {
 			break
 		}
 		g.PlayerMP[c.caster] -= c.cost
 		if c.all {
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				g.healPartyMember(i, c.amount)
 			}
 		} else {

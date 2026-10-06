@@ -51,7 +51,7 @@ func loadingGlyphImage(r rune) *ebiten.Image {
 	w := len(rows[0])
 	pix := make([]byte, w*loadingGlyphHeight*4)
 	for y, row := range rows {
-		for x := 0; x < w; x++ {
+		for x := range w {
 			if row[x] == '#' {
 				i := (y*w + x) * 4
 				pix[i], pix[i+1], pix[i+2], pix[i+3] = 0xff, 0xff, 0xff, 0xff
@@ -106,7 +106,7 @@ func drawLoadingIndicator(screen *ebiten.Image, t float64, progress float64, sho
 	for _, r := range loadingLabel {
 		drawGlyph(r, 0)
 	}
-	for i := 0; i < loadingDotCount; i++ {
+	for i := range loadingDotCount {
 		drawGlyph(loadingDotRune, loadingDotLift(t, i))
 	}
 

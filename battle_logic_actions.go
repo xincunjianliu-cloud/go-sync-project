@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func (s *BattleScene) executeRewind(p int) {
+func (s *BattleScene) executeRewind() {
 	s.consumeAllGaugePoints()
 	s.rewindActive = true
 	s.rewindTimer = 15.0
@@ -15,10 +15,7 @@ func (s *BattleScene) executeRewind(p int) {
 
 	if s.lastEnemyAttackDamage > 0 && s.lastEnemyAttackTarget >= 0 && s.lastEnemyAttackTarget < partySize {
 		target := s.lastEnemyAttackTarget
-		s.game.PlayerHP[target] = s.lastEnemyAttackPrevHP
-		if s.game.PlayerHP[target] > s.game.PlayerMaxHP[target] {
-			s.game.PlayerHP[target] = s.game.PlayerMaxHP[target]
-		}
+		s.game.PlayerHP[target] = min(s.lastEnemyAttackPrevHP, s.game.PlayerMaxHP[target])
 		s.battleLog = "巻き戻し：直前攻撃をなかったことにした"
 	} else {
 		s.battleLog = "巻き戻しを発動した"
@@ -33,10 +30,7 @@ func (s *BattleScene) rollNormalDamage(target int) int {
 		return 5
 	}
 	atk := s.effectiveAtk(p)
-	def := s.effectiveEnemyDef(target, false)
-	if def < 1 {
-		def = 1
-	}
+	def := max(s.effectiveEnemyDef(target, false), 1)
 	power := 100.0 + float64(s.gaugeAtkBonus())
 	return s.rollDamage(float64(atk), power, float64(def), 1.0, s.game.PlayerLuck[p])
 }
@@ -55,7 +49,7 @@ func (s *BattleScene) finishPlayerTurn(returnPos float64) {
 
 func (s *BattleScene) countWaitStance() int {
 	n := 0
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.waitStance[i] {
 			n++
 		}
@@ -65,7 +59,7 @@ func (s *BattleScene) countWaitStance() int {
 
 func (s *BattleScene) cancelWaitAfterDeath() {
 	s.waitCancelOrder = append(s.waitCancelOrder[:0], s.waitOrder...)
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if !s.waitStance[i] {
 			continue
 		}
@@ -85,7 +79,7 @@ func (s *BattleScene) cancelWaitAfterDeath() {
 }
 
 func (s *BattleScene) othersAllInWaitStance(actor int) bool {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if i != actor && !s.waitStance[i] {
 			return false
 		}
@@ -96,10 +90,8 @@ func (s *BattleScene) othersAllInWaitStance(actor int) bool {
 func (s *BattleScene) enterWaitStance(actor int) {
 	s.waitStance[actor] = true
 	s.atbGauge[actor] = atbMax
-	for _, actorIdx := range s.waitOrder {
-		if actorIdx == actor {
-			return
-		}
+	if slices.Contains(s.waitOrder, actor) {
+		return
 	}
 	s.waitOrder = append(s.waitOrder, actor)
 }
@@ -107,7 +99,7 @@ func (s *BattleScene) enterWaitStance(actor int) {
 // tryWaitSynergy fires the 4-person synergy attack on s.targetIndex once
 // every party member is in wait stance.
 func (s *BattleScene) tryWaitSynergy() bool {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if !s.waitStance[i] {
 			return false
 		}
@@ -117,7 +109,7 @@ func (s *BattleScene) tryWaitSynergy() bool {
 
 	atk := 0
 	luck := 0
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		atk += s.effectiveAtk(i)
 		luck += s.game.PlayerLuck[i]
 	}
@@ -149,7 +141,7 @@ func (s *BattleScene) tryWaitSynergy() bool {
 		return true
 	}
 
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		s.waitStance[i] = false
 		s.resetPlayerGaugeTo(i, synergyReturnPosition)
 	}
@@ -162,7 +154,7 @@ func (s *BattleScene) tryWaitSynergy() bool {
 
 func (s *BattleScene) rollEnemyAction() {
 	var aliveList []int
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.game.PlayerHP[i] > 0 {
 			aliveList = append(aliveList, i)
 		}
@@ -196,10 +188,7 @@ func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
 		return
 	}
 
-	def := s.effectivePlayerDef(target, false)
-	if def < 1 {
-		def = 1
-	}
+	def := max(s.effectivePlayerDef(target, false), 1)
 	dmg := s.rollDamage(float64(s.effectiveEnemyAtk(s.actingEnemySlot, false)), 100.0, float64(def), 1.0, 0)
 
 	s.pendingEnemyHits = []pendingEnemyHit{{target: target, dmg: dmg}}
@@ -322,7 +311,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 		}
 
 		if s.pendingEnemySkillEffects != nil {
-			s.applySkillEffects(s.pendingEnemySkillEffects, s.actingEnemySlot, false, target, s.pendingEnemyIsAll)
+			s.applySkillEffects(s.pendingEnemySkillEffects, false, target, s.pendingEnemyIsAll)
 		}
 
 		if dmg > 0 && s.game.PlayerHP[target] > 0 && s.counterTimer[target] > 0 {
@@ -331,7 +320,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 	}
 
 	// かばう's buffs stay through the last covered hit, then go.
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.coverCount[i] <= 0 {
 			s.PlayerBuffs[i] = withoutCoverBuffs(s.PlayerBuffs[i])
 		}
@@ -355,8 +344,8 @@ func (s *BattleScene) applyEnemyPendingHits() {
 func (s *BattleScene) checkBattleEnd() bool {
 	if s.allEnemiesDead() {
 		if !s.isWon {
-			if strings.HasPrefix(s.enemyType, "boss_") {
-				numStr := strings.TrimPrefix(s.enemyType, "boss_")
+			if after, ok := strings.CutPrefix(s.enemyType, "boss_"); ok {
+				numStr := after
 				if bossNum, err := strconv.Atoi(numStr); err == nil {
 					if bossNum >= 1 && bossNum <= 4 {
 						s.game.BossDefeatedFlags[bossNum-1] = true
@@ -365,14 +354,14 @@ func (s *BattleScene) checkBattleEnd() bool {
 				}
 			}
 
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				s.expStartEXP[i] = s.game.PlayerEXP[i]
 				s.drawPlayerLv[i] = s.game.PlayerLv[i]
 				s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 			}
 
 			totalExp := s.totalEnemyExp()
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				if s.game.PlayerLv[i] < maxPlayerLevel {
 					s.game.PlayerEXP[i] += totalExp
 				}
@@ -393,7 +382,7 @@ func (s *BattleScene) checkBattleEnd() bool {
 			}
 
 			totalSP := s.totalEnemySP()
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				s.game.PlayerSP[i] += totalSP
 			}
 
@@ -431,7 +420,7 @@ func (s *BattleScene) checkBattleEnd() bool {
 	}
 
 	allDead := true
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.game.PlayerHP[i] > 0 {
 			allDead = false
 			break
@@ -450,7 +439,7 @@ func (s *BattleScene) checkBattleEnd() bool {
 }
 
 func (s *BattleScene) restoreDefeatedPartyHP() {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.game.PlayerHP[i] <= 0 {
 			s.game.PlayerHP[i] = 1
 		}
@@ -460,8 +449,8 @@ func (s *BattleScene) restoreDefeatedPartyHP() {
 func (s *BattleScene) exitBattleToField() {
 	s.restoreDefeatedPartyHP()
 	field, _ := NewRoomScene(s.game, s.originMap, s.originX, s.originY, "", s.originDir)
-	if strings.HasPrefix(s.enemyType, "boss_") {
-		numStr := strings.TrimPrefix(s.enemyType, "boss_")
+	if after, ok := strings.CutPrefix(s.enemyType, "boss_"); ok {
+		numStr := after
 		if bossNum, err := strconv.Atoi(numStr); err == nil {
 			if bossNum >= 1 && bossNum <= 4 {
 				field.justDefeatedBoss = bossNum
@@ -479,7 +468,7 @@ func (s *BattleScene) exitBattleToField() {
 // upgrade one of their unlocked skills, i.e. whether skill enhancement in
 // the menu has just become possible.
 func partyHasEnoughSPToUpgrade(game *Game) bool {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		for j := range game.CharacterSkills(i) {
 			if game.IsSkillUnlocked(i, j) && game.CanUpgradeSkill(i, j) {
 				return true
@@ -558,10 +547,7 @@ func (s *BattleScene) updateTargetSelect() {
 
 	if s.pendingSkill >= 1 {
 		skillIdx := s.pendingSkill - 1
-		lv := s.lastSkillLevel[p][skillIdx]
-		if lv < 1 {
-			lv = 1
-		}
+		lv := max(s.lastSkillLevel[p][skillIdx], 1)
 		skills := s.game.CharacterSkills(p)
 		data := skills[skillIdx].Levels[lv-1]
 		isAll := s.currentAttackIsAllTarget()
@@ -599,9 +585,9 @@ func (s *BattleScene) updateTargetSelect() {
 			knockback = data.Knockback + data.KnockbackPerTG*float64(s.tgLevel()-1)
 		}
 		for _, slot := range targets {
-			s.applySkillEffects(data.Effects, p, true, slot, isAll)
+			s.applySkillEffects(data.Effects, true, slot, isAll)
 			if s.rewindActive {
-				s.applySkillEffects(data.Effects, p, true, slot, isAll)
+				s.applySkillEffects(data.Effects, true, slot, isAll)
 			}
 			if knockback > 0 {
 				s.reduceAtb(true, slot, knockback)
@@ -678,7 +664,7 @@ func (s *BattleScene) allyTargetValid(data SkillLevelData, i int) bool {
 
 func (s *BattleScene) allyAllTargets(data SkillLevelData) []int {
 	var targets []int
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.allyTargetValid(data, i) {
 			targets = append(targets, i)
 		}
@@ -692,7 +678,7 @@ func (s *BattleScene) allyAllTargets(data SkillLevelData) []int {
 func allyTargetOptions(data SkillLevelData) []int {
 	var options []int
 	if data.Target != TargetAll {
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			options = append(options, i)
 		}
 	}
@@ -707,7 +693,7 @@ func (s *BattleScene) firstAllyTarget(data SkillLevelData) int {
 	if data.Target == TargetAll {
 		return partySize
 	}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.allyTargetValid(data, i) {
 			return i
 		}
@@ -760,10 +746,7 @@ func (s *BattleScene) updateHealTargetSelect() {
 	}
 
 	skillIdx := s.pendingSkill - 1
-	lv := s.lastSkillLevel[p][skillIdx]
-	if lv < 1 {
-		lv = 1
-	}
+	lv := max(s.lastSkillLevel[p][skillIdx], 1)
 	skills := s.game.CharacterSkills(p)
 	cost := s.effectiveMPCost(data.MPCost)
 
@@ -816,12 +799,12 @@ func (s *BattleScene) updateHealTargetSelect() {
 			s.guardHPPercent[target] = data.GuardHPPercent
 			s.guardCount[target] = data.GuardCount
 		}
-		s.applySkillEffects(data.Effects, p, false, target, isAll)
+		s.applySkillEffects(data.Effects, false, target, isAll)
 		if s.rewindActive {
 			if data.IsHeal {
 				s.applySkillHeal(target, s.rollSkillHeal(p, skillIdx, lv, isAll), true)
 			}
-			s.applySkillEffects(data.Effects, p, false, target, isAll)
+			s.applySkillEffects(data.Effects, false, target, isAll)
 		}
 		if target != p {
 			recvRow := spriteRowBuffRecv
@@ -867,7 +850,7 @@ func (s *BattleScene) executeSelfSkill() {
 			}
 		}
 	} else {
-		s.applySkillEffects(data.Effects, p, false, p, false)
+		s.applySkillEffects(data.Effects, false, p, false)
 	}
 	if data.CounterSeconds > 0 {
 		s.counterTimer[p] = data.CounterSeconds
@@ -920,7 +903,7 @@ func (s *BattleScene) applySkillMPHeal(target, amount int) {
 // attack aimed at target: a living ally with かばう charges left (spending
 // one), or target itself.
 func (s *BattleScene) coverRedirect(target int) int {
-	for c := 0; c < partySize; c++ {
+	for c := range partySize {
 		if c == target || s.coverCount[c] <= 0 || s.game.PlayerHP[c] <= 0 {
 			continue
 		}

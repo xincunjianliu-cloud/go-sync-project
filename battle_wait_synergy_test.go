@@ -4,7 +4,7 @@ import "testing"
 
 func TestTryWaitSynergyLethalKeepsBattleEndPhase(t *testing.T) {
 	g := &Game{}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		g.PlayerHP[i] = 100
 		g.PlayerMaxHP[i] = 100
 		g.PlayerAtk[i] = 999
@@ -19,7 +19,7 @@ func TestTryWaitSynergyLethalKeepsBattleEndPhase(t *testing.T) {
 		waitingActor: -1,
 		battlePhase:  phasePlayerMenu,
 	}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		s.waitStance[i] = true
 	}
 

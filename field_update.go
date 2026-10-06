@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -23,10 +24,7 @@ const (
 func (s *FieldScene) openMessageLog() {
 	s.isLogActive = true
 	s.logScrollOffset = 0
-	s.logCursorIndex = len(s.msgLog) - 1
-	if s.logCursorIndex < 0 {
-		s.logCursorIndex = 0
-	}
+	s.logCursorIndex = max(len(s.msgLog)-1, 0)
 }
 
 func (s *FieldScene) moveLogCursor(delta int) {
@@ -44,10 +42,7 @@ func (s *FieldScene) moveLogCursor(delta int) {
 	}
 
 	endIndex := n - int(s.logScrollOffset)
-	startIndex := endIndex - logVisibleCount
-	if startIndex < 0 {
-		startIndex = 0
-	}
+	startIndex := max(endIndex-logVisibleCount, 0)
 
 	if s.logCursorIndex < startIndex {
 		s.logScrollOffset = float64(n - s.logCursorIndex - logVisibleCount)
@@ -694,8 +689,8 @@ func (s *FieldScene) Update(dt float64) Scene {
 						s.pendingCutsceneRoute = []MoveStep{}
 
 						if routeStr != "" && routeStr != "<nil>" {
-							steps := strings.Split(routeStr, ",")
-							for _, step := range steps {
+							steps := strings.SplitSeq(routeStr, ",")
+							for step := range steps {
 								step = strings.TrimSpace(step)
 								var dir int
 								var distStr string
@@ -741,10 +736,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 					targetEnemiesStr = evText
 					targetMaxCount = 1
 					if n, ok := objPropInt(obj, "maxcount"); ok && n > 1 {
-						targetMaxCount = n
-						if targetMaxCount > maxEnemies {
-							targetMaxCount = maxEnemies
-						}
+						targetMaxCount = min(n, maxEnemies)
 					}
 				}
 			}
@@ -765,7 +757,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 					allowedEnemies := strings.Split(targetEnemiesStr, ",")
 					count := 1 + rand.Intn(targetMaxCount)
 					chosenEnemyNames := make([]string, count)
-					for i := 0; i < count; i++ {
+					for i := range count {
 						chosenEnemyNames[i] = strings.TrimSpace(allowedEnemies[rand.Intn(len(allowedEnemies))])
 					}
 					s.game.Audio.PlaySEByKey("encounter")
@@ -805,7 +797,7 @@ func segmentIntersectsRect(x1, y1, x2, y2, rx, ry, rw, rh float64) bool {
 	p := [4]float64{-dx, dx, -dy, dy}
 	q := [4]float64{x1 - rx, rx + rw - x1, y1 - ry, ry + rh - y1}
 	tMin, tMax := 0.0, 1.0
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		if p[i] == 0 {
 			if q[i] < 0 {
 				return false
@@ -1247,10 +1239,8 @@ func (s *FieldScene) runSceneChangeCommand(cmd EventCommand) bool {
 
 func (s *FieldScene) skipMessage() Scene {
 	s.autoMode = false
-	for _, cmd := range s.msgTexts {
-		if s.runSceneChangeCommand(cmd) {
-			return s
-		}
+	if slices.ContainsFunc(s.msgTexts, s.runSceneChangeCommand) {
+		return s
 	}
 	if s.onChoiceConfirm != nil {
 		s.isMsgActive = false

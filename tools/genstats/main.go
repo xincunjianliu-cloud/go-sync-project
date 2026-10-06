@@ -481,10 +481,10 @@ func generate(playerStats []playerStatRow, playerExp []int, enemies []enemyRow, 
 	b.WriteString("// Drop tables live in enemy_content.go; skill definitions in enemy_skill.go.\n\n")
 	b.WriteString("package main\n\n")
 
-	b.WriteString(fmt.Sprintf("var PlayerStatsByLevel = [%d][%d]PlayerStats{\n", playerLevels, partySize))
-	for lv := 0; lv < playerLevels; lv++ {
+	fmt.Fprintf(&b, "var PlayerStatsByLevel = [%d][%d]PlayerStats{\n", playerLevels, partySize)
+	for lv := range playerLevels {
 		b.WriteString("\t{\n")
-		for slot := 0; slot < partySize; slot++ {
+		for slot := range partySize {
 			r := playerStats[lv*partySize+slot]
 			if r.Level != lv+1 || r.Slot != slot+1 {
 				return nil, fmt.Errorf("player stats out of order: expected Level=%d Slot=%d, got Level=%d Slot=%d (rows must be sorted by Level then Slot)", lv+1, slot+1, r.Level, r.Slot)

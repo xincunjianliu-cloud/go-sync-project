@@ -1,5 +1,7 @@
 package main
 
+import "slices"
+
 type confirmResult int
 
 const (
@@ -29,7 +31,7 @@ func (m *MenuScene) pollConfirmDialog() confirmResult {
 		m.confirmIndex = 1 - m.confirmIndex
 		m.game.Audio.PlaySEByKey("cursor")
 	}
-	if idx, ok := hitTestConfirmDialog(m.game, confirmImageOffsetX); ok {
+	if idx, ok := hitTestConfirmDialog(confirmImageOffsetX); ok {
 		m.confirmIndex = idx
 		if idx == 0 {
 			m.game.Audio.PlaySEByKey("decide")
@@ -80,10 +82,5 @@ func (m *MenuScene) isModalMenuState() bool {
 }
 
 func tapInsideRect(r tapRect) bool {
-	for _, p := range justPressedTouchPoints() {
-		if r.contains(p) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(justPressedTouchPoints(), r.contains)
 }

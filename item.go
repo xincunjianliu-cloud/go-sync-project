@@ -202,14 +202,8 @@ func applyItemEffect(g *Game, def ItemDef, target int) (hpHealed int, mpHealed i
 	}
 
 	if isDead && def.Revive {
-		amt := def.HealHP + g.PlayerMaxHP[target]*def.HealHPPercent/100
-		if amt < 1 {
-			amt = 1
-		}
-		g.PlayerHP[target] = amt
-		if g.PlayerHP[target] > g.PlayerMaxHP[target] {
-			g.PlayerHP[target] = g.PlayerMaxHP[target]
-		}
+		amt := max(def.HealHP+g.PlayerMaxHP[target]*def.HealHPPercent/100, 1)
+		g.PlayerHP[target] = min(amt, g.PlayerMaxHP[target])
 		return g.PlayerHP[target], 0, true
 	}
 

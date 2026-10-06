@@ -11,7 +11,7 @@ type stubScene struct{ name string }
 func (s *stubScene) Update(dt float64) Scene   { return s }
 func (s *stubScene) Draw(screen *ebiten.Image) {}
 func runFrames(g *Game, n int) {
-	for i := 0; i < n; i++ {
+	for range n {
 		g.Update()
 	}
 }

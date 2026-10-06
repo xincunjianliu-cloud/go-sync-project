@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -428,10 +429,8 @@ func (a *AudioManager) PinBGM(paths []string) {
 }
 
 func (a *AudioManager) isPendingPath(path string) bool {
-	for _, p := range a.pendingPaths {
-		if p == path {
-			return true
-		}
+	if slices.Contains(a.pendingPaths, path) {
+		return true
 	}
 	return a.fadeOutActive && a.fadeOutNextPath == path
 }

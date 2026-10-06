@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"slices"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -87,7 +88,7 @@ func (s *BattleScene) battleSubRowRect(row int) tapRect {
 
 func (s *BattleScene) hitTestBattleSubRows(rowCount int) (int, bool) {
 	rects := make([]tapRect, rowCount)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		rects[i] = s.battleSubRowRect(i)
 	}
 	return hitTestTapRects(rects)
@@ -122,23 +123,11 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 		if !s.game.IsSkillUnlocked(p, i) {
 			continue
 		}
-		curLv := s.game.PlayerSkillLv[p][i]
-		if curLv < 1 {
-			curLv = 1
-		}
-		if curLv > len(sk.Levels) {
-			curLv = len(sk.Levels)
-		}
+		curLv := min(max(s.game.PlayerSkillLv[p][i], 1), len(sk.Levels))
 		if curLv <= 1 {
 			continue
 		}
-		lv := s.skillLevelCursors[p][i]
-		if lv < 1 {
-			lv = 1
-		}
-		if lv > curLv {
-			lv = curLv
-		}
+		lv := min(max(s.skillLevelCursors[p][i], 1), curLv)
 		leftRect, rightRect, _, _, _, _ := s.skillLevelArrowRects(s.game.SkillDisplayRow(p, i), lv, face)
 		for _, pt := range pts {
 			if leftRect.contains(pt) {
@@ -263,7 +252,7 @@ func (s *BattleScene) drawAllTargetRow(screen *ebiten.Image, selected bool) {
 
 func partyPortraitHitOrder() [partySize]int {
 	var order [partySize]int
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		order[i] = partySize - 1 - i
 	}
 	return order
@@ -279,7 +268,7 @@ func (s *BattleScene) partyPortraitRowSpan(i, ly int) (minX, maxX int, ok bool) 
 		return 0, 0, false
 	}
 	minX, maxX = -1, -1
-	for x := 0; x < battleSpriteCellW; x++ {
+	for x := range battleSpriteCellW {
 		_, _, _, a := spriteSheet.At(srcRect.Min.X+x, srcRect.Min.Y+ly).RGBA()
 		if a > 0 {
 			if minX == -1 {
@@ -528,16 +517,16 @@ func (s *BattleScene) hitTestEnemyTargetPoint(p touchPoint, alive []int, forcedA
 		return i
 	}
 
-	for idx := len(alive) - 1; idx >= 0; idx-- {
-		i := alive[idx]
+	for _, i := range slices.Backward(alive) {
+
 		if s.enemyPortraitPixelHit(i, p) {
 			return slotFor(i), true
 		}
 	}
 
 	if allowPadded {
-		for idx := len(alive) - 1; idx >= 0; idx-- {
-			i := alive[idx]
+		for _, i := range slices.Backward(alive) {
+
 			if r, ok := s.enemyTargetRect(i); ok && r.contains(p) {
 				return slotFor(i), true
 			}

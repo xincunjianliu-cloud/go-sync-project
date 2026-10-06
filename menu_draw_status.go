@@ -163,7 +163,7 @@ func (m *MenuScene) drawStatusScreen(screen *ebiten.Image) {
 			statusFontSize, statusRightLineOffsetY)
 	}
 
-	for idx := 0; idx < partySize; idx++ {
+	for idx := range partySize {
 		cx := statusPartyIconStartX + float64(idx)*statusPartyIconGap
 		cy := statusPartyIconY
 
@@ -225,7 +225,7 @@ func clampSlotScrollTop(scrollTop, selectedIndex int) int {
 	return scrollTop
 }
 
-func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [maxSaveSlots]*SaveData, slotThumbs [maxSaveSlots]*ebiten.Image, saveMode bool, scrollTop int, cardStartX, cardStartY, dragOffsetY float64) {
+func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [maxSaveSlots]*SaveData, slotThumbs [maxSaveSlots]*ebiten.Image, scrollTop int, cardStartX, cardStartY, dragOffsetY float64) {
 
 	cardH := float64(g.SaveThumbFrameImg.Bounds().Dy())
 	cardW := float64(g.SaveThumbFrameImg.Bounds().Dx())
@@ -294,7 +294,7 @@ func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [ma
 
 	barX := scrollBarX + (cardStartX - slotCardStartX)
 	barTop := scrollBarTopY + (cardStartY - slotCardStartY)
-	drawSaveScrollBar(screen, g, float64(scrollTop)-dragOffsetY/cardH, barX, barTop)
+	drawSaveScrollBar(screen, float64(scrollTop)-dragOffsetY/cardH, barX, barTop)
 }
 
 func hitTestSlotList(g *Game, tapX, tapY float64, scrollTop int, cardStartX, cardStartY float64) (int, bool) {
@@ -303,7 +303,7 @@ func hitTestSlotList(g *Game, tapX, tapY float64, scrollTop int, cardStartX, car
 
 	var rects []tapRect
 	var absIdx []int
-	for dispIdx := 0; dispIdx < slotsPerPageView; dispIdx++ {
+	for dispIdx := range slotsPerPageView {
 		i := scrollTop + dispIdx
 		if i >= maxSaveSlots {
 			break
@@ -373,7 +373,7 @@ func drawConfirmDialog(screen *ebiten.Image, game *Game, message string, selecte
 	}
 }
 
-func hitTestConfirmDialog(game *Game, horizontalOffset float64) (int, bool) {
+func hitTestConfirmDialog(horizontalOffset float64) (int, bool) {
 	winW := confirmPanelW
 	winH := confirmPanelH
 	winX := float64(gameWidth)/2 - winW/2 + horizontalOffset
@@ -428,7 +428,7 @@ func slotScrollBarMoveRange() float64 {
 	return moveRange
 }
 
-func drawSaveScrollBar(screen *ebiten.Image, g *Game, scrollTop float64, scrollBarX, barTop float64) {
+func drawSaveScrollBar(screen *ebiten.Image, scrollTop float64, scrollBarX, barTop float64) {
 	fillRect(screen, scrollBarX, barTop, scrollBarTrackWidth, scrollBarTrackHeight, scrollBarTrackColor)
 
 	moveRange := scrollBarTrackHeight - scrollBarCursorH

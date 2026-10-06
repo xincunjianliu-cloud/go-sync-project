@@ -4,7 +4,7 @@ import "testing"
 
 func newAutoHealTestGame() *Game {
 	g := &Game{}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		g.PlayerLv[i] = 1
 		g.PlayerMaxHP[i] = 100
 		g.PlayerHP[i] = 100

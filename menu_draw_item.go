@@ -27,9 +27,10 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 		rowCenterY := skillRowStartY + float64(i)*itemRowGapY
 
 		selected := false
-		if m.menuState == menuStateItemList {
+		switch m.menuState {
+		case menuStateItemList:
 			selected = i == m.itemListIndex
-		} else if m.menuState == menuStateItemTarget {
+		case menuStateItemTarget:
 			selected = slot.ItemID == m.pendingItemID
 		}
 

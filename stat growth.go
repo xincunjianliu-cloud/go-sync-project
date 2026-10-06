@@ -4,13 +4,7 @@ func (g *Game) ApplyLevelUpGrowth(actor int) {
 	if actor < 0 || actor >= partySize {
 		return
 	}
-	lv := g.PlayerLv[actor]
-	if lv < 1 {
-		lv = 1
-	}
-	if lv > maxPlayerLevel {
-		lv = maxPlayerLevel
-	}
+	lv := min(max(g.PlayerLv[actor], 1), maxPlayerLevel)
 	// Skill upgrades raise stats on top of the level table, so re-add them.
 	st := PlayerStatsByLevel[lv-1][actor].add(g.SkillStatBonus(actor))
 

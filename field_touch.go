@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"math"
+	"slices"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -97,12 +98,7 @@ func (p touchPoint) inCircle(cx, cy, r float64) bool {
 }
 
 func touchIDStillHeld(id ebiten.TouchID) bool {
-	for _, tid := range ebiten.AppendTouchIDs(nil) {
-		if tid == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ebiten.AppendTouchIDs(nil), id)
 }
 
 func pointInStickZone(x, y float64) bool {

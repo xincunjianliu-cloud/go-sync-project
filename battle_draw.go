@@ -154,7 +154,7 @@ func (s *BattleScene) partySpriteOrigin(i int) (x, y float64) {
 }
 
 func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		spriteSheet, srcRect, ok := s.partySpriteSrcRect(i)
 		if !ok {
 			continue
@@ -347,13 +347,7 @@ func (s *BattleScene) skillLevelDataAtCursor(p, skillIdx int) SkillLevelData {
 	if len(levels) == 0 {
 		return SkillLevelData{}
 	}
-	lv := s.skillLevelCursors[p][skillIdx]
-	if lv < 1 {
-		lv = 1
-	}
-	if lv > len(levels) {
-		lv = len(levels)
-	}
+	lv := min(max(s.skillLevelCursors[p][skillIdx], 1), len(levels))
 	return levels[lv-1]
 }
 

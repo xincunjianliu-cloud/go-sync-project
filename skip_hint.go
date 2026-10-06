@@ -76,10 +76,7 @@ func drawProgressArc(screen *ebiten.Image, cx, cy, radius, progress float64) {
 	}
 	var arc vector.Path
 	const segs = 40
-	steps := int(float64(segs) * progress)
-	if steps < 1 {
-		steps = 1
-	}
+	steps := max(int(float64(segs)*progress), 1)
 	for i := 0; i <= steps; i++ {
 		ang := -math.Pi/2 + progress*2*math.Pi*float64(i)/float64(steps)
 		x := cx + radius*math.Cos(ang)

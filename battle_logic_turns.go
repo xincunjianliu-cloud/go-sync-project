@@ -72,7 +72,7 @@ func (s *BattleScene) endCast(actor int) {
 }
 
 func (s *BattleScene) tickATB(dt float64) {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.waitStance[i] || s.waitCancelHold[i] > 0 || s.atbGauge[i] >= atbMax || s.game.PlayerHP[i] <= 0 {
 			continue
 		}
@@ -108,7 +108,7 @@ func (s *BattleScene) updateRewind(dt float64) {
 	if s.rewindTimer <= 0 {
 		s.rewindTimer = 0
 		s.rewindActive = false
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			s.rewindExtraTurnAvailable[i] = false
 		}
 		s.battleLog = "巻き戻し効果が切れた"
@@ -360,7 +360,7 @@ func (s *BattleScene) tryStartNextActor() {
 		return
 	}
 	best := -1
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if !s.isActorReady(i) || s.waitStance[i] {
 			continue
 		}
@@ -485,7 +485,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		p := s.waitingActor
 		if p >= 0 && p < partySize && s.canUseRewind(p) {
 			s.game.Audio.PlaySEByKey("decide")
-			s.executeRewind(p)
+			s.executeRewind()
 			return nil
 		}
 		s.game.Audio.PlaySEByKey("error")
@@ -540,10 +540,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		}
 		for i := range s.skillLevelCursors[p] {
 			if s.skillLevelCursors[p][i] < 1 {
-				lv := s.lastSkillLevel[p][i]
-				if lv < 1 {
-					lv = 1
-				}
+				lv := max(s.lastSkillLevel[p][i], 1)
 				s.skillLevelCursors[p][i] = lv
 			}
 		}
@@ -582,7 +579,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	return nil
 }
 
-func (s *BattleScene) updateSkillMenu(dt float64) {
+func (s *BattleScene) updateSkillMenu() {
 	if s.skillMenuOpenTimer > 0 {
 		s.skillMenuOpenTimer -= 1.0 / 60.0
 		return
@@ -618,13 +615,7 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		s.lastSkillIndex[p] = s.skillIndex
 	}
 
-	curLv := s.game.PlayerSkillLv[p][s.skillIndex]
-	if curLv < 1 {
-		curLv = 1
-	}
-	if curLv > len(skills[s.skillIndex].Levels) {
-		curLv = len(skills[s.skillIndex].Levels)
-	}
+	curLv := min(max(s.game.PlayerSkillLv[p][s.skillIndex], 1), len(skills[s.skillIndex].Levels))
 
 	if s.skillLevelCursors[p][s.skillIndex] < 1 {
 		s.skillLevelCursors[p][s.skillIndex] = 1
@@ -654,7 +645,7 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	if inpututil.IsKeyJustPressed(ebiten.KeyF) {
 		if s.canUseRewind(p) {
 			s.game.Audio.PlaySEByKey("decide")
-			s.executeRewind(p)
+			s.executeRewind()
 			return
 		}
 	}
@@ -664,10 +655,7 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 		return
 	}
 
-	lv := s.skillLevelCursors[p][s.skillIndex]
-	if lv < 1 {
-		lv = 1
-	}
+	lv := max(s.skillLevelCursors[p][s.skillIndex], 1)
 	data := skills[s.skillIndex].Levels[lv-1]
 	if !s.game.IsSkillUnlocked(p, s.skillIndex) {
 		s.game.Audio.PlaySEByKey("error")

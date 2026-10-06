@@ -300,8 +300,8 @@ func generateLightMaskImage(size int) *ebiten.Image {
 	cx, cy := float64(size)/2, float64(size)/2
 	maxR := float64(size) / 2
 
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
+	for y := range size {
+		for x := range size {
 			dx := float64(x) + 0.5 - cx
 			dy := float64(y) + 0.5 - cy
 			t := math.Sqrt(dx*dx+dy*dy) / maxR
@@ -324,8 +324,8 @@ func generateBlockDoorImage(size int) *ebiten.Image {
 	border := color.RGBA{55, 60, 74, 255}
 	const borderW = 3
 
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
+	for y := range size {
+		for x := range size {
 			if x < borderW || y < borderW || x >= size-borderW || y >= size-borderW {
 				img.Set(x, y, border)
 			} else {
@@ -345,7 +345,7 @@ func (g *Game) rememberedIndex(v int) int {
 }
 
 func (g *Game) ResetForNewGame() {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		st := PlayerStatsByLevel[0][i]
 		g.PlayerHP[i], g.PlayerMaxHP[i] = st.HP, st.HP
 		g.PlayerMP[i], g.PlayerMaxMP[i] = st.MP, st.MP
@@ -361,8 +361,8 @@ func (g *Game) ResetForNewGame() {
 		g.PlayerNextEXP[i] = PlayerExpToNextByLevel[0]
 	}
 
-	for i := 0; i < partySize; i++ {
-		for j := 0; j < len(g.PlayerSkillLv[i]); j++ {
+	for i := range partySize {
+		for j := range len(g.PlayerSkillLv[i]) {
 			g.PlayerSkillLv[i][j] = 1
 		}
 	}
@@ -541,7 +541,8 @@ func (g *Game) Update() error {
 	g.TotalPlayTime += dt
 	g.Audio.Update(dt)
 
-	if g.fadeMode == FadeOut {
+	switch g.fadeMode {
+	case FadeOut:
 		g.fadeAlpha += g.fadeSpeed * dt
 		if g.fadeAlpha >= 1.0 {
 			g.fadeAlpha = 1.0
@@ -549,10 +550,10 @@ func (g *Game) Update() error {
 			g.updateSceneLoading()
 		}
 		return nil
-	} else if g.fadeMode == FadeLoading {
+	case FadeLoading:
 		g.updateSceneLoading()
 		return nil
-	} else if g.fadeMode == FadeIn {
+	case FadeIn:
 		g.fadeAlpha -= g.fadeSpeed * dt
 		if g.fadeAlpha <= 0 {
 			g.fadeAlpha = 0
@@ -861,7 +862,7 @@ func buildCharaSlugs() map[string]string {
 	for i, name := range BossNames {
 		m[name] = fmt.Sprintf("boss%d", i+1)
 	}
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		m[PlayerNames[i]] = fmt.Sprintf("player_%d", i+1)
 	}
 	return m

@@ -204,10 +204,7 @@ func (m *MessageSystem) Draw(screen *ebiten.Image, cmd EventCommand, g *Game, si
 	}
 
 	runes := []rune(cmd.Text)
-	count := (m.ticks - m.msgStart) / m.speed()
-	if count > len(runes) {
-		count = len(runes)
-	}
+	count := min((m.ticks-m.msgStart)/m.speed(), len(runes))
 	visibleText := string(runes[:count])
 
 	lines := strings.Split(visibleText, "\n")

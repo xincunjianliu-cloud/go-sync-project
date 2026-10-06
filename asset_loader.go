@@ -12,8 +12,6 @@ const (
 	// prioUrgent は今まさに処理が止まって待っているアセット
 	// （loadAssetBytesCachedでの同期読み込みなど）。
 	prioUrgent = iota
-	// prioBoot はタイトル画面を出すのに必要なアセット。
-	prioBoot
 	// prioSoon はもうすぐ使うと分かっているアセット（これから始まる会話の
 	// 立ち絵、タイトルBGMなど）。
 	prioSoon
@@ -92,7 +90,7 @@ type assetLoader struct {
 func newAssetLoader(workers int, fetchFn func(string) ([]byte, error)) *assetLoader {
 	l := &assetLoader{jobs: map[string]*assetJob{}, fetchFn: fetchFn}
 	l.cond = sync.NewCond(&l.mu)
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go l.worker()
 	}
 	return l

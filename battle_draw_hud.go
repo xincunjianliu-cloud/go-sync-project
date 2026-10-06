@@ -76,7 +76,7 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 		}
 		return s.atbGauge[a] < s.atbGauge[b]
 	}
-	for i := 0; i < len(order); i++ {
+	for i := range order {
 		for j := i + 1; j < len(order); j++ {
 			if less(order[j], order[i]) {
 				order[i], order[j] = order[j], order[i]
@@ -220,7 +220,7 @@ func (s *BattleScene) statusBarAlpha() float64 {
 func (s *BattleScene) drawStatusBar(screen *ebiten.Image) {
 
 	alpha := s.statusBarAlpha()
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		sx, sy := partyNamePosition(i)
 
 		s.drawPartyName(screen, i, sx, sy, alpha)
@@ -401,21 +401,9 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		if !s.game.IsSkillUnlocked(p, i) {
 			continue
 		}
-		curLv := s.game.PlayerSkillLv[p][i]
-		if curLv < 1 {
-			curLv = 1
-		}
-		if curLv > len(sk.Levels) {
-			curLv = len(sk.Levels)
-		}
+		curLv := min(max(s.game.PlayerSkillLv[p][i], 1), len(sk.Levels))
 
-		lv := s.skillLevelCursors[p][i]
-		if lv < 1 {
-			lv = 1
-		}
-		if lv > curLv {
-			lv = curLv
-		}
+		lv := min(max(s.skillLevelCursors[p][i], 1), curLv)
 
 		data := sk.Levels[lv-1]
 		label := sk.Name

@@ -185,7 +185,7 @@ const (
 
 func (m *MenuScene) hitTestPartyRows() (int, bool) {
 	rects := make([]tapRect, partySize)
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		itemY := menuStatusStartY + float64(i)*menuStatusSpacingY
 		rects[i] = tapRect{x: partyRowHitX, y: itemY - 20, w: partyRowHitW, h: 100}
 	}
@@ -199,7 +199,7 @@ func (m *MenuScene) allTargetRowRect() tapRect {
 
 func (m *MenuScene) hitTestPartyRowsWithAll(allowAll bool) (int, bool) {
 	rects := make([]tapRect, 0, partySize+1)
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		itemY := menuStatusStartY + float64(i)*menuStatusSpacingY
 		rects = append(rects, tapRect{x: partyRowHitX, y: itemY - 20, w: partyRowHitW, h: 100})
 	}
@@ -287,7 +287,7 @@ func (m *MenuScene) enterCommand(idx int) {
 
 func (m *MenuScene) hitTestStatusPartyIcons() (int, bool) {
 	rects := make([]tapRect, partySize)
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		cx := statusPartyIconStartX + float64(i)*statusPartyIconGap
 		rects[i] = tapRect{x: cx - statusPartyIconGap/2, y: statusPartyIconY - 45, w: statusPartyIconGap, h: 90}
 	}
@@ -342,7 +342,7 @@ func (m *MenuScene) enterSlotScreen(save bool) {
 	}
 	m.slotScrollTop = clampSlotScrollTop(0, m.slotIndex)
 	m.slotDragAccum = 0
-	for i := 0; i < maxSaveSlots; i++ {
+	for i := range maxSaveSlots {
 		m.slotData[i], _ = LoadGame(i + 1)
 		m.slotThumbs[i] = LoadThumb(i + 1)
 	}
@@ -359,7 +359,7 @@ func (m *MenuScene) resetSlotDrag() {
 }
 
 func (m *MenuScene) reloadSlotData() {
-	for i := 0; i < maxSaveSlots; i++ {
+	for i := range maxSaveSlots {
 		m.slotData[i], _ = LoadGame(i + 1)
 		m.slotThumbs[i] = LoadThumb(i + 1)
 	}

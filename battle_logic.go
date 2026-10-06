@@ -14,7 +14,7 @@ const debugModeEnabled = true
 // wrapping around, skipping over skills the character hasn't unlocked yet.
 func (s *BattleScene) nextUnlockedSkillIndex(charIdx, from, dir, n int) int {
 	idx := from
-	for i := 0; i < n; i++ {
+	for range n {
 		idx = (idx + dir + n) % n
 		if s.game.IsSkillUnlocked(charIdx, idx) {
 			return idx
@@ -92,13 +92,13 @@ func (s *BattleScene) applyDebugCheats() {
 		s.checkBattleEnd()
 
 	case inpututil.IsKeyJustPressed(ebiten.Key2):
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			s.game.PlayerHP[i] = s.game.PlayerMaxHP[i]
 			s.game.PlayerMP[i] = s.game.PlayerMaxMP[i]
 		}
 
 	case inpututil.IsKeyJustPressed(ebiten.Key3):
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			if s.game.PlayerHP[i] > 0 {
 				s.game.PlayerHP[i] = 1
 			}
@@ -110,7 +110,7 @@ func (s *BattleScene) applyDebugCheats() {
 		}
 
 	case inpututil.IsKeyJustPressed(ebiten.Key5):
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			s.game.PlayerMP[i] = 0
 		}
 
@@ -119,7 +119,7 @@ func (s *BattleScene) applyDebugCheats() {
 		s.recomputeGaugeStage()
 
 	case inpututil.IsKeyJustPressed(ebiten.Key7):
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			skills := s.game.CharacterSkills(i)
 			for j, sk := range skills {
 				if j >= len(s.game.PlayerSkillLv[i]) {
@@ -135,7 +135,7 @@ func (s *BattleScene) applyDebugCheats() {
 		s.battleLogTimer = battleLogDuration
 
 	case inpututil.IsKeyJustPressed(ebiten.Key8):
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			s.game.PlayerSP[i] += 9999
 		}
 		s.battleLog = "SP+9999（デバッグ）"
@@ -149,14 +149,14 @@ func (s *BattleScene) applyDebugCheats() {
 		s.battleLogTimer = battleLogDuration
 
 	case inpututil.IsKeyJustPressed(ebiten.Key0):
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			s.game.PlayerHP[i] = 0
 		}
 		s.checkBattleEnd()
 
 	case inpututil.IsKeyJustPressed(ebiten.KeyB):
 		if s.debugStatIconTest {
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				s.PlayerBuffs[i] = nil
 				s.PlayerDebuffs[i] = nil
 			}
@@ -193,7 +193,7 @@ func (s *BattleScene) applyDebugCheats() {
 		s.tutorialActive = true
 
 	case inpututil.IsKeyJustPressed(ebiten.KeyK):
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			skills := s.game.CharacterSkills(i)
 			for j, sk := range skills {
 				if j >= len(s.game.PlayerSkillLv[i]) {
@@ -277,7 +277,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			}
 
 		case 3:
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				if s.introCharOffsetX != 0 {
 					if s.playerPose[i] != poseWalk {
 						s.playerPose[i] = poseWalk
@@ -440,7 +440,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 		}
 	}
 
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.playerFlashTimer[i] > 0 {
 			s.playerFlashTimer[i] -= dt
 			if s.playerFlashTimer[i] < 0 {
@@ -464,7 +464,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 		if isConfirmKeyPressed() {
 			s.game.Audio.PlaySEByKey("decide")
 			if s.gameOverIdx == 0 {
-				for i := 0; i < partySize; i++ {
+				for i := range partySize {
 					s.game.PlayerHP[i] = s.preBattlePlayerHP[i]
 					s.game.PlayerMP[i] = s.preBattlePlayerMP[i]
 				}
@@ -477,7 +477,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 	const returnDelayDuration = 0.4
 
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.waitCancelHold[i] > 0 {
 			s.waitCancelHold[i] -= dt
 			if s.waitCancelHold[i] < 0 {
@@ -569,7 +569,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 				s.resetEnemyGaugeTo(s.actingEnemySlot, s.enemyActionReturnPosition)
 			}
 
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				if s.playerPose[i] != poseDead && s.playerPose[i] != poseWin {
 					s.playerPose[i] = poseIdle
 					s.playerAnimTimer[i] = 0
@@ -608,7 +608,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			s.battlePhase = phasePlayerMenu
 		}
 	case phaseSkillMenu:
-		s.updateSkillMenu(dt)
+		s.updateSkillMenu()
 
 	case phaseTargetSelect:
 		s.updateTargetSelect()
@@ -617,7 +617,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 		s.updateHealTargetSelect()
 
 	case phaseItemMenu:
-		s.updateItemMenu(dt)
+		s.updateItemMenu()
 
 	case phaseItemTarget:
 		s.updateItemTargetSelect()
@@ -634,7 +634,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			if s.resultAnimTimer >= 0.8 {
 				s.resultAnimTimer = 0.0
 				s.resultSubPhase = resSubWinPose
-				for i := 0; i < partySize; i++ {
+				for i := range partySize {
 					if s.game.PlayerHP[i] > 0 {
 						s.playerPose[i] = poseWin
 						s.playerAnimTimer[i] = 0
@@ -649,7 +649,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 				s.resultAnimTimer = 0.0
 				s.resultSubPhase = resSubResultFadeIn
 
-				for i := 0; i < partySize; i++ {
+				for i := range partySize {
 					s.drawPlayerEXP[i] = s.expStartEXP[i]
 					s.drawPlayerEXPF[i] = float64(s.expStartEXP[i])
 					s.isLevelUp[i] = s.game.PlayerLv[i] > s.drawPlayerLv[i]
@@ -670,7 +670,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 		case resSubBarAnimate:
 			if isResultAdvancePressed() {
-				for i := 0; i < partySize; i++ {
+				for i := range partySize {
 					if s.game.PlayerHP[i] <= 0 {
 						continue
 					}
@@ -695,7 +695,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 				}
 
 				allDone := true
-				for i := 0; i < partySize; i++ {
+				for i := range partySize {
 					if s.game.PlayerHP[i] <= 0 {
 						continue
 					}
@@ -711,7 +711,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			}
 
 			allFinished := true
-			for i := 0; i < partySize; i++ {
+			for i := range partySize {
 				if s.game.PlayerHP[i] <= 0 {
 					continue
 				}
@@ -790,7 +790,7 @@ func (s *BattleScene) updateEnemyDeath(dt float64) {
 				_, _, w, h := s.enemyDrawRect(i)
 				spreadX := w / 4
 				spreadY := h / 8
-				for n := 0; n < 50; n++ {
+				for range 50 {
 					angle := rand.Float64() * math.Pi * 2
 					speed := rand.Float64()*15 + 5
 					s.deathParticles = append(s.deathParticles, DeathParticle{
@@ -843,7 +843,7 @@ func (s *BattleScene) updateEnemyDeath(dt float64) {
 }
 
 func (s *BattleScene) updateAllPoses(dt float64) {
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		if s.evadeOffsetX[i] > 0 {
 			s.evadeOffsetX[i] -= evadeDodgeReturnSpeed * dt
 			if s.evadeOffsetX[i] < 0 {
@@ -943,13 +943,7 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 				(s.battlePhase == phaseTargetSelect && s.pendingSkill >= 1)
 
 			if isSkillSelecting {
-				lv := s.skillLevelCursors[i][s.skillIndex]
-				if lv < 1 {
-					lv = 1
-				}
-				if lv > 3 {
-					lv = 3
-				}
+				lv := min(max(s.skillLevelCursors[i][s.skillIndex], 1), 3)
 				s.skillGlowLevel = lv
 				if s.playerPose[i] != poseReadyGlow {
 					s.playerPose[i] = poseReadyGlow

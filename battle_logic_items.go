@@ -8,7 +8,7 @@ func (s *BattleScene) hasAnyBattleUsableItem() bool {
 	return len(s.battleUsableItems()) > 0
 }
 
-func (s *BattleScene) updateItemMenu(dt float64) {
+func (s *BattleScene) updateItemMenu() {
 	p := s.waitingActor
 	if p < 0 || p >= partySize {
 		s.battlePhase = phasePlayerMenu
@@ -100,7 +100,7 @@ func (s *BattleScene) updateItemTargetSelect() {
 
 	used := false
 	if s.itemTargetIndex == partySize {
-		for i := 0; i < partySize; i++ {
+		for i := range partySize {
 			if s.applyItemToTargetInBattle(def, i) {
 				used = true
 			}

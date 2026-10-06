@@ -244,7 +244,6 @@ const (
 const levelUpPauseDuration = 0.35
 
 const (
-	timelineIconOffsetY = 46.0
 	// waitIconFirstGap はゴール画像の下端と1人目の待機アイコンの
 	// すき間、waitIconStackGap は待機アイコン同士のすき間（どちらもpx）。
 	waitIconFirstGap      = 0.0
@@ -729,7 +728,7 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 		game.SeenGaugeTutorial = true
 	}
 
-	for i := 0; i < partySize; i++ {
+	for i := range partySize {
 		s.preBattlePlayerHP[i] = game.PlayerHP[i]
 		s.preBattlePlayerMP[i] = game.PlayerMP[i]
 	}
