@@ -671,6 +671,7 @@ func SaveGame(slot int, mapPath string, x, y float64, hp [4]int) error {
 		PlayerLuck:               g.PlayerLuck,
 		PlayerSP:                 g.PlayerSP,
 		PlayerSkillLv:            g.PlayerSkillLv,
+		PlayerSkillLvByName:      skillLevelsByName(g.PlayerSkillLv, currentSkillOrder),
 		BossDefeatedFlags:        g.BossDefeatedFlags,
 		PlayerLv:                 g.PlayerLv,
 		PlayerEXP:                g.PlayerEXP,

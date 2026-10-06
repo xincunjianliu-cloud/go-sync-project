@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"image"
 	_ "image/png"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -51,22 +51,46 @@ func decodeAssetImage(path string) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	start := time.Now()
+	img, err := decodeImageData(data)
 	assetStore.release(path)
 	if err != nil {
 		return nil, fmt.Errorf("画像デコード失敗 %s: %w", path, err)
 	}
+	if d := time.Since(start); d >= slowImageDecodeThreshold {
+		b := img.Bounds()
+		loadTrace("画像デコードに%.0fms %s (%dx%d)", d.Seconds()*1000, path, b.Dx(), b.Dy())
+	}
 	return img, nil
 }
+
+// slowImageDecodeThreshold 以上かかった画像のデコードはログに出す
+// (1フレームは約16ms)。
+const slowImageDecodeThreshold = 30 * time.Millisecond
 
 func loadRuntimeImage(path string) (*ebiten.Image, error) {
 	data, err := readRuntimeFile(path)
 	if err != nil {
 		return nil, err
 	}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, err := decodeImageData(data)
 	if err != nil {
 		return nil, fmt.Errorf("画像デコード失敗 %s: %w", path, err)
 	}
 	return ebiten.NewImageFromImage(img), nil
 }
+
+// newImageTraced はebiten.NewImageFromImageと同じだが、時間がかかったときは
+// ログに出す。GPUへの転送はメインゴルーチンで行うので、大きい画像はその
+// フレームを引き延ばす。
+func newImageTraced(path string, img image.Image) *ebiten.Image {
+	start := time.Now()
+	out := ebiten.NewImageFromImage(img)
+	if d := time.Since(start); d >= slowImageUploadThreshold {
+		loadTrace("画像のGPU転送に%.0fms %s", d.Seconds()*1000, path)
+	}
+	return out
+}
+
+// slowImageUploadThreshold 以上かかったGPU転送はログに出す。
+const slowImageUploadThreshold = 8 * time.Millisecond

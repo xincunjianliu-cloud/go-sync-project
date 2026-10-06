@@ -212,7 +212,7 @@ func (g *Game) applyHeavyMsg(item decodedHeavyAsset) {
 			return
 		}
 		if item.assign != nil {
-			item.assign(g, ebiten.NewImageFromImage(item.img))
+			item.assign(g, newImageTraced(item.label, item.img))
 		}
 	}
 }
@@ -250,7 +250,63 @@ func (g *Game) onTierReady(tier assetTier) {
 	case assetTierBattle:
 		// 最初の戦闘開始・勝利で待ちが出ないように。
 		g.Audio.Prewarm(prioTierBase+int(assetTierRest), bgmBattleNormal, bgmVictoryIntro, bgmVictoryLoop)
+	case assetTierRest:
+		// まだ用意していないボスの画像も、ほかが全部終わった後に読んでおく。
+		all := make([]int, len(g.BossImgs))
+		for i := range all {
+			all[i] = i
+		}
+		g.prepareBossImages(all, prioAudioPrefetch)
 	}
+}
+
+// bossImageAsset はボス1体分の画像1枚と、その格納先。
+type bossImageAsset struct {
+	path string
+	slot **ebiten.Image
+}
+
+// bossImageAssets はボス(BossImgs等の添字idx)の戦闘で使う画像の一覧を返す。
+// ボスの画像は段階読み込みに入れず、そのボスがいるマップのロード地点や、
+// ボス戦が始まる会話の開始時点で、ボスごとに読み込む。こうしておくと、
+// ボスを増やしてもロード地点の待ちはそのマップにいるボスの分しか増えない。
+func (g *Game) bossImageAssets(idx int) []bossImageAsset {
+	if idx < 0 || idx >= len(g.BossImgs) {
+		return nil
+	}
+	n := idx + 1
+	return []bossImageAsset{
+		{fmt.Sprintf("assets/images/battle/boss_%d.png", n), &g.BossImgs[idx]},
+		{fmt.Sprintf("assets/images/battle/boss_%d_icon.png", n), &g.BossIconImgs[idx]},
+		{fmt.Sprintf("assets/images/battle/boss_%d_icon_large.png", n), &g.BossIconLargeImgs[idx]},
+		{fmt.Sprintf("assets/images/battle/battle_bg_boss_%d.png", n), &g.BossBgImgs[idx]},
+	}
+}
+
+// prepareBossImages はbossesのボスの画像のうち、まだのものを優先度prioで
+// 裏でデコードし始め、全部終わって(成功・失敗どちらでも)いるかを返す。
+// デコード中のものを、より高い優先度で頼み直すと取得の順番が繰り上がる。
+func (g *Game) prepareBossImages(bosses []int, prio int) bool {
+	ready := true
+	for _, idx := range bosses {
+		for _, a := range g.bossImageAssets(idx) {
+			if *a.slot != nil || g.asyncImageFailed[a.path] {
+				continue
+			}
+			ready = false
+			if g.asyncImagePending[a.path] {
+				assetStore.request(a.path, prio)
+				continue
+			}
+			path, slot := a.path, a.slot
+			g.decodeImageAsync(path, prio, func(img *ebiten.Image) {
+				if *slot == nil {
+					*slot = img
+				}
+			}, func() { loadTrace("ボスの画像を読み込めませんでした: %s", path) })
+		}
+	}
+	return ready
 }
 
 // prewarmSE は全効果音をバックグラウンドで先にデコードしておく。
@@ -280,7 +336,10 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		g.Tilesets["default"] = img
 		tilesetImageCache["assets/images/field/Tile_set_School_Set.png"] = img
 	})
-	add(assetTierField, "assets/images/field/player_walk.png", func(g *Game, img *ebiten.Image) { g.SpriteSheet = img })
+	add(assetTierField, "assets/images/field/player_walk.png", func(g *Game, img *ebiten.Image) {
+		g.SpriteSheet = img
+		preloadedPlayerSprites["assets/images/field/player_walk.png"] = img
+	})
 	for i := 0; i < 4; i++ {
 		add(assetTierField, fmt.Sprintf("assets/images/field/bossスプライト_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.BossSpriteSheets[i] = img })
 	}
@@ -321,12 +380,8 @@ func deferredAssetAssignments() []deferredAssetAssign {
 
 	// ---- 戦闘段階 ----
 
-	for i := 0; i < 4; i++ {
-		add(assetTierBattle, fmt.Sprintf("assets/images/battle/boss_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.BossImgs[i] = img })
-		add(assetTierBattle, fmt.Sprintf("assets/images/battle/boss_%d_icon.png", i+1), func(g *Game, img *ebiten.Image) { g.BossIconImgs[i] = img })
-		add(assetTierBattle, fmt.Sprintf("assets/images/battle/boss_%d_icon_large.png", i+1), func(g *Game, img *ebiten.Image) { g.BossIconLargeImgs[i] = img })
-		add(assetTierBattle, fmt.Sprintf("assets/images/battle/battle_bg_boss_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.BossBgImgs[i] = img })
-	}
+	// ボスの画像は段階に入れず、ボスごとに必要になった時点で読み込む
+	// (bossImageAssets / prepareBossImages)。
 
 	for _, enemy := range EnemyDatabase {
 		name := enemy.Name
@@ -353,6 +408,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	add(assetTierBattle, "assets/images/battle/timeline_bar.png", func(g *Game, img *ebiten.Image) { g.TimelineBarImg = img })
 	add(assetTierBattle, "assets/images/battle/gauge.png", func(g *Game, img *ebiten.Image) { g.GaugeImg = img })
 	add(assetTierBattle, "assets/images/battle/goal.png", func(g *Game, img *ebiten.Image) { g.GoalImg = img })
+	add(assetTierBattle, "assets/images/battle/item_button.png", func(g *Game, img *ebiten.Image) { g.ItemButtonImg = img })
 	add(assetTierBattle, "assets/images/battle/timeline_bar_vertical.png", func(g *Game, img *ebiten.Image) { g.TimelineBarVertImg = img })
 	add(assetTierBattle, "assets/images/battle/battle_bg.png", func(g *Game, img *ebiten.Image) { g.BattleBgImg = img })
 

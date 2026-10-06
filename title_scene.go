@@ -104,9 +104,8 @@ func (s *TitleScene) Update(dt float64) Scene {
 				return s
 			}
 			s.game.Audio.PlaySEByKey("decide")
-			// 最初のマップに必要な画像がまだそろっていなければ、暗転中にそろえて
-			// から組み立てる(ChangeSceneToMap参照)。
-			s.game.ChangeSceneToMap(startMapPath, func() Scene {
+			// ロード地点。最初のマップで使う画像と曲をそろえてから組み立てる。
+			s.game.ChangeSceneAtLoadPoint(startMapPath, func() Scene {
 				s.game.ResetForNewGame()
 				field, err := NewRoomScene(s.game, startMapPath, 0, 0, "start_point", 0)
 				if err != nil {
@@ -204,30 +203,33 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 }
 
 type SaveData struct {
-	SlotID            int       `json:"slot_id"`
-	LocationName      string    `json:"location_name"`
-	CurrentMap        string    `json:"current_map"`
-	PlayerX           float64   `json:"player_x"`
-	PlayerY           float64   `json:"player_y"`
-	PlayerDir         int       `json:"player_dir"`
-	PlayerHP          [4]int    `json:"player_hp"`
-	PlayerMaxHP       [4]int    `json:"player_max_hp"`
-	PlayerMP          [4]int    `json:"player_mp"`
-	PlayerMaxMP       [4]int    `json:"player_max_mp"`
-	PlayerAtk         [4]int    `json:"player_atk"`
-	PlayerMagicAtk    [4]int    `json:"player_magic_atk"`
-	PlayerDef         [4]int    `json:"player_def"`
-	PlayerMagicDef    [4]int    `json:"player_magic_def"`
-	PlayerSpd         [4]int    `json:"player_spd"`
-	PlayerLuck        [4]int    `json:"player_luck"`
-	PlayerSP          [4]int    `json:"player_sp"`
-	PlayerSkillLv     [4][8]int `json:"player_skill_lv"`
-	PlayerLv          [4]int    `json:"player_lv"`
-	PlayerEXP         [4]int    `json:"player_exp"`
-	PlayerNextEXP     [4]int    `json:"player_next_exp"`
-	BossDefeatedFlags [4]bool   `json:"boss_defeated_flags"`
-	PlayTime          float64   `json:"play_time"`
-	SavedAt           string    `json:"saved_at"`
+	SlotID         int       `json:"slot_id"`
+	LocationName   string    `json:"location_name"`
+	CurrentMap     string    `json:"current_map"`
+	PlayerX        float64   `json:"player_x"`
+	PlayerY        float64   `json:"player_y"`
+	PlayerDir      int       `json:"player_dir"`
+	PlayerHP       [4]int    `json:"player_hp"`
+	PlayerMaxHP    [4]int    `json:"player_max_hp"`
+	PlayerMP       [4]int    `json:"player_mp"`
+	PlayerMaxMP    [4]int    `json:"player_max_mp"`
+	PlayerAtk      [4]int    `json:"player_atk"`
+	PlayerMagicAtk [4]int    `json:"player_magic_atk"`
+	PlayerDef      [4]int    `json:"player_def"`
+	PlayerMagicDef [4]int    `json:"player_magic_def"`
+	PlayerSpd      [4]int    `json:"player_spd"`
+	PlayerLuck     [4]int    `json:"player_luck"`
+	PlayerSP       [4]int    `json:"player_sp"`
+	PlayerSkillLv  [4][8]int `json:"player_skill_lv"`
+	// PlayerSkillLvByName はスキル名→レベル。読み込み時はこちらを優先し、
+	// スキルの並び順が変わってもレベルがずれないようにする。
+	PlayerSkillLvByName [4]map[string]int `json:"player_skill_lv_by_name,omitempty"`
+	PlayerLv            [4]int            `json:"player_lv"`
+	PlayerEXP           [4]int            `json:"player_exp"`
+	PlayerNextEXP       [4]int            `json:"player_next_exp"`
+	BossDefeatedFlags   [4]bool           `json:"boss_defeated_flags"`
+	PlayTime            float64           `json:"play_time"`
+	SavedAt             string            `json:"saved_at"`
 
 	Inventory                []InventorySlot       `json:"inventory"`
 	OpenedChests             map[string]bool       `json:"opened_chests"`
@@ -284,6 +286,12 @@ func LoadGame(slot int) (*SaveData, error) {
 				data.PlayerSkillLv[i][j] = 1
 			}
 		}
+	}
+	if _, ok := raw["player_skill_lv_by_name"]; ok {
+		data.PlayerSkillLv = skillLevelsFromNames(data.PlayerSkillLvByName)
+	} else if _, ok := raw["player_skill_lv"]; ok {
+		// スキルを技表の順に並べ替える前のセーブは、古い並びの位置で持っている。
+		data.PlayerSkillLv = skillLevelsFromNames(skillLevelsByName(data.PlayerSkillLv, legacySkillOrderOf))
 	}
 	return &data, nil
 }
@@ -410,7 +418,7 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.BlockPositions = d.BlockPositions
 		s.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
-		s.game.ChangeSceneToMap(d.CurrentMap, func() Scene {
+		s.game.ChangeSceneAtLoadPoint(d.CurrentMap, func() Scene {
 			field, err := NewRoomScene(s.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
 			if err != nil {
 				return nil

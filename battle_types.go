@@ -160,9 +160,14 @@ const (
 	poseDefend      = 10
 )
 
+// spriteFrameW/H は味方1人が画面上で占める枠（足元の位置やタップ判定、
+// ダメージ表示の基準）。スプライトシートのマス（battleSpriteCellW/H）を
+// battleSpriteScale倍にして、この枠の下端・左右中央にそろえて描く。
 const (
 	spriteFrameW = 64
 	spriteFrameH = 96
+
+	battleSpriteScale = 2
 )
 
 // damagePopHeadOffsetRatio positions damage/heal popups a fraction of the
@@ -181,66 +186,51 @@ const (
 )
 
 const (
-	poseWalk           = 11
-	poseAttack         = 12
-	poseReadyGlow      = 13
-	poseChargeApproach = 14
-	poseChargeAttack   = 15
-	poseFireCast       = 16
-	poseFireLoop       = 17
-	poseHealCast       = 18
+	poseWalk      = 11
+	poseAttack    = 12
+	poseReadyGlow = 13
+	// poseSkill は攻撃スキルの専用アニメ（actionRowの行）を再生中。
+	poseSkill = 14
+	// poseHealCast は回復・補助スキルを使ったアニメ（actionRowの行）を再生中。
+	poseHealCast = 18
+	// poseRecv は回復・補助スキルを受けたアニメ（recvRowの行）を再生中。
+	poseRecv = 19
 )
 
-var poseRow = map[int]int{
-	poseIdle:           0,
-	poseDamage:         1,
-	poseWalk:           2,
-	poseAttack:         3,
-	poseReady:          4,
-	poseReadyGlow:      4,
-	poseChargeApproach: 5,
-	poseChargeAttack:   6,
-	poseFireCast:       7,
-	poseFireLoop:       8,
-	poseHealCast:       9,
-	poseDefend:         0,
-	poseLowHP:          0,
-	poseDead:           0,
-	poseWin:            0,
-}
+// player_attack_N.png の共通アニメの行。
+// この後ろに専用アニメのあるスキルの行が続き、どのスキルがどの行かは
+// partySkillSpriteRow（スキル名で引く）にある。
+const (
+	spriteRowIdle = iota
+	spriteRowDamage
+	spriteRowWalk
+	spriteRowCommand
+	spriteRowAttack
+	spriteRowBuffRecv
+	spriteRowHealRecv
+)
 
-var poseFrameCount = map[int]int{
-	poseIdle:           2,
-	poseDamage:         2,
-	poseWalk:           2,
-	poseAttack:         7,
-	poseReady:          1,
-	poseReadyGlow:      10,
-	poseChargeApproach: 4,
-	poseChargeAttack:   11,
-	poseFireCast:       16,
-	poseFireLoop:       15,
-	poseHealCast:       14,
-}
+// battleSpriteFrameDur は待機・歩きなどくり返すアニメを1コマ表示する秒数。
+// 15フレーム（60TPS）ごとに次のコマへ進む。
+const battleSpriteFrameDur = 15.0 / 60.0
 
-var poseLoopFrameDur = map[int]float64{
-	poseIdle:     0.25,
-	poseWalk:     0.12,
-	poseHealCast: 0.08,
-	poseFireLoop: 0.05,
-}
+// battleActionFrameDur は通常攻撃・スキル・回復を受けるなど、1回だけ流す
+// アニメを1コマ表示する秒数（3フレーム＝20コマ/秒）。アニメの長さは
+// コマ数×この秒数になり、攻撃はアニメが終わった時にダメージが出る。
+const battleActionFrameDur = 3.0 / 60.0
 
 const (
 	animNormal = iota
-	animCharge
-	animFireMagic
+	animSkill
 )
 
+// glowLevelRange はスキル選択中のコマンド選択アニメで、スキルレベルごとに
+// 使うコマの{開始, コマ数}。
 var glowLevelRange = [4][2]int{
 	{0, 1},
 	{1, 1},
 	{2, 1},
-	{3, 7},
+	{3, 6},
 }
 
 const (
@@ -254,7 +244,11 @@ const (
 const levelUpPauseDuration = 0.35
 
 const (
-	timelineIconOffsetY   = 46.0
+	timelineIconOffsetY = 46.0
+	// waitIconFirstGap はゴール画像の下端と1人目の待機アイコンの
+	// すき間、waitIconStackGap は待機アイコン同士のすき間（どちらもpx）。
+	waitIconFirstGap      = 0.0
+	waitIconStackGap      = 0.0
 	introStartOffsetX     = 960.0
 	introStartOffsetVertY = 540.0
 
@@ -583,9 +577,15 @@ type BattleScene struct {
 	lastSkillIndex   [partySize]int
 	lastSkillLevel   [partySize][8]int
 
-	attackAnimType       int
-	chargeApproachOffset float64
-	skillGlowLevel       int
+	attackAnimType int
+	skillGlowLevel int
+
+	// actionRow/actionFrames はposeSkill・poseHealCastで再生する行とコマ数。
+	actionRow    [partySize]int
+	actionFrames [partySize]int
+	// recvRow/recvTimer はposeRecvで再生する行と、終わるまでの残り秒数。
+	recvRow   [partySize]int
+	recvTimer [partySize]float64
 
 	healingAnimTimer [partySize]float64
 	healingCaster    int

@@ -418,7 +418,7 @@ func (s *BattleScene) drawBattleTutorial(screen *ebiten.Image) {
 			scene.DrawImage(icon, op)
 		}
 		ix, iy := itemButtonCenter()
-		drawItemIcon(scene, ix, iy, battleIconR, false)
+		drawItemIcon(scene, s.game.ItemButtonImg, ix, iy, true)
 	}
 
 	s.dimSceneExceptBox(scene, box)

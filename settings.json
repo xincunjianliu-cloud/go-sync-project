@@ -4,7 +4,7 @@
   "masterVolume": 1,
   "messageSpeed": 0,
   "fullscreen": false,
-  "windowWidth": 640,
-  "windowHeight": 480,
+  "windowWidth": 1920,
+  "windowHeight": 1009,
   "rememberCursor": false
 }

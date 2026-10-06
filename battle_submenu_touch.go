@@ -139,7 +139,7 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 		if lv > curLv {
 			lv = curLv
 		}
-		leftRect, rightRect, _, _, _, _ := s.skillLevelArrowRects(i, lv, face)
+		leftRect, rightRect, _, _, _, _ := s.skillLevelArrowRects(s.game.SkillDisplayRow(p, i), lv, face)
 		for _, pt := range pts {
 			if leftRect.contains(pt) {
 				if lv > 1 {
@@ -270,15 +270,16 @@ func partyPortraitHitOrder() [partySize]int {
 }
 
 // partyPortraitRowSpan scans frame-local row ly of party member i's current
-// sprite frame and returns the leftmost/rightmost frame-local X holding a
-// non-transparent pixel. ok is false if the row has no visible pixels.
+// sprite frame (in sheet pixels, before battleSpriteScale) and returns the
+// leftmost/rightmost frame-local X holding a non-transparent pixel. ok is
+// false if the row has no visible pixels.
 func (s *BattleScene) partyPortraitRowSpan(i, ly int) (minX, maxX int, ok bool) {
 	spriteSheet, srcRect, srcOk := s.partySpriteSrcRect(i)
-	if !srcOk || ly < 0 || ly >= spriteFrameH {
+	if !srcOk || ly < 0 || ly >= battleSpriteCellH {
 		return 0, 0, false
 	}
 	minX, maxX = -1, -1
-	for x := 0; x < spriteFrameW; x++ {
+	for x := 0; x < battleSpriteCellW; x++ {
 		_, _, _, a := spriteSheet.At(srcRect.Min.X+x, srcRect.Min.Y+ly).RGBA()
 		if a > 0 {
 			if minX == -1 {
@@ -302,9 +303,14 @@ func (s *BattleScene) partyPortraitRowSpan(i, ly int) (minX, maxX int, ok bool) 
 // (e.g. the transparent space between a character's legs) while still
 // excluding the empty margin outside the actual silhouette.
 func (s *BattleScene) partyPortraitPixelHit(i int, p touchPoint) bool {
-	lx := int(p.x - s.partyScreenX[i])
-	ly := int(p.y - s.partyScreenY[i])
-	if lx < 0 || ly < 0 || lx >= spriteFrameW || ly >= spriteFrameH {
+	originX, originY := s.partySpriteOrigin(i)
+	fx := (p.x - originX) / battleSpriteScale
+	fy := (p.y - originY) / battleSpriteScale
+	if fx < 0 || fy < 0 {
+		return false
+	}
+	lx, ly := int(fx), int(fy)
+	if lx >= battleSpriteCellW || ly >= battleSpriteCellH {
 		return false
 	}
 	minX, maxX, ok := s.partyPortraitRowSpan(i, ly)

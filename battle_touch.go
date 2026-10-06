@@ -18,6 +18,10 @@ const (
 	// mouse), since the 12px icon radius alone is too small to hit
 	// reliably with a thumb.
 	battleIconTapMargin = 16.0
+
+	// itemButtonR is half of the 50x50 item_button.png, which is drawn at
+	// its native size.
+	itemButtonR = 25.0
 )
 
 func rewindButtonCenter(game *Game) (cx, cy float64) {
@@ -28,10 +32,16 @@ func rewindButtonCenter(game *Game) (cx, cy float64) {
 	return
 }
 
+// itemButtonCenter sits diagonally down-left of the skill/flee pair, far
+// enough out that the item diamond doesn't touch either one even when
+// they swap to their larger _selected sprites (92px).
 func itemButtonCenter() (cx, cy float64) {
 	positions := commandIconPositions()
-	cx = positions[1][0]
-	cy = positions[3][1]
+	midX := (positions[1][0] + positions[3][0]) / 2
+	midY := (positions[1][1] + positions[3][1]) / 2
+	const diagonal = 38.0
+	cx = midX - diagonal
+	cy = midY + diagonal
 	return
 }
 
@@ -74,19 +84,19 @@ func drawRewindIcon(screen *ebiten.Image, cx, cy, r float64, selected bool) {
 	fillTriPath(screen, color.White, [][2]float64{{tx, ty}, {b1x, b1y}, {b2x, b2y}})
 }
 
-func drawItemIcon(screen *ebiten.Image, cx, cy, r float64, selected bool) {
-	drawIconBackdrop(screen, cx, cy, r)
-	if selected {
-		drawIconSelectedRing(screen, cx, cy, r)
+// drawItemIcon dims the icon when not selected, matching drawCommandMenu.
+func drawItemIcon(screen *ebiten.Image, img *ebiten.Image, cx, cy float64, selected bool) {
+	if img == nil {
+		return
 	}
-	w := r * 1.1
-	h := r * 0.9
-	x := cx - w/2
-	y := cy - h/2 + r*0.15
-	vector.StrokeRect(screen, float32(x), float32(y), float32(w), float32(h), 2, color.White, true)
-
-	handleW := w * 0.5
-	vector.StrokeRect(screen, float32(cx-handleW/2), float32(y-r*0.25), float32(handleW), float32(r*0.25), 2, color.White, true)
+	w := float64(img.Bounds().Dx())
+	h := float64(img.Bounds().Dy())
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(cx-w/2, cy-h/2)
+	if !selected {
+		op.ColorScale.Scale(0.6, 0.6, 0.6, 1.0)
+	}
+	screen.DrawImage(img, op)
 }
 
 func isRewindButtonJustPressed(game *Game) bool {
@@ -109,12 +119,12 @@ func isItemButtonJustPressed() bool {
 	cx, cy := itemButtonCenter()
 	touches, mouse := justPressedTouchAndMousePoints()
 	for _, p := range touches {
-		if p.inCircle(cx, cy, battleIconR+battleIconTapMargin) {
+		if p.inCircle(cx, cy, itemButtonR+battleIconTapMargin) {
 			return true
 		}
 	}
 	for _, p := range mouse {
-		if p.inCircle(cx, cy, battleIconR) {
+		if p.inCircle(cx, cy, itemButtonR) {
 			return true
 		}
 	}
@@ -126,18 +136,25 @@ func (s *BattleScene) drawBattleShortcutButtons(screen *ebiten.Image) {
 	drawRewindIcon(screen, rx, ry, battleIconR, s.rewindButtonArmed)
 
 	ix, iy := itemButtonCenter()
-	drawItemIcon(screen, ix, iy, battleIconR, s.itemButtonArmed)
+	drawItemIcon(screen, s.game.ItemButtonImg, ix, iy, s.itemButtonArmed)
 
 	if !s.game.MobileMode {
-		drawKeyLabel := func(cx, cy float64, key string) {
-			op := &text.DrawOptions{}
-			op.GeoM.Translate(cx, cy+battleIconR+4)
-			op.PrimaryAlign = text.AlignCenter
-			op.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, key, s.game.FontFace(ctrlLabelFontSize), op)
-		}
-		drawKeyLabel(rx, ry, "F")
-		drawKeyLabel(ix, iy, "I")
+		face := s.game.FontFace(ctrlLabelFontSize)
+
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(rx, ry+battleIconR+4)
+		op.PrimaryAlign = text.AlignCenter
+		op.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, "F", face, op)
+
+		// The item button sits near the bottom edge, so its label goes to
+		// the left instead of below.
+		op = &text.DrawOptions{}
+		op.GeoM.Translate(ix-itemButtonR-4, iy)
+		op.PrimaryAlign = text.AlignEnd
+		op.SecondaryAlign = text.AlignCenter
+		op.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, "I", face, op)
 	}
 }
 

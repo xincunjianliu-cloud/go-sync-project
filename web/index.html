@@ -13,9 +13,25 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <!-- タイトル画面に必要なフォントと背景は、ゲーム本体(game.wasm)のダウンロードと
      並行して先に取得しておく。ゲームが動き出してから取りに行くと、本体の読み込みの
-     後にさらに待ち時間が足される。パスはgame.goのloadBootAssetsAsyncと合わせること。 -->
-<link rel="preload" href="assets/fonts/k8x12.ttf" as="fetch" crossorigin>
-<link rel="preload" href="assets/images/title/title_bg.png" as="fetch" crossorigin>
+     後にさらに待ち時間が足される。パスはgame.goのloadBootAssetsAsyncと合わせること。
+     URLはゲーム本体と同じ「パス?v=ハッシュ」にする(assets_js.goのassetURL)。 -->
+<script>
+  // 公開するファイルの相対パス → 中身のハッシュ。デプロイ時に
+  // tools/genswmanifestが書き込む(ローカルの確認用サーバーでは文字列のまま)。
+  window.assetManifest = "__ASSET_MANIFEST__";
+  function versionedURL(path) {
+    const m = window.assetManifest;
+    return (m && typeof m === "object" && m[path]) ? path + "?v=" + m[path] : path;
+  }
+  for (const path of ["assets/fonts/k8x12.ttf", "assets/images/title/title_bg.png"]) {
+    const link = document.createElement("link");
+    link.rel = "preload";
+    link.as = "fetch";
+    link.crossOrigin = "anonymous";
+    link.href = versionedURL(path);
+    document.head.appendChild(link);
+  }
+</script>
 <title>七不思議討滅録</title>
 <style>
   html, body {
@@ -132,7 +148,7 @@
   <div class="icon">📱</div>
   <div>端末を横向きにしてください</div>
 </div>
-<script src="wasm_exec.js"></script>
+<script src="wasm_exec.js?v=__WASM_EXEC_HASH__"></script>
 <script>
   // フルスクリーンへの切り替え自体はゲーム側(Go)が最初のタップ/キー入力で
   // 行う。ここでは切り替わった後に効く設定だけをかける。
@@ -187,7 +203,7 @@
   }
 
   async function fetchWasmWithProgress() {
-    const resp = await fetch("game.wasm");
+    const resp = await fetch(versionedURL("game.wasm"));
     if (!resp.ok) {
       throw new Error("game.wasm: HTTP " + resp.status);
     }
@@ -218,6 +234,13 @@
       return WebAssembly.instantiateStreaming(resp, importObject);
     }
     return WebAssembly.instantiate(await resp.arrayBuffer(), importObject);
+  }
+
+  // 2回目以降の起動を速くするService Worker(sw.jsの先頭を参照)。中身の
+  // 一覧はデプロイ時に書き込まれるので、ローカルの確認用サーバーでは登録しない。
+  const BUILD_ID = "__BUILD_ID__";
+  if (!BUILD_ID.startsWith("__") && "serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch((err) => console.warn("[load] Service Worker登録失敗", err));
   }
 
   const go = new Go();

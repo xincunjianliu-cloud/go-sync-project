@@ -521,42 +521,16 @@ func (s *BattleScene) Update(dt float64) Scene {
 		p := s.activeAttacker
 
 		switch s.attackAnimType {
-		case animCharge:
-			const approachDur = 0.20
-			const attackDur = 0.45
-			if s.attackPhaseTimer < approachDur {
-				s.playerPose[p] = poseChargeApproach
-				s.chargeApproachOffset = (s.attackPhaseTimer / approachDur) * 80.0
-			} else if s.attackPhaseTimer < approachDur+attackDur {
-				s.playerPose[p] = poseChargeAttack
-			} else {
-				s.hitStopTimer = hitStopStrong
-				s.activeAttacker = -1
-				s.chargeApproachOffset = 0
-			}
-
-		case animFireMagic:
-			const castDur = 0.30
-			const loopDur = 0.30
-			if s.attackPhaseTimer < castDur {
-				if s.playerPose[p] != poseFireCast {
-					s.playerPose[p] = poseFireCast
-					s.playerAnimTimer[p] = 0
-				}
-			} else if s.attackPhaseTimer < castDur+loopDur {
-				if s.playerPose[p] != poseFireLoop {
-					s.playerPose[p] = poseFireLoop
-					s.playerAnimTimer[p] = 0
-				}
-			} else {
+		case animSkill:
+			s.playerPose[p] = poseSkill
+			if s.attackPhaseTimer >= actionAnimDuration(s.actionFrames[p]) {
 				s.hitStopTimer = hitStopStrong
 				s.activeAttacker = -1
 			}
 
 		default:
-			const atkDur = 0.45
 			s.playerPose[p] = poseAttack
-			if s.attackPhaseTimer >= atkDur {
+			if s.attackPhaseTimer >= actionAnimDuration(partySpriteRowFrames[p][spriteRowAttack]) {
 				s.hitStopTimer = hitStopWeak
 				s.activeAttacker = -1
 			}
@@ -909,6 +883,20 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 				s.playerAnimTimer[i] = 0
 			}
 			continue
+		}
+
+		if s.recvTimer[i] > 0 {
+			s.recvTimer[i] -= dt
+			if s.recvTimer[i] > 0 {
+				if s.playerPose[i] != poseRecv {
+					s.playerPose[i] = poseRecv
+					s.playerAnimTimer[i] = 0
+				}
+				continue
+			}
+			s.recvTimer[i] = 0
+			s.playerPose[i] = poseIdle
+			s.playerAnimTimer[i] = 0
 		}
 
 		if s.battlePhase == phaseBattleEnd {

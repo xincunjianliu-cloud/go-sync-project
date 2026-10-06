@@ -153,10 +153,11 @@ type SkillDef struct {
 	UnlockLevel int
 }
 
-// Each character's skill slice must be kept sorted by ascending UnlockLevel.
-// The skill list and battle skill menu draw rows by array index and skip
-// locked skills, relying on locked skills always being a trailing suffix
-// (never a gap in the middle) so the visible rows stay packed from the top.
+// Each character's skill slice is in the design table's numbering order,
+// not unlock order, so locked skills can sit between unlocked ones. Skill
+// lists skip locked skills and pack the rest from the top: use
+// SkillDisplayRow / SkillAtDisplayRow to convert between a skill index and
+// its on-screen row.
 
 // characterSkillSets is indexed by party slot: 0 = player_1, 1 = player_2
 // (the white-haired girl), 2 = player_3, 3 = player_4 (the purple-haired
@@ -166,6 +167,89 @@ var characterSkillSets = [partySize][]SkillDef{
 	Player2Skills,
 	Player3Skills,
 	Player4Skills,
+}
+
+// SkillDisplayRow は覚えているスキルだけを上から詰めて並べた一覧で、
+// skillIdx番目のスキルが何行目に来るか。
+func (g *Game) SkillDisplayRow(charIdx, skillIdx int) int {
+	row := 0
+	for j := 0; j < skillIdx; j++ {
+		if g.IsSkillUnlocked(charIdx, j) {
+			row++
+		}
+	}
+	return row
+}
+
+// SkillAtDisplayRow は詰めて並べた一覧のrow行目にあるスキルの添字を返す。
+func (g *Game) SkillAtDisplayRow(charIdx, row int) (int, bool) {
+	if row < 0 {
+		return 0, false
+	}
+	for j := range g.CharacterSkills(charIdx) {
+		if !g.IsSkillUnlocked(charIdx, j) {
+			continue
+		}
+		if row == 0 {
+			return j, true
+		}
+		row--
+	}
+	return 0, false
+}
+
+// legacySkillOrder は2026-10-06に技表の番号順へ並べ替える前のスキルの並び。
+// それより前のセーブデータは player_skill_lv をこの並びの位置で持っている。
+var legacySkillOrder = [partySize][]string{
+	{"スマッシュ", "みやぶる", "フレイム", "回復", "クラッシュサークル", "バフ"},
+	{"スーパーヒーリング", "妖艶の舞", "フィナーレソング", "氷のつぶて", "聖なる魔法", "レイズ"},
+	{"かばう", "ねこキック", "エレクトロパンチ", "防御バフ", "カウンター", "守りの祈り"},
+	{"フレイムアックス", "ドレインアックス", "ヒャッコルアックス", "エレクトロアックス", "ウィンガアックス", "アックスメテオ"},
+}
+
+// skillLevelsByName は位置で持っているスキルレベルを、order(キャラ)の並びに
+// 従ってスキル名→レベルに直す。セーブデータはこの形でも保存し、スキルの
+// 並び順を変えてもレベルが別のスキルに移らないようにする。
+func skillLevelsByName(lv [partySize][8]int, order func(c int) []string) [partySize]map[string]int {
+	var out [partySize]map[string]int
+	for c := range partySize {
+		out[c] = map[string]int{}
+		for j, name := range order(c) {
+			if j < len(lv[c]) {
+				out[c][name] = lv[c][j]
+			}
+		}
+	}
+	return out
+}
+
+// skillLevelsFromNames はスキル名→レベルを今のスキルの並びの位置に戻す。
+// 名前が見つからないスキルはLv1にする。
+func skillLevelsFromNames(byName [partySize]map[string]int) [partySize][8]int {
+	var out [partySize][8]int
+	for c := range partySize {
+		for j := range out[c] {
+			out[c][j] = 1
+		}
+		for j, sk := range characterSkillSets[c] {
+			if lv, ok := byName[c][sk.Name]; ok && lv >= 1 && j < len(out[c]) {
+				out[c][j] = lv
+			}
+		}
+	}
+	return out
+}
+
+func currentSkillOrder(c int) []string {
+	names := make([]string, len(characterSkillSets[c]))
+	for j, sk := range characterSkillSets[c] {
+		names[j] = sk.Name
+	}
+	return names
+}
+
+func legacySkillOrderOf(c int) []string {
+	return legacySkillOrder[c]
 }
 
 func (g *Game) CharacterSkills(charIdx int) []SkillDef {

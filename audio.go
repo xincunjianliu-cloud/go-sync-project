@@ -172,6 +172,10 @@ type AudioManager struct {
 	// 1曲あたり数十MBになるため、合計がmaxCachedBGMBytesを超えたら古い曲から
 	// キャッシュを外す。
 	bgmLRU []string
+	// pinnedBGM は容量を超えてもキャッシュから外さない曲(今いるマップの
+	// ロード地点でそろえた曲)。外すのはそれ以外(先読みした隣のマップの曲や
+	// 会話の曲など)から。
+	pinnedBGM map[string]bool
 
 	// pendingStart は再生したいBGMのデコード待ち中に、デコード完了後に
 	// 実行する再生開始処理。pendingPathsが全てデコード済み(または失敗)に
@@ -385,6 +389,8 @@ func (a *AudioManager) touchBGM(path string) {
 // enforceBGMCacheLimit はBGMのPCMの合計がmaxCachedBGMBytesを超えていれば、
 // 古い曲からキャッシュを外す。直近minCachedBGM曲と、再生開始を待っている曲・
 // デコード中の曲は外さない(外すと待っている再生が始まらなくなる)。
+// ロード地点で固定した曲(pinnedBGM)も外さないので、古くても先読みした曲の
+// 方が先に外れる。
 // デコードはバックグラウンドで終わるので、Updateからも毎フレーム呼ぶ。
 func (a *AudioManager) enforceBGMCacheLimit() {
 	a.pcmMu.Lock()
@@ -395,7 +401,7 @@ func (a *AudioManager) enforceBGMCacheLimit() {
 	}
 	for i := 0; total > maxCachedBGMBytes && i < len(a.bgmLRU)-minCachedBGM; {
 		p := a.bgmLRU[i]
-		if a.pcmLoading[p] || a.isPendingPath(p) {
+		if a.pcmLoading[p] || a.isPendingPath(p) || a.pinnedBGM[p] {
 			i++
 			continue
 		}
@@ -403,6 +409,22 @@ func (a *AudioManager) enforceBGMCacheLimit() {
 		delete(a.pcmCache, p)
 		a.bgmLRU = append(a.bgmLRU[:i], a.bgmLRU[i+1:]...)
 	}
+}
+
+// PinBGM はpathsを、容量を超えてもキャッシュから外さない曲にする(前に固定
+// していた曲の固定はやめる)。ロード地点で、そのマップで遊び終えるまでに使う
+// 曲を固定し、ロード地点以外の切り替え(戦闘の開始など)で待ちが出ないようにする。
+func (a *AudioManager) PinBGM(paths []string) {
+	if a == nil {
+		return
+	}
+	pinned := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		pinned[p] = true
+	}
+	a.pcmMu.Lock()
+	a.pinnedBGM = pinned
+	a.pcmMu.Unlock()
 }
 
 func (a *AudioManager) isPendingPath(path string) bool {
@@ -453,6 +475,14 @@ func (a *AudioManager) IsLoading() bool {
 		return true
 	}
 	return a.fadeOutActive && a.fadeOutNextPath != "" && !a.pcmSettled(a.fadeOutNextPath)
+}
+
+// IsSwitching は前の曲をフェードアウトして次の曲へ切り替えている途中かを返す。
+func (a *AudioManager) IsSwitching() bool {
+	if a == nil {
+		return false
+	}
+	return a.pendingStart != nil || (a.fadeOutActive && a.fadeOutNextPath != "")
 }
 
 // trimTrailingSilence はmp3→PCM変換後の完全な無音区間(エンコーダーが

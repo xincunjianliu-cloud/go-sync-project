@@ -30,7 +30,22 @@ func (g *Game) prefetchAroundMap(mapPath string, tmap TiledMap) {
 			paths = append(paths, p)
 		}
 	}
+	paths = append(paths, g.mapBossBGMs(tmap)...)
+	g.Audio.PrefetchBGM(paths...)
+}
 
+// mapBossBGMs はマップにいる、まだ倒していないボスとの戦闘BGMを返す。
+func (g *Game) mapBossBGMs(tmap TiledMap) []string {
+	var paths []string
+	for _, idx := range g.mapBossIndices(tmap) {
+		paths = append(paths, bossBattleBGM(fmt.Sprintf("boss_%d", idx+1)))
+	}
+	return paths
+}
+
+// mapBossIndices はマップにいる、まだ倒していないボスを(BossImgs等の添字で)返す。
+func (g *Game) mapBossIndices(tmap TiledMap) []int {
+	var out []int
 	for _, layer := range tmap.Layers {
 		if !strings.HasPrefix(layer.Name, "events") {
 			continue
@@ -41,10 +56,10 @@ func (g *Game) prefetchAroundMap(mapPath string, tmap TiledMap) {
 			if p["type"] != "boss" || !hasBossID || isBossDefeated(g, bossID) {
 				continue
 			}
-			paths = append(paths, bossBattleBGM(fmt.Sprintf("boss_%d", bossID)))
+			out = append(out, bossID-1)
 		}
 	}
-	g.Audio.PrefetchBGM(paths...)
+	return out
 }
 
 // mapBGMPath はマップで流すBGMのパスを返す(NewRoomSceneと同じ決め方)。
@@ -58,10 +73,11 @@ func mapBGMPath(tmap TiledMap) (string, bool) {
 }
 
 // prefetchDialogueAssets は会話が始まるときに呼ばれ、登場する話者の立ち絵・
-// 背景画像を裏でデコードし、会話中に切り替えるBGMを取得しておく。会話の
-// 最後にボス戦が始まる場合は、ボス戦の曲のデコードも始めておく(戦闘開始の
-// 暗転が延びないように)。立ち絵は会話中に初めて表示する瞬間に必要になる
-// (GetCharaImage)ので、先に用意できていればその瞬間の引っかかりがなくなる。
+// 背景画像と、会話中に切り替えるBGMを裏でデコードしておく(BGMはPLAY_BGMの
+// 瞬間にデコードを始めると、終わるまで無音の間が空く)。会話の最後にボス戦が
+// 始まる場合は、ボス戦の曲とボスの画像も用意しておく(戦闘開始の暗転が延びない
+// ように)。立ち絵は会話中に初めて表示する瞬間に必要になる(GetCharaImage)ので、
+// 先に用意できていればその瞬間の引っかかりがなくなる。
 func (g *Game) prefetchDialogueAssets(bd BossDialogue) {
 	seen := map[string]bool{}
 	var bgm []string
@@ -73,7 +89,11 @@ func (g *Game) prefetchDialogueAssets(bd BossDialogue) {
 					bgm = append(bgm, p)
 				}
 			case strings.HasPrefix(cmd.Text, cmdStartBattlePrefix):
-				g.Audio.Prewarm(prioSoon, bossBattleBGM(strings.TrimPrefix(cmd.Text, cmdStartBattlePrefix)))
+				evType := strings.TrimPrefix(cmd.Text, cmdStartBattlePrefix)
+				g.Audio.Prewarm(prioSoon, bossBattleBGM(evType))
+				if idx, ok := bossIndexFromEnemyType(evType); ok {
+					g.prepareBossImages([]int{idx}, prioSoon)
+				}
 			}
 			continue
 		}
@@ -90,7 +110,7 @@ func (g *Game) prefetchDialogueAssets(bd BossDialogue) {
 			}
 		}, func() { g.bgImgMissing[key] = true })
 	}
-	g.Audio.PrefetchBGM(bgm...)
+	g.Audio.Prewarm(prioSoon, bgm...)
 }
 
 // prepareSpeaker は話者の立ち絵がまだ無ければ裏でデコードしてCharaImgsへ

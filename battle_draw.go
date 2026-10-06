@@ -113,54 +113,59 @@ func (s *BattleScene) partySpriteSrcRect(i int) (spriteSheet *ebiten.Image, srcR
 		return nil, image.Rectangle{}, false
 	}
 
-	pose := s.playerPose[i]
-	row, rowOk := poseRow[pose]
-	if !rowOk {
-		row = 0
-		pose = poseIdle
-	}
+	row, frame := s.partySpriteRowFrame(i)
+	srcX := frame * battleSpriteCellW
+	srcY := row * battleSpriteCellH
+	srcRect = image.Rect(srcX, srcY, srcX+battleSpriteCellW, srcY+battleSpriteCellH)
 
-	var frame int
-
-	switch pose {
-	case poseAttack:
-		frame = frameFromProgress(s.attackPhaseTimer/0.45, poseAttack)
-	case poseChargeApproach:
-		frame = frameFromProgress(s.attackPhaseTimer/0.20, poseChargeApproach)
-	case poseChargeAttack:
-		frame = frameFromProgress((s.attackPhaseTimer-0.20)/0.45, poseChargeAttack)
-	case poseFireCast:
-		frame = frameFromProgress(s.attackPhaseTimer/0.30, poseFireCast)
-	case poseReady:
-		frame = 0
-	case poseReadyGlow:
-		frame = glowFrameForLevel(s.skillGlowLevel, s.playerAnimTimer[i])
-	case poseWalk:
-		frame = spriteFrame(pose, s.playerAnimTimer[i])
-	case poseHealCast:
-		if i != s.healingCaster || s.healingAnimTimer[i] <= 0 {
-			pose = poseIdle
-			row = poseRow[poseIdle]
-			frame = spriteFrame(poseIdle, s.playerAnimTimer[i])
-		} else {
-			dur := 1.5
-			elapsed := dur - s.healingAnimTimer[i]
-			frame = frameFromProgress(elapsed/dur, poseHealCast)
-		}
-	default:
-		frame = spriteFrame(pose, s.playerAnimTimer[i])
-	}
-
-	srcX := frame * spriteFrameW
-	srcY := row * spriteFrameH
-	srcRect = image.Rect(srcX, srcY, srcX+spriteFrameW, srcY+spriteFrameH)
-
-	if srcRect.Max.X > spriteSheet.Bounds().Dx() ||
-		srcRect.Max.Y > spriteSheet.Bounds().Dy() {
-		srcRect = image.Rect(0, 0, spriteFrameW, spriteFrameH)
+	if !srcRect.In(spriteSheet.Bounds()) {
+		srcRect = image.Rect(0, 0, battleSpriteCellW, battleSpriteCellH)
 	}
 
 	return spriteSheet, srcRect, true
+}
+
+// partySpriteRowFrame は味方iの今のポーズで表示する、スプライトシートの行とコマ。
+func (s *BattleScene) partySpriteRowFrame(i int) (row, frame int) {
+	frames := func(row int) int {
+		if row < 0 || row >= len(partySpriteRowFrames[i]) {
+			return 1
+		}
+		return partySpriteRowFrames[i][row]
+	}
+	timer := s.playerAnimTimer[i]
+
+	switch s.playerPose[i] {
+	case poseDamage:
+		return spriteRowDamage, loopFrame(frames(spriteRowDamage), timer)
+	case poseWalk:
+		return spriteRowWalk, loopFrame(frames(spriteRowWalk), timer)
+	case poseReady:
+		return spriteRowCommand, 0
+	case poseReadyGlow:
+		return spriteRowCommand, glowFrameForLevel(s.skillGlowLevel, timer)
+	case poseAttack:
+		return spriteRowAttack, actionFrame(frames(spriteRowAttack), s.attackPhaseTimer)
+	case poseSkill:
+		return s.actionRow[i], actionFrame(s.actionFrames[i], s.attackPhaseTimer)
+	case poseHealCast:
+		if i == s.healingCaster && s.healingAnimTimer[i] > 0 {
+			n := s.actionFrames[i]
+			return s.actionRow[i], actionFrame(n, actionAnimDuration(n)-s.healingAnimTimer[i])
+		}
+	case poseRecv:
+		return s.recvRow[i], actionFrame(frames(s.recvRow[i]), timer)
+	}
+	return spriteRowIdle, loopFrame(frames(spriteRowIdle), timer)
+}
+
+// partySpriteOrigin は味方iのスプライトのマスを画面に描く左上の位置（揺れは含まない）。
+// battleSpriteScale倍にしたマスの下端・左右中央を、画面上の枠
+// （partyScreenX/Yから spriteFrameW×spriteFrameH）にそろえる。
+func (s *BattleScene) partySpriteOrigin(i int) (x, y float64) {
+	x = s.partyScreenX[i] + (spriteFrameW-battleSpriteCellW*battleSpriteScale)/2
+	y = s.partyScreenY[i] + spriteFrameH - battleSpriteCellH*battleSpriteScale
+	return x, y
 }
 
 func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
@@ -183,14 +188,12 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 		centerX += s.introCharOffsetX
 		centerX += s.evadeOffsetX[i]
 
-		if s.activeAttacker == i && (pose == poseChargeApproach || pose == poseChargeAttack) {
-			centerX -= s.chargeApproachOffset
-		}
-
 		s.partyScreenX[i] = centerX
 		s.partyScreenY[i] = centerY
 
-		op.GeoM.Translate(centerX+s.shakeX, centerY+s.shakeY)
+		originX, originY := s.partySpriteOrigin(i)
+		op.GeoM.Scale(battleSpriteScale, battleSpriteScale)
+		op.GeoM.Translate(originX+s.shakeX, originY+s.shakeY)
 
 		if pose == poseDead {
 			pulse := float32(0.5 + 0.5*math.Sin(s.playerAnimTimer[i]*2.2))
@@ -297,11 +300,11 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 
 	switch s.battlePhase {
 	case phasePlayerMenu:
-		s.drawCommandMenu(screen)
+		s.drawCommandMenu(screen, s.commandIndex)
 		s.drawBattleShortcutButtons(screen)
 		s.drawBottomDescription(screen, s.playerMenuDescription())
 	case phaseSkillMenu:
-		s.drawCommandMenu(screen)
+		s.drawCommandMenu(screen, s.commandIndex)
 		s.drawSkillSubMenu(screen)
 		s.drawBottomDescription(screen, s.currentSkillDescription())
 	case phaseTargetSelect:
@@ -315,7 +318,9 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 		}
 		s.drawBottomDescription(screen, healDesc)
 	case phaseItemMenu:
-		s.drawCommandMenu(screen)
+		s.drawCommandMenu(screen, -1)
+		ix, iy := itemButtonCenter()
+		drawItemIcon(screen, s.game.ItemButtonImg, ix, iy, true)
 		s.drawItemSubMenu(screen)
 		s.drawBottomDescription(screen, s.currentItemDescription())
 	case phaseItemTarget:

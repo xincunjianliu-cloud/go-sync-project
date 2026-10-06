@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -566,11 +567,8 @@ func (s *BattleScene) updateTargetSelect() {
 		isAll := s.currentAttackIsAllTarget()
 		targets := s.enemyTargetsForAttack(isAll)
 
-		if data.usesPhysical() {
-			s.attackAnimType = animCharge
-		} else {
-			s.attackAnimType = animFireMagic
-		}
+		s.attackAnimType = animSkill
+		s.actionRow[p], s.actionFrames[p], _ = s.skillSpriteAnim(p, skillIdx)
 
 		hits := make([]pendingPlayerHit, 0, len(targets))
 		for _, slot := range targets {
@@ -781,7 +779,13 @@ func (s *BattleScene) updateHealTargetSelect() {
 		return
 	}
 	s.game.Audio.PlaySEByKey("heal")
-	s.startCast(p)
+	// 回復のアニメは最後に自分が回復を受ける部分まで描かれているので、
+	// 自分が対象に入っていない時はその手前で終える。
+	castRow, castFrames, cut := s.skillSpriteAnim(p, skillIdx)
+	if cut > 0 && !slices.Contains(targets, p) {
+		castFrames = min(cut, castFrames)
+	}
+	s.startCast(p, castRow, castFrames)
 	s.game.PlayerMP[p] -= cost
 
 	mpHeal := 0
@@ -819,8 +823,14 @@ func (s *BattleScene) updateHealTargetSelect() {
 			}
 			s.applySkillEffects(data.Effects, p, false, target, isAll)
 		}
+		if target != p {
+			recvRow := spriteRowBuffRecv
+			if data.IsHeal || data.ReviveHPPercent > 0 || mpHeal > 0 {
+				recvRow = spriteRowHealRecv
+			}
+			s.startRecv(target, recvRow)
+		}
 	}
-	s.healingAnimTimer[p] = 1.5
 	s.battleLog = skills[skillIdx].Name
 	if isAll {
 		s.battleLog += "（全体）"
@@ -840,7 +850,8 @@ func (s *BattleScene) executeSelfSkill() {
 		return
 	}
 	s.game.Audio.PlaySEByKey("heal")
-	s.startCast(p)
+	castRow, castFrames, _ := s.skillSpriteAnim(p, s.pendingSkill-1)
+	s.startCast(p, castRow, castFrames)
 	s.game.PlayerMP[p] -= s.effectiveMPCost(data.MPCost)
 
 	if data.CoverCount > 0 {
@@ -863,7 +874,6 @@ func (s *BattleScene) executeSelfSkill() {
 		s.counterBonus[p] = data.CounterBonus
 	}
 
-	s.healingAnimTimer[p] = 1.5
 	s.battleLog = s.game.CharacterSkills(p)[s.pendingSkill-1].Name
 	s.battleLogTimer = battleLogDuration
 	s.addGaugePoint(data.GaugePoint)

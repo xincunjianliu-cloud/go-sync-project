@@ -74,34 +74,28 @@ func (s *BattleScene) rollIsEvade(luck int) bool {
 	return rand.Intn(100) < chance
 }
 
-func spriteFrame(pose int, timer float64) int {
-	n, ok := poseFrameCount[pose]
-	if !ok || n <= 0 {
-		return 0
-	}
-	dur, ok2 := poseLoopFrameDur[pose]
-	if !ok2 {
-		dur = 0.15
-	}
-	t := timer
-	if t < 0 {
-		t = 0
-	}
-	return int(t/dur) % n
-}
-
-func frameFromProgress(progress float64, pose int) int {
-	n := poseFrameCount[pose]
+// loopFrame はn コマのくり返しアニメで、経過timer秒の時に表示するコマ。
+func loopFrame(n int, timer float64) int {
 	if n <= 0 {
 		return 0
 	}
-	if progress < 0 {
-		progress = 0
+	t := max(timer, 0)
+	return int(t/battleSpriteFrameDur) % n
+}
+
+// actionFrame はnコマの1回きりのアニメで、経過timer秒の時に表示するコマ。
+// 最後まで行ったら最後のコマで止まる。
+func actionFrame(n int, timer float64) int {
+	if n <= 0 {
+		return 0
 	}
-	if progress >= 1 {
-		progress = 0.999
-	}
-	return int(progress * float64(n))
+	t := max(timer, 0)
+	return min(int(t/battleActionFrameDur), n-1)
+}
+
+// actionAnimDuration はnコマの1回きりのアニメの長さ（秒）。
+func actionAnimDuration(n int) float64 {
+	return float64(n) * battleActionFrameDur
 }
 
 func glowFrameForLevel(level int, timer float64) int {
@@ -115,12 +109,7 @@ func glowFrameForLevel(level int, timer float64) int {
 	if count <= 1 {
 		return start
 	}
-	t := timer
-	if t < 0 {
-		t = 0
-	}
-	sub := int(t/0.15) % count
-	return start + sub
+	return start + loopFrame(count, timer)
 }
 
 var goalAnchorLayout = struct {

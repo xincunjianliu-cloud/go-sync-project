@@ -5,20 +5,26 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
+//go:generate go run ./tools/genloadingfont
+
 const (
-	loadingLabel        = "Loading"
-	loadingDotCount     = 3
-	loadingCharW        = 6
-	loadingCharH        = 16
-	loadingScale        = 2.0
-	loadingMarginX      = 16
-	loadingMarginY      = 14
-	loadingBounceHeight = 8.0
-	loadingBouncePeriod = 0.7
-	loadingDotStagger   = 0.15
+	loadingLabel    = "Loading"
+	loadingDotRune  = '.'
+	loadingDotCount = 3
+	// loadingScale は文字のドット1つを画面の何pxで描くか(整数倍でくっきり)。
+	loadingScale   = 3
+	loadingMarginX = 16
+	loadingMarginY = 14
+
+	// 点の動き: 1周期(loadingDotCycle秒)の頭で、点が左から順に
+	// loadingDotStagger秒ずつずれて1回ずつ跳ね、残りの時間は止まって待つ。
+	// 跳ねる高さは文字のドット単位で、ドット絵として段階的に動く。
+	loadingDotCycle     = 1.6
+	loadingDotStagger   = 0.2
+	loadingDotHopTime   = 0.45
+	loadingDotHopHeight = 2 // 文字のドット数
 
 	// 進捗バーは"Loading..."の幅いっぱいに、文字のすぐ上へ描く。
 	loadingBarH    = 4.0
@@ -30,48 +36,84 @@ var (
 	loadingBarFgColor = color.NRGBA{255, 255, 255, 220}
 )
 
-// loadingGlyphBuf はDebugPrintの6x16px文字を拡大して描くための作業用画像。
-var loadingGlyphBuf *ebiten.Image
+// loadingGlyphImgs はloadingGlyphs(k8x12.ttfから取り出したドットパターン)を
+// 1文字ずつ画像にしたもの。初めて描くときに作る。
+var loadingGlyphImgs map[rune]*ebiten.Image
 
-// drawLoadingIndicator は画面右下に"Loading"と、その後ろではねる"..."を描く。
-// 文字("Loading")は動かず、ドットだけが順番に上下にはねる。
-// 起動直後(フォント/タイトル画像の取得中)と、戦闘・メニュー用画像を
-// バックグラウンドで読み込んでいる間の両方で使う。g.fontSourceが
-// まだ読み込まれていない起動直後でも描画できるよう、独自フォントの
-// text.Drawではなくebitenutil.DebugPrintAtの組み込みビットマップフォント
-// (ASCII専用、6x16px)を整数倍に拡大して使う。
+func loadingGlyphImage(r rune) *ebiten.Image {
+	if loadingGlyphImgs == nil {
+		loadingGlyphImgs = map[rune]*ebiten.Image{}
+	}
+	if img, ok := loadingGlyphImgs[r]; ok {
+		return img
+	}
+	rows := loadingGlyphs[r]
+	w := len(rows[0])
+	pix := make([]byte, w*loadingGlyphHeight*4)
+	for y, row := range rows {
+		for x := 0; x < w; x++ {
+			if row[x] == '#' {
+				i := (y*w + x) * 4
+				pix[i], pix[i+1], pix[i+2], pix[i+3] = 0xff, 0xff, 0xff, 0xff
+			}
+		}
+	}
+	img := ebiten.NewImage(w, loadingGlyphHeight)
+	img.WritePixels(pix)
+	loadingGlyphImgs[r] = img
+	return img
+}
+
+// loadingGlyphWidth は文字rの幅(文字のドット数)。
+func loadingGlyphWidth(r rune) int {
+	return len(loadingGlyphs[r][0])
+}
+
+// loadingDotLift は点i(0始まり)が時刻tにどれだけ持ち上がっているか(文字の
+// ドット数)を返す。
+func loadingDotLift(t float64, i int) int {
+	phase := math.Mod(t, loadingDotCycle) - float64(i)*loadingDotStagger
+	if phase < 0 || phase >= loadingDotHopTime {
+		return 0
+	}
+	return int(math.Round(loadingDotHopHeight * math.Sin(phase/loadingDotHopTime*math.Pi)))
+}
+
+// drawLoadingIndicator は画面右下に"Loading"と、その後ろで順に跳ねる"..."を描く。
+// 文字はゲーム本編と同じk8x12の字形だが、フォントファイルではなく
+// loading_glyphs.go(tools/genloadingfontで生成)のドットパターンから描く。
+// フォントの読み込みが終わっていない起動直後でも同じ見た目で出せるように。
 // showProgressなら、文字の上に進捗バー(progressは0〜1)も描く。
 func drawLoadingIndicator(screen *ebiten.Image, t float64, progress float64, showProgress bool) {
-	if loadingGlyphBuf == nil {
-		loadingGlyphBuf = ebiten.NewImage((len(loadingLabel)+loadingDotCount)*loadingCharW, loadingCharH)
+	textW := 0
+	for _, r := range loadingLabel {
+		textW += loadingGlyphWidth(r)
 	}
+	textW += loadingDotCount * loadingGlyphWidth(loadingDotRune)
 
-	cellW := loadingCharW * loadingScale
-	totalW := float64(len(loadingLabel)+loadingDotCount) * cellW
+	totalW := float64(textW * loadingScale)
 	x0 := float64(gameWidth-loadingMarginX) - totalW
-	y0 := float64(gameHeight-loadingMarginY) - loadingCharH*loadingScale - loadingBounceHeight
+	y0 := float64(gameHeight-loadingMarginY) - loadingGlyphHeight*loadingScale
 
-	drawText := func(s string, x, y float64) {
-		loadingGlyphBuf.Clear()
-		ebitenutil.DebugPrintAt(loadingGlyphBuf, s, 0, 0)
+	x := x0
+	drawGlyph := func(r rune, liftDots int) {
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Scale(loadingScale, loadingScale)
-		op.GeoM.Translate(x, y)
-		screen.DrawImage(loadingGlyphBuf, op)
+		op.GeoM.Translate(x, y0-float64(liftDots*loadingScale))
+		screen.DrawImage(loadingGlyphImage(r), op)
+		x += float64(loadingGlyphWidth(r) * loadingScale)
 	}
-
-	drawText(loadingLabel, x0, y0+loadingBounceHeight)
+	for _, r := range loadingLabel {
+		drawGlyph(r, 0)
+	}
+	for i := 0; i < loadingDotCount; i++ {
+		drawGlyph(loadingDotRune, loadingDotLift(t, i))
+	}
 
 	if showProgress {
-		barY := y0 - loadingBarGapY - loadingBarH
+		// 跳ねた点と重ならないよう、跳ねる高さの分だけ上に置く。
+		barY := y0 - loadingDotHopHeight*loadingScale - loadingBarGapY - loadingBarH
 		fillRect(screen, x0, barY, totalW, loadingBarH, loadingBarBgColor)
 		fillRect(screen, x0, barY, totalW*math.Max(0, math.Min(progress, 1)), loadingBarH, loadingBarFgColor)
-	}
-
-	for i := 0; i < loadingDotCount; i++ {
-		phase := t - float64(i)*loadingDotStagger
-		bounce := loadingBounceHeight * math.Abs(math.Sin(phase*math.Pi/loadingBouncePeriod))
-		x := x0 + float64(len(loadingLabel)+i)*cellW
-		drawText(".", x, y0+loadingBounceHeight-bounce)
 	}
 }

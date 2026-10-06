@@ -1,5 +1,7 @@
 package main
 
+// hitTestSkillNameRows はタップされたスキル名の行を、スキルの添字で返す。
+// 一覧は覚えているスキルだけを上から詰めて並べている。
 func (m *MenuScene) hitTestSkillNameRows(rowCount int) (int, bool) {
 	rects := make([]tapRect, rowCount)
 	for i := 0; i < rowCount; i++ {
@@ -11,11 +13,16 @@ func (m *MenuScene) hitTestSkillNameRows(rowCount int) (int, bool) {
 			h: skillRowGapY,
 		}
 	}
-	return hitTestTapRects(rects)
+	row, ok := hitTestTapRects(rects)
+	if !ok {
+		return 0, false
+	}
+	return m.game.SkillAtDisplayRow(m.skillCharIndex, row)
 }
 
-func (m *MenuScene) skillLevelCellRect(rowIndex, lv int) tapRect {
-	y := skillRowStartY + float64(rowIndex)*skillRowGapY
+// skillLevelCellRect はskillIdx番目のスキルのレベルlvのマスのタップ範囲。
+func (m *MenuScene) skillLevelCellRect(skillIdx, lv int) tapRect {
+	y := skillRowStartY + float64(m.game.SkillDisplayRow(m.skillCharIndex, skillIdx))*skillRowGapY
 	x := skillLevelStartX + float64(lv-1)*skillLevelGapX
 	return tapRect{x: x - skillLevelGapX/2, y: y - skillRowGapY/2, w: skillLevelGapX, h: skillRowGapY}
 }
@@ -24,6 +31,10 @@ func (m *MenuScene) hitTestAnySkillLevelCell(skills []SkillDef) (int, int, bool)
 	var rects []tapRect
 	var rows, lvs []int
 	for row, sk := range skills {
+		// 覚えていないスキルは一覧に出ていない（詰めた行が次のスキルと重なる）。
+		if !m.isSkillRowUnlocked(row) {
+			continue
+		}
 		for lv := 1; lv <= len(sk.Levels); lv++ {
 			rects = append(rects, m.skillLevelCellRect(row, lv))
 			rows = append(rows, row)

@@ -28,15 +28,36 @@ jobs:
           GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o web/game.wasm .
           cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/wasm_exec.js
           cp -r assets web/assets
+      - name: Install optimizers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+          # oxipngが無い場合はoptipngで代用する(どちらも可逆圧縮)。
+          sudo apt-get install -y oxipng || sudo apt-get install -y optipng
       - name: Optimize wasm size
         run: |
-          sudo apt-get update && sudo apt-get install -y binaryen
           wasm-opt -Oz --enable-bulk-memory --enable-sign-ext --enable-nontrapping-float-to-int \
             -o web/game.wasm web/game.wasm
+      - name: Compress PNG images (lossless)
+        # 公開用にコピーしたweb/assetsだけを圧縮する(リポジトリの元画像はそのまま)。
+        # 画質は変わらず、ファイルサイズだけが小さくなる。素材を差し替えても
+        # デプロイのたびに自動で効く。
+        run: |
+          before=$(du -sb web/assets/images | cut -f1)
+          if command -v oxipng >/dev/null; then
+            find web/assets -name '*.png' -print0 | xargs -0 oxipng -o 2 --strip safe -q
+          else
+            find web/assets -name '*.png' -print0 | xargs -0 -P "$(nproc)" -n 8 optipng -o2 -quiet
+          fi
+          after=$(du -sb web/assets/images | cut -f1)
+          echo "PNG: ${before} -> ${after} bytes"
       - name: Write wasm size for the download progress bar
         # GitHub Pagesはwasmを圧縮して送るので、ブラウザ側では本来の大きさが
         # 分からない。index.htmlの__WASM_SIZE__を最終的なファイルサイズに置き換える。
         run: sed -i "s/__WASM_SIZE__/$(stat -c%s web/game.wasm)/" web/index.html
+      - name: Write file hashes for the Service Worker
+        # 公開するファイルがすべてそろってから(最後に)行う。
+        run: go run ./tools/genswmanifest web
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

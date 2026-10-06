@@ -66,6 +66,7 @@ type Game struct {
 	PlayerAttackSprites  [4]*ebiten.Image
 	CommandIcons         [4]*ebiten.Image
 	CommandIconsSelected [4]*ebiten.Image
+	ItemButtonImg        *ebiten.Image
 	TimelineIcons        [4]*ebiten.Image
 	TimelineIconsLarge   [4]*ebiten.Image
 	SkillPanelImg        *ebiten.Image
@@ -232,17 +233,24 @@ type Game struct {
 	heavyTierReady [assetTierCount]bool
 	heavyTierTotal [assetTierCount]int
 	heavyTierDone  [assetTierCount]int
-	// pendingPrep はChangeScenePreparedで、暗転中にそろうのを待っているもの。
+	// pendingPrep は今の切り替えで、暗転中にそろうのを待っているもの
+	// (ロード地点かどうかもここで見る)。
 	pendingPrep scenePrep
 	// loadingWaitStart は暗転したまま待ち始めた時刻(計測ログ用)。
 	loadingWaitStart time.Time
-	// loadingWaitTicks は暗転したまま待っているフレーム数(Loading表示の遅延用)。
+	// loadingWaitTicks は暗転したまま待っているフレーム数(ロード地点の最短表示用)。
 	loadingWaitTicks int
 
 	// asyncImagePending/Done はdecodeImageAsyncでバックグラウンドデコード中の
 	// 画像と、その結果の受け渡し口。
 	asyncImagePending map[string]bool
 	asyncImageDone    chan asyncImageResult
+	// asyncImageFailed はdecodeImageAsyncで読み込めなかったパス。準備を
+	// 待っている側が、同じ画像を毎フレーム頼み直して待ち続けないように記録する。
+	asyncImageFailed map[string]bool
+
+	// screenScratchImg はscreenScratchが使い回す画面サイズの画像。
+	screenScratchImg *ebiten.Image
 
 	bootDecoded     chan bootResult
 	bootReady       bool
@@ -571,6 +579,7 @@ type bgmScene interface {
 func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
 	g.pendingScene = nextScene
 	g.pendingBuild = nil
+	g.pendingPrep = scenePrep{}
 	g.fadeMode = FadeOut
 	g.fadeAlpha = 0.0
 	g.fadeSpeed = 1.0 / durationSeconds
@@ -600,14 +609,18 @@ func (g *Game) ChangeSceneWhenTierReady(tier assetTier, build func() Scene, dura
 // ChangeScenePrepared はprepがそろってから組み立てるシーンへ遷移する
 // (流れはscene_prep.goの先頭を参照)。準備済みなら通常のChangeSceneWithFadeと
 // 同じ。まだなら暗転と同時に準備を始め、そろったところでbuildを呼ぶ。
+// ロード地点は準備済みでも必ず暗転中にLoadingを出してから組み立てる。
 // buildがnilを返した場合(マップ読み込み失敗など)は元のシーンへ戻る。
 func (g *Game) ChangeScenePrepared(prep scenePrep, build func() Scene, durationSeconds float64) {
 	g.startScenePrep(prep)
-	if g.scenePrepReady(prep) {
+	if !prep.loadPoint && g.scenePrepReady(prep) {
 		if next := build(); next != nil {
 			g.ChangeSceneWithFade(next, durationSeconds)
 		}
 		return
+	}
+	if prep.loadPoint {
+		g.fadeOutBGMForLoadPoint(prep.mapPath, durationSeconds)
 	}
 	g.pendingScene = nil
 	g.pendingBuild = build
@@ -616,6 +629,21 @@ func (g *Game) ChangeScenePrepared(prep scenePrep, build func() Scene, durationS
 	g.fadeMode = FadeOut
 	g.fadeAlpha = 0.0
 	g.fadeSpeed = 1.0 / durationSeconds
+}
+
+// fadeOutBGMForLoadPoint はロード地点へ入るとき、今の曲を画面の暗転と一緒に
+// フェードアウトさせる(Loading中は無音にし、画面が明けるときに次の曲を鳴らす)。
+// 行き先のマップで同じ曲が流れるなら止めずにそのまま流し続ける。
+func (g *Game) fadeOutBGMForLoadPoint(mapPath string, durationSeconds float64) {
+	if g.Audio == nil {
+		return
+	}
+	if tmap, ok := peekTiledMap(mapPath); ok {
+		if p, ok := mapBGMPath(tmap); ok && p == g.Audio.bgmName {
+			return
+		}
+	}
+	g.Audio.FadeOutBGM(durationSeconds)
 }
 
 // updateSceneLoading は暗転中(FadeLoading)に毎フレーム呼ばれ、遷移先の
@@ -639,7 +667,8 @@ func (g *Game) updateSceneLoading() {
 			next = g.currentScene
 		}
 		g.pendingScene = next
-		// BGMは待っている間も流し続け、遷移先が決まった時点で切り替える。
+		// BGMは待っている間も流し続け(ロード地点では暗転と一緒にフェード
+		// アウト済み)、遷移先が決まった時点で切り替える。
 		if bs, ok := next.(bgmScene); ok {
 			path, fadeIn, hardCut := bs.desiredBGM(g.pendingDuration)
 			g.Audio.FadeOutThenPlay(path, g.pendingDuration, fadeIn, hardCut)
@@ -648,9 +677,16 @@ func (g *Game) updateSceneLoading() {
 	if g.Audio.IsLoading() {
 		return
 	}
-	// 暗転しきってから画面が明けるまでに目立つ待ちがあれば記録する。
-	if waited := time.Since(g.loadingWaitStart); waited >= loadingWaitTraceThreshold {
-		loadTrace("暗転中に%.2f秒待機 (遷移先 %T)", waited.Seconds(), g.pendingScene)
+	if g.pendingPrep.loadPoint {
+		// ロード地点は最短表示時間まで出し続け、前の曲がフェードアウトし終えて
+		// 次の曲が鳴り始めるのと同時に画面を明ける。
+		if g.loadingWaitTicks < loadPointMinTicks || g.Audio.IsSwitching() {
+			return
+		}
+		loadTrace("ロード地点: %.2f秒 (遷移先 %T)", time.Since(g.loadingWaitStart).Seconds(), g.pendingScene)
+	} else if waited := time.Since(g.loadingWaitStart); waited >= loadingWaitTraceThreshold {
+		// ロード地点以外の待ちは、ロード地点での準備に抜けがあるということ。
+		loadTrace("警告: ロード地点以外で暗転中に%.2f秒待機 (遷移先 %T)", waited.Seconds(), g.pendingScene)
 	}
 	g.loadingWaitTicks = 0
 	g.currentScene = g.pendingScene
@@ -663,12 +699,12 @@ const loadingWaitTraceThreshold = 100 * time.Millisecond
 
 // isLoading はLoading表示を出すべき状態かを返す。タイトル画面では、
 // 「はじめから」で先へ進めるようになる(フィールド段階の完了)まで出す。
-// 暗転中の待ちは、loadingIndicatorDelayTicksより長引いたときだけ出す。
+// 暗転中は、ロード地点(scene_prep.go先頭を参照)のときだけ出す。
 func (g *Game) isLoading() bool {
 	if !g.assetTierReady(assetTierField) {
 		return true
 	}
-	return g.fadeMode == FadeLoading && g.loadingWaitTicks >= loadingIndicatorDelayTicks
+	return g.fadeMode == FadeLoading && g.pendingPrep.loadPoint
 }
 
 // loadProgress は今待っている段階の読み込み進捗(0〜1)を返す。段階の読み込みを
@@ -738,6 +774,20 @@ func (g *Game) GetEnemyTimelineIconLarge(evType, name string) *ebiten.Image {
 		return g.BossIconLargeImgs[idx]
 	}
 	return g.EnemyIconLargeImgs[name]
+}
+
+// screenScratch は画面全体の写しを一時的に描く先(メニューを開くときの
+// サムネイル用、エンカウント演出用)を、消去済みで返す。毎回確保すると画面
+// サイズのGPUテクスチャが使い捨てになり、スマホでメモリの山と引っかかりの
+// 原因になるので1枚を使い回す。次に呼ばれた時点で上書きされるので、
+// 使う側は使い終わるまでの間だけ持つこと。
+func (g *Game) screenScratch() *ebiten.Image {
+	if g.screenScratchImg == nil {
+		g.screenScratchImg = ebiten.NewImage(gameWidth, gameHeight)
+	} else {
+		g.screenScratchImg.Clear()
+	}
+	return g.screenScratchImg
 }
 
 func (g *Game) captureMenuEntryThumb(full *ebiten.Image) {

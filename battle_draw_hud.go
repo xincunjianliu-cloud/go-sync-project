@@ -142,7 +142,16 @@ func (s *BattleScene) drawTimeline(screen *ebiten.Image) {
 				if downCount == -1 {
 					downCount = len(s.waitOrder)
 				}
-				y += 75.0 + float64(downCount)*55.0
+				// 待機中は常に通常サイズのアイコンなので、その実際の高さで
+				// ゴール画像の下端から縦に積む。描画時に画像を枠の中央へ
+				// 寄せる分(currentIconSize-高さ)/2を差し引いて上端を合わせる。
+				waitIconH := float64(iconSize)
+				if actor < partySize && s.game.TimelineIcons[actor] != nil {
+					waitIconH = float64(s.game.TimelineIcons[actor].Bounds().Dy())
+				}
+				goalBottom := centerY + float64(s.game.GoalImg.Bounds().Dy())/2
+				y = goalBottom + waitIconFirstGap - (currentIconSize-waitIconH)/2 +
+					float64(downCount)*(waitIconH+waitIconStackGap)
 			}
 
 			blockedByOther := anyoneSelecting && actor != s.waitingActor && actor < partySize
@@ -327,12 +336,14 @@ func commandIconPositions() [4][2]float64 {
 	}
 }
 
-func (s *BattleScene) drawCommandMenu(screen *ebiten.Image) {
+// drawCommandMenu brightens the icon at highlight; pass -1 to dim all four
+// (e.g. while the item menu, which isn't one of these commands, is open).
+func (s *BattleScene) drawCommandMenu(screen *ebiten.Image, highlight int) {
 	positions := commandIconPositions()
 
 	for i, pos := range positions {
 		icon := s.game.CommandIcons[i]
-		if s.commandIndex == i && s.game.CommandIconsSelected[i] != nil {
+		if highlight == i && s.game.CommandIconsSelected[i] != nil {
 			icon = s.game.CommandIconsSelected[i]
 		}
 
@@ -342,7 +353,7 @@ func (s *BattleScene) drawCommandMenu(screen *ebiten.Image) {
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(pos[0]-float64(iw)/2, pos[1]-float64(ih)/2)
 
-		if s.commandIndex != i {
+		if highlight != i {
 			op.ColorScale.Scale(0.6, 0.6, 0.6, 1.0)
 		}
 
@@ -424,7 +435,7 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		}
 
 		baseX := windowX + battleSubLabelOffsetX
-		baseY := windowY + battleSubLabelOffsetY + float64(i)*battleSubRowHeight
+		baseY := windowY + battleSubLabelOffsetY + float64(s.game.SkillDisplayRow(p, i))*battleSubRowHeight
 		if selected {
 			arrowOp := &text.DrawOptions{}
 			arrowOp.GeoM.Translate(baseX, baseY)
@@ -436,7 +447,7 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		labelOp.ColorScale.ScaleWithColor(textCol)
 		text.Draw(screen, label, skillListFace, labelOp)
 
-		_, _, leftX, lvX, rightX, textY := s.skillLevelArrowRects(i, lv, skillListFace)
+		_, _, leftX, lvX, rightX, textY := s.skillLevelArrowRects(s.game.SkillDisplayRow(p, i), lv, skillListFace)
 
 		lvOp := &text.DrawOptions{}
 		lvOp.GeoM.Translate(lvX, textY)

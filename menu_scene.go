@@ -538,7 +538,7 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.BlockPositions = d.BlockPositions
 	m.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
-	m.game.ChangeSceneToMap(d.CurrentMap, func() Scene {
+	m.game.ChangeSceneAtLoadPoint(d.CurrentMap, func() Scene {
 		field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
 		if err != nil {
 			// 暗転していた場合はメニュー画面へ戻る。

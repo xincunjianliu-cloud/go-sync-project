@@ -17,13 +17,46 @@ func isLowHP(hp, maxHP int) bool {
 	return float64(hp)/float64(maxHP) <= 0.25
 }
 
-func (s *BattleScene) startCast(actor int) {
+// skillSpriteAnim は味方pのskillIdx番目のスキルで再生するスプライトシートの行と
+// コマ数、回復の「自分が受ける」部分が始まるコマ（なければ0）を返す。
+// 表はスキル名で引く。表にないスキルは通常攻撃のアニメにする。
+func (s *BattleScene) skillSpriteAnim(p, skillIdx int) (row, frames, healSelfFrom int) {
+	row = spriteRowAttack
+	skills := s.game.CharacterSkills(p)
+	if skillIdx >= 0 && skillIdx < len(skills) {
+		name := skills[skillIdx].Name
+		if r, ok := partySkillSpriteRow[p][name]; ok {
+			row = r
+		}
+		healSelfFrom = partySkillHealSelfFrame[p][name]
+	}
+	return row, partySpriteRowFrames[p][row], healSelfFrom
+}
+
+// startCast は回復・補助スキルを使ったアニメ（スプライトシートのrow行の
+// 先頭framesコマ）をactorに再生させる。
+func (s *BattleScene) startCast(actor, row, frames int) {
 	if actor < 0 || actor >= partySize {
 		return
 	}
 	s.healingCaster = actor
 	s.playerPose[actor] = poseHealCast
 	s.playerAnimTimer[actor] = 0
+	s.actionRow[actor] = row
+	s.actionFrames[actor] = frames
+	s.healingAnimTimer[actor] = actionAnimDuration(frames)
+}
+
+// startRecv は回復・補助スキルを受けたアニメ（スプライトシートのrow行）を
+// targetに再生させる。
+func (s *BattleScene) startRecv(target, row int) {
+	if target < 0 || target >= partySize || s.game.PlayerHP[target] <= 0 {
+		return
+	}
+	s.recvRow[target] = row
+	s.recvTimer[target] = actionAnimDuration(partySpriteRowFrames[target][row])
+	s.playerPose[target] = poseRecv
+	s.playerAnimTimer[target] = 0
 }
 
 func (s *BattleScene) endCast(actor int) {
@@ -427,7 +460,9 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	}
 	tappedIdx, tappedOk := hitTestCommandMenu(s.game)
 	rewindTapped := isRewindButtonJustPressed(s.game)
-	itemTapped := isItemButtonJustPressed()
+	// The item button's widened touch area overlaps the skill/flee tap rects;
+	// a tap inside a command icon goes to that icon only.
+	itemTapped := !tappedOk && isItemButtonJustPressed()
 
 	if tappedOk {
 		s.rewindButtonArmed = false
@@ -573,9 +608,9 @@ func (s *BattleScene) updateSkillMenu(dt float64) {
 	arrowTapped := s.handleSkillLevelArrowTaps(p, skills)
 	tappedIdx, tappedOk := -1, false
 	if !arrowTapped {
-		tappedIdx, tappedOk = s.hitTestBattleSubRows(menuLen)
-		if tappedOk && !s.game.IsSkillUnlocked(p, tappedIdx) {
-			tappedOk = false
+		// 一覧は覚えているスキルだけを詰めて並べているので、行からスキルに直す。
+		if row, ok := s.hitTestBattleSubRows(menuLen); ok {
+			tappedIdx, tappedOk = s.game.SkillAtDisplayRow(p, row)
 		}
 	}
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skillIndex, s.game.Audio)

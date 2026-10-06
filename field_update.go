@@ -584,7 +584,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 	s.updateScreenShake(dt)
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyM) || fieldTouchMenuPressed() {
-		full := ebiten.NewImage(gameWidth, gameHeight)
+		full := s.game.screenScratch()
 		s.Draw(full)
 		s.game.captureMenuEntryThumb(full)
 		s.game.Audio.PlaySEByKey("menu_toggle")
@@ -754,8 +754,8 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if moved && actualMovedDist > 0 {
 		if s.safetyDistance > 0 {
 			s.safetyDistance -= encounterMovedDist
-		} else if targetEnemiesStr != "" && s.game.assetTierReady(assetTierBattle) {
-			// 戦闘の画像を読み込み終わるまで(起動直後の数秒)はエンカウントしない。
+		} else if targetEnemiesStr != "" {
+			// 戦闘の画像はロード地点で読み込み済み(scene_prep.go先頭を参照)。
 			s.walkCooldown += encounterMovedDist
 			if s.walkCooldown >= 32.0 {
 				s.walkCooldown = 0
@@ -786,7 +786,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 // カメラが回転しながらズームインしていく演出を開始する。演出が終わると
 // Update側でbattleSceneへフェード切り替えする。
 func (s *FieldScene) startEncounterEffect(battleScene *BattleScene) {
-	snapshot := ebiten.NewImage(gameWidth, gameHeight)
+	snapshot := s.game.screenScratch()
 	s.drawWorld(snapshot)
 
 	s.encounterSnapshot = snapshot
@@ -1097,15 +1097,20 @@ func (s *FieldScene) triggerDoorWarp() Scene {
 		return nil
 	}
 	s.game.Audio.PlaySEByKey("door")
-	// 行き先のタイルセットはドアに近づいた時点で準備を始めている
-	// (checkDoorProximity)。間に合っていなければ暗転中にそろえる。
-	s.game.ChangeSceneToMap(targetMap, func() Scene {
+	build := func() Scene {
 		nextRoom, err := NewRoomScene(s.game, targetMap, x, y, point, dir)
 		if err != nil {
 			return nil
 		}
 		return nextRoom
-	}, fadeTimeDoor)
+	}
+	// 別のマップへの移動はロード地点。行き先の準備はドアに近づいた時点で
+	// 始めている(checkDoorProximity)ので、Loadingの待ちは短く済む。
+	if targetMap != s.currentMap {
+		s.game.ChangeSceneAtLoadPoint(targetMap, build, fadeTimeDoor)
+	} else {
+		s.game.ChangeSceneToMap(targetMap, build, fadeTimeDoor)
+	}
 	return s
 }
 
@@ -1227,13 +1232,13 @@ func (s *FieldScene) runSceneChangeCommand(cmd EventCommand) bool {
 	s.autoMode = false
 
 	if isBattle {
-		// 戦闘の画像がまだ読み込み中なら、暗転したまま待ってから始める。
-		s.game.ChangeSceneWhenTierReady(assetTierBattle, func() Scene {
+		// 戦闘・ボスの画像がまだ読み込み中なら、暗転したまま待ってから始める。
+		s.game.ChangeSceneToBossBattle(bossType, func() Scene {
 			return NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
 		}, fadeTimeBossIn)
 		return true
 	}
-	thumb := ebiten.NewImage(gameWidth, gameHeight)
+	thumb := s.game.screenScratch()
 	s.Draw(thumb)
 	s.game.captureMenuEntryThumb(thumb)
 	s.game.ChangeSceneWithFade(NewEndingScene(s.game, s), fadeTimeBossOut)

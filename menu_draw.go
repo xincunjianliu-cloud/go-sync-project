@@ -418,7 +418,7 @@ func (m *MenuScene) drawSkillSubMenu(screen *ebiten.Image) {
 			curLv = len(sk.Levels)
 		}
 
-		rowCenterY := skillRowStartY + float64(i)*skillRowGapY
+		rowCenterY := skillRowStartY + float64(m.game.SkillDisplayRow(m.skillCharIndex, i))*skillRowGapY
 		rowSelected := i == m.skillSubIndex
 
 		curData := sk.Levels[curLv-1]

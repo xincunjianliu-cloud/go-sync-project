@@ -91,6 +91,10 @@ const fieldPlayerConfigPath = "assets/field_player.json"
 // (+GPUテクスチャの作り直し)が走っていたのを1回だけにする。
 var fieldPlayerConfigCache = map[string]fieldPlayerConfigEntry{}
 
+// preloadedPlayerSprites はフィールド段階の読み込み(assets_deferred.go)で
+// デコード済みのプレイヤーのスプライト画像(パス → 画像)。
+var preloadedPlayerSprites = map[string]*ebiten.Image{}
+
 type fieldPlayerConfigEntry struct {
 	cfg FieldPlayerConfig
 	img *ebiten.Image
@@ -140,6 +144,11 @@ func loadFieldPlayerConfigUncached(path string) (FieldPlayerConfig, *ebiten.Imag
 		cfg.DashSpeedMultiplier = 1.4
 	}
 
+	// フィールド段階の読み込みでデコード済みなら、それを使う(同じ画像を
+	// マップに入る瞬間にもう一度、画面を止めてデコードしないように)。
+	if img, ok := preloadedPlayerSprites[cfg.Sprite]; ok {
+		return cfg, img, nil
+	}
 	img, err := loadAssetImage(cfg.Sprite)
 	if err != nil {
 		return cfg, nil, fmt.Errorf("load player sprite %q: %w", cfg.Sprite, err)

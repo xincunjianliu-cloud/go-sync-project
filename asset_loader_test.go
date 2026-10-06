@@ -208,3 +208,26 @@ func TestLoadProgressCountsTiersUpToTarget(t *testing.T) {
 		t.Fatalf("battle wait progress = %v, %v; want (10+10)/(10+30)=0.5", p, ok)
 	}
 }
+
+// ロード地点で固定した曲は、容量を超えても古い順に外さず、固定していない曲を
+// 先に外すこと。
+func TestBGMCacheKeepsPinnedTracks(t *testing.T) {
+	a := newCapTestAudio()
+	const track = maxCachedBGMBytes / 3
+	paths := []string{"assets/bgm/a.mp3", "assets/bgm/b.mp3", "assets/bgm/c.mp3", "assets/bgm/d.mp3"}
+	for _, p := range paths {
+		a.pcmCache[p] = make([]byte, track+1)
+	}
+	a.PinBGM([]string{"assets/bgm/a.mp3"})
+
+	for _, p := range paths {
+		a.touchBGM(p)
+	}
+
+	if _, ok := a.pcmCache["assets/bgm/a.mp3"]; !ok {
+		t.Error("pinned (oldest) track a was evicted")
+	}
+	if _, ok := a.pcmCache["assets/bgm/b.mp3"]; ok {
+		t.Error("unpinned track b was kept while over the cap")
+	}
+}
