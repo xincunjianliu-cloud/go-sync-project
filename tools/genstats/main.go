@@ -6,6 +6,10 @@
 // config.json, then run:
 //
 //	go run ./tools/genstats
+//
+// The enemy and boss sheets may have a 17th column, Skills, listing skill
+// IDs from enemySkillTable (enemy_skill.go), e.g. "tackle,bite". Unknown
+// IDs stop generation with an error.
 package main
 
 import (
@@ -17,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -52,6 +57,7 @@ type enemyRow struct {
 	Element                     string
 	ResistFire, ResistLightning int
 	ResistIce, ResistWind       int
+	Skills                      []string
 }
 
 type bossRow struct {
@@ -62,6 +68,72 @@ type bossRow struct {
 	Element                     string
 	ResistFire, ResistLightning int
 	ResistIce, ResistWind       int
+	Skills                      []string
+}
+
+// skillsColumn is the optional 17th column (Skills) of the enemy and boss
+// sheets: skill IDs from enemySkillTable, e.g. "tackle,bite". Rows with only
+// 16 columns, or an empty cell, mean "normal attack only".
+const skillsColumn = 16
+
+// skillTablePath is where enemySkillTable lives; genstats reads its keys so
+// a typo in the Skills column fails here instead of silently dropping the
+// skill in game.
+const skillTablePath = "enemy_skill.go"
+
+var skillTableKeyRe = regexp.MustCompile(`(?m)^\t"([^"]+)":\s*\{`)
+
+func loadSkillIDs(path string) (map[string]bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	ids := map[string]bool{}
+	for _, m := range skillTableKeyRe.FindAllSubmatch(data, -1) {
+		ids[string(m[1])] = true
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("%s: no skill IDs found in enemySkillTable", path)
+	}
+	return ids, nil
+}
+
+// parseSkills splits a Skills cell. Commas (half/full width), 、, / and
+// spaces all work as separators.
+func parseSkills(row []string, n int, known map[string]bool) ([]string, error) {
+	if len(row) <= skillsColumn {
+		return nil, nil
+	}
+	fields := strings.FieldsFunc(row[skillsColumn], func(r rune) bool {
+		switch r {
+		case ',', '，', '、', '/', ' ', '　', '\t', '\n':
+			return true
+		}
+		return false
+	})
+	for _, id := range fields {
+		if !known[id] {
+			return nil, fmt.Errorf("row %d, column Skills: unknown skill %q (see enemySkillTable in %s)", n+2, id, skillTablePath)
+		}
+	}
+	return fields, nil
+}
+
+func hasSkillsColumn(rows [][]string) bool {
+	for _, row := range rows {
+		if len(row) > skillsColumn {
+			return true
+		}
+	}
+	return false
+}
+
+func skillIDsLiteral(ids []string) string {
+	q := make([]string, len(ids))
+	for i, id := range ids {
+		q[i] = strconv.Quote(id)
+	}
+	return "[]string{" + strings.Join(q, ", ") + "}"
 }
 
 func main() {
@@ -102,13 +174,24 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("player exp: %w", err)
 	}
-	enemies, err := parseEnemies(enemiesCSV)
+	skillIDs, err := loadSkillIDs(skillTablePath)
+	if err != nil {
+		return fmt.Errorf("skill table: %w", err)
+	}
+	enemies, err := parseEnemies(enemiesCSV, skillIDs)
 	if err != nil {
 		return fmt.Errorf("enemies: %w", err)
 	}
-	bosses, err := parseBosses(bossesCSV)
+	bosses, err := parseBosses(bossesCSV, skillIDs)
 	if err != nil {
 		return fmt.Errorf("bosses: %w", err)
+	}
+
+	if !hasSkillsColumn(enemiesCSV) {
+		fmt.Fprintln(os.Stderr, "genstats: warning: enemies sheet has no Skills column (17th); every enemy will use only its normal attack")
+	}
+	if !hasSkillsColumn(bossesCSV) {
+		fmt.Fprintln(os.Stderr, "genstats: warning: bosses sheet has no Skills column (17th); every boss will use only its normal attack")
 	}
 
 	src, err := generate(playerStats, playerExp, enemies, bosses)
@@ -243,7 +326,7 @@ func parsePlayerExp(rows [][]string) ([]int, error) {
 	return out, nil
 }
 
-func parseEnemies(rows [][]string) ([]enemyRow, error) {
+func parseEnemies(rows [][]string, skillIDs map[string]bool) ([]enemyRow, error) {
 	var out []enemyRow
 	for i, row := range rows {
 		if len(row) < 16 {
@@ -293,6 +376,9 @@ func parseEnemies(rows [][]string) ([]enemyRow, error) {
 		if r.ResistWind, err = atoi(row[15], "ResistWind", i); err != nil {
 			return nil, err
 		}
+		if r.Skills, err = parseSkills(row, i, skillIDs); err != nil {
+			return nil, err
+		}
 		if r.Name == "" {
 			return nil, fmt.Errorf("row %d: Name is empty", i+2)
 		}
@@ -301,7 +387,7 @@ func parseEnemies(rows [][]string) ([]enemyRow, error) {
 	return out, nil
 }
 
-func parseBosses(rows [][]string) ([]bossRow, error) {
+func parseBosses(rows [][]string, skillIDs map[string]bool) ([]bossRow, error) {
 	var out []bossRow
 	for i, row := range rows {
 		if len(row) < 16 {
@@ -351,6 +437,9 @@ func parseBosses(rows [][]string) ([]bossRow, error) {
 		if r.ResistWind, err = atoi(row[15], "ResistWind", i); err != nil {
 			return nil, err
 		}
+		if r.Skills, err = parseSkills(row, i, skillIDs); err != nil {
+			return nil, err
+		}
 		if !strings.HasPrefix(r.Key, "boss_") {
 			return nil, fmt.Errorf("row %d: Key %q must look like \"boss_N\"", i+2, r.Key)
 		}
@@ -389,7 +478,7 @@ func generate(playerStats []playerStatRow, playerExp []int, enemies []enemyRow, 
 	var b strings.Builder
 	b.WriteString("// Code generated by tools/genstats from spreadsheet data. DO NOT EDIT.\n")
 	b.WriteString("// Regenerate with: go run ./tools/genstats\n")
-	b.WriteString("// Drop tables and skill lists live in enemy_content.go instead.\n\n")
+	b.WriteString("// Drop tables live in enemy_content.go; skill definitions in enemy_skill.go.\n\n")
 	b.WriteString("package main\n\n")
 
 	b.WriteString(fmt.Sprintf("var PlayerStatsByLevel = [%d][%d]PlayerStats{\n", playerLevels, partySize))
@@ -422,7 +511,11 @@ func generate(playerStats []playerStatRow, playerExp []int, enemies []enemyRow, 
 		fmt.Fprintf(&b, "\t{Name: %q, Lv: %d, Exp: %d, HP: %d, MP: %d, PhysAtk: %d, MagicAtk: %d, PhysDef: %d, MagicDef: %d, Spd: %d, SP: %d, Element: %s, ElementResist: [%d]int{%d, %d, %d, %d},\n",
 			e.Name, e.Lv, e.Exp, e.HP, e.MP, e.PhysAtk, e.MagicAtk, e.PhysDef, e.MagicDef, e.Spd, e.SP, elem,
 			elementalTypeCount, e.ResistFire, e.ResistLightning, e.ResistIce, e.ResistWind)
-		fmt.Fprintf(&b, "\t\tDrops: enemyDrops[%q]},\n", e.Name)
+		fmt.Fprintf(&b, "\t\tDrops: enemyDrops[%q]", e.Name)
+		if len(e.Skills) > 0 {
+			fmt.Fprintf(&b, ", SkillIDs: %s", skillIDsLiteral(e.Skills))
+		}
+		b.WriteString("},\n")
 	}
 	b.WriteString("}\n\n")
 
@@ -439,7 +532,11 @@ func generate(playerStats []playerStatRow, playerExp []int, enemies []enemyRow, 
 		fmt.Fprintf(&b, "\t%q: {Name: BossNames[%d], Lv: %d, Exp: %d, HP: %d, MP: %d, PhysAtk: %d, MagicAtk: %d, PhysDef: %d, MagicDef: %d, Spd: %d, SP: %d, Element: %s, ElementResist: [%d]int{%d, %d, %d, %d},\n",
 			boss.Key, idx, boss.Lv, boss.Exp, boss.HP, boss.MP, boss.PhysAtk, boss.MagicAtk, boss.PhysDef, boss.MagicDef, boss.Spd, boss.SP, elem,
 			elementalTypeCount, boss.ResistFire, boss.ResistLightning, boss.ResistIce, boss.ResistWind)
-		fmt.Fprintf(&b, "\t\tDrops: bossDrops[%q], Skills: bossSkills[%q]},\n", boss.Key, boss.Key)
+		fmt.Fprintf(&b, "\t\tDrops: bossDrops[%q]", boss.Key)
+		if len(boss.Skills) > 0 {
+			fmt.Fprintf(&b, ", SkillIDs: %s", skillIDsLiteral(boss.Skills))
+		}
+		b.WriteString("},\n")
 	}
 	b.WriteString("}\n")
 

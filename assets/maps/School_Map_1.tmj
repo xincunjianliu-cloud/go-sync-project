@@ -1,6 +1,11 @@
 { "compressionlevel":-1,
  "properties":[
         {
+         "name":"battlebg",
+         "type":"string",
+         "value":"school"
+        },
+        {
          "name":"bgm",
          "type":"string",
          "value":"field1"

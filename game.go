@@ -96,7 +96,10 @@ type Game struct {
 	GaugeImg *ebiten.Image
 
 	BattleBgImg *ebiten.Image
-	BossBgImgs  [4]*ebiten.Image
+	// battleBgImgs は戦闘背景(assets/images/battle/bg/<名前>.png)の
+	// キャッシュ。マップの"battlebg"とbossBattleBgで指定された名前で引く
+	// (battle_bg.go)。
+	battleBgImgs map[string]*ebiten.Image
 
 	NameImg       *ebiten.Image
 	NameMyTurnImg *ebiten.Image

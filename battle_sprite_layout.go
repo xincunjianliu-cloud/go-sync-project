@@ -52,10 +52,11 @@ var partySkillSpriteRow = [partySize]map[string]int{
 	},
 }
 
-// partySkillHealSelfFrame は回復スキルの「自分が受ける」部分が始まるコマ。自分以外に使ったときはその手前で終わる（書いていないスキルは区切りなし）。
+// partySkillHealSelfFrame は回復・補助スキルの「自分が受ける」部分が始まるコマ。自分以外に使ったときはその手前で終わる（書いていないスキルは区切りなし）。
 var partySkillHealSelfFrame = [partySize]map[string]int{
 	{ // 男
-		"回復": 8,
+		"バフ": 1,
+		"回復": 1,
 	},
 	{ // 白髪
 		"スーパーヒーリング": 15,

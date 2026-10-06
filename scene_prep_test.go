@@ -107,7 +107,7 @@ func TestBossBattleWaitsForBossImages(t *testing.T) {
 	builtWithImages := false
 	g.ChangeSceneToBossBattle("boss_1", func() Scene {
 		builtWithImages = g.BossImgs[0] != nil && g.BossIconImgs[0] != nil &&
-			g.BossIconLargeImgs[0] != nil && g.BossBgImgs[0] != nil
+			g.BossIconLargeImgs[0] != nil
 		return battle
 	}, 0.1)
 

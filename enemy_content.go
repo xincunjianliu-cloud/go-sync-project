@@ -1,8 +1,9 @@
 package main
 
-// Drop tables and skill lists for enemies/bosses, keyed by Name (EnemyDatabase)
-// or boss key (BossDatabase). Numeric stats (HP, ATK, etc.) live in the
-// spreadsheet-driven stats_generated.go instead — see tools/genstats.
+// Drop tables for enemies/bosses, keyed by Name (EnemyDatabase) or boss key
+// (BossDatabase). Numeric stats (HP, ATK, etc.) and which skills each enemy
+// uses (Skills column) live in the spreadsheet-driven stats_generated.go
+// instead — see tools/genstats. Skill definitions are in enemy_skill.go.
 
 var enemyDrops = map[string][]ItemDrop{
 	"スライム1":      {{ItemID: "potion", Percent: 100}},
@@ -42,11 +43,4 @@ var bossDrops = map[string][]ItemDrop{
 	"boss_2": {{ItemID: "ether", Percent: 100}},
 	"boss_3": {{ItemID: "phoenix_down", Percent: 100}},
 	"boss_4": {{ItemID: "elixir", Percent: 100}},
-}
-
-var bossSkills = map[string][]EnemySkill{
-	"boss_1": {SkillFlameBurst, SkillCrushingBlow},
-	"boss_2": {SkillThunderBolt, SkillCrushingBlow},
-	"boss_3": {SkillIceBreath, SkillCrushingBlow},
-	"boss_4": {SkillWindSlash, SkillFlameBurst},
 }

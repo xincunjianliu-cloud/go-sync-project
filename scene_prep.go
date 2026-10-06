@@ -18,7 +18,7 @@ import (
 //   - 別のマップ(.tmj)へ移るとき
 //
 // ロード地点では、そのマップで遊び終えるまでに使うもの(戦闘段階までの画像、
-// タイルセット、マップ・戦闘・勝利・ボス戦のBGM)をすべてそろえてから画面を
+// タイルセット、戦闘背景、マップ・戦闘・勝利・ボス戦のBGM)をすべてそろえてから画面を
 // 明ける。準備が済んでいても毎回Loadingを出し、loadPointMinTicksは表示して
 // 区切りとして見せる。それ以外の切り替え(同じマップ内の移動、戦闘、メニュー
 // など)ではLoadingを出さない。ロード地点でそろえてあるので、ふつうは待ちも
@@ -146,6 +146,9 @@ func (g *Game) scenePrepReady(prep scenePrep) bool {
 		}
 	}
 	if prep.loadPoint {
+		if !g.prepareBattleBgs(g.mapBattleBgKeys(tmap), prioUrgent) {
+			ready = false
+		}
 		bgm := g.loadPointBGM(tmap)
 		g.Audio.PinBGM(bgm)
 		if !g.prepareBGM(bgm) {
@@ -219,8 +222,8 @@ func (g *Game) ChangeSceneAtLoadPoint(mapPath string, build func() Scene, durati
 }
 
 // prepareMap はマップに行きそうだと分かった時点(ドアに近づいたなど)で呼び、
-// そのマップのタイルセット・BGM・ボスの画像を先に準備しておく(ボス戦の曲は
-// 取得だけ)。実際に移動するときのロード地点の待ちが短くなる。
+// そのマップのタイルセット・BGM・ボスの画像・戦闘背景を先に準備しておく
+// (ボス戦の曲は取得だけ)。実際に移動するときのロード地点の待ちが短くなる。
 func (g *Game) prepareMap(mapPath string) {
 	tmap, ok := peekTiledMap(mapPath)
 	if !ok {
@@ -233,6 +236,7 @@ func (g *Game) prepareMap(mapPath string) {
 		g.Audio.Prewarm(prioSoon, bgm)
 	}
 	g.prepareBossImages(g.mapBossIndices(tmap), prioSoon)
+	g.prepareBattleBgs(g.mapBattleBgKeys(tmap), prioSoon)
 	g.Audio.PrefetchBGM(g.mapBossBGMs(tmap)...)
 }
 

@@ -649,7 +649,7 @@ func newEnemyUnit(game *Game, evType string, chosen EnemyStats) EnemyUnit {
 		SP:            chosen.SP,
 		Element:       chosen.Element,
 		ElementResist: chosen.ElementResist,
-		Skills:        chosen.Skills,
+		Skills:        enemySkillList(chosen.SkillIDs),
 		Drops:         chosen.Drops,
 		Image:         game.GetEnemyBattleImage(evType, chosen.Name),
 		Alpha:         1.0,

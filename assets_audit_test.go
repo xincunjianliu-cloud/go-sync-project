@@ -39,6 +39,31 @@ func TestBossImageAssetsExist(t *testing.T) {
 	}
 }
 
+// マップの"battlebg"とbossBattleBgで指定した戦闘背景が、すべて存在すること
+// (無いとbattle_bg.pngで代わりに描かれ、指定の間違いに気づきにくい)。
+func TestBattleBgsExist(t *testing.T) {
+	if err := BuildObjectiveAndMapIndex(); err != nil {
+		t.Fatal(err)
+	}
+	for _, mapPath := range allMapPaths {
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			t.Errorf("%s: %v", mapPath, err)
+			continue
+		}
+		if key, ok := tmap.mapBattleBgKey(); ok {
+			if _, err := embeddedAssets.ReadFile(battleBgImagePath(key)); err != nil {
+				t.Errorf("%s の戦闘背景(battlebg=%q)がありません: %s", mapPath, key, battleBgImagePath(key))
+			}
+		}
+	}
+	for n, key := range bossBattleBg {
+		if _, err := embeddedAssets.ReadFile(battleBgImagePath(key)); err != nil {
+			t.Errorf("ボス%dの専用背景がありません: %s", n, battleBgImagePath(key))
+		}
+	}
+}
+
 // どのマップも、タイルセット画像が存在すること(無いとそのマップに入れない)。
 func TestMapTilesetsExist(t *testing.T) {
 	if err := BuildObjectiveAndMapIndex(); err != nil {
@@ -105,7 +130,13 @@ func TestListUnreferencedImages(t *testing.T) {
 			if p, ok := mapTilesetImagePath(tmap); ok {
 				used[p] = true
 			}
+			if key, ok := tmap.mapBattleBgKey(); ok {
+				used[battleBgImagePath(key)] = true
+			}
 		}
+	}
+	for _, key := range bossBattleBg {
+		used[battleBgImagePath(key)] = true
 	}
 	// 名前から実行中に決まるもの(立ち絵・会話の背景)。
 	dynamic := func(p string) bool {

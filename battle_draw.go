@@ -5,8 +5,6 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"strconv"
-	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -48,19 +46,6 @@ func (s *BattleScene) drawBackground(screen *ebiten.Image) {
 		return
 	}
 	screen.Fill(color.RGBA{20, 20, 25, 255})
-}
-
-func (s *BattleScene) battleBgImage() *ebiten.Image {
-	if strings.HasPrefix(s.enemyType, "boss_") {
-		numStr := strings.TrimPrefix(s.enemyType, "boss_")
-		if bossNum, err := strconv.Atoi(numStr); err == nil {
-			idx := bossNum - 1
-			if idx >= 0 && idx < len(s.game.BossBgImgs) && s.game.BossBgImgs[idx] != nil {
-				return s.game.BossBgImgs[idx]
-			}
-		}
-	}
-	return s.game.BattleBgImg
 }
 
 func (s *BattleScene) drawEnemyHeader(screen *ebiten.Image) {

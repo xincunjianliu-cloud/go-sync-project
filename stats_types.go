@@ -26,5 +26,7 @@ type EnemyStats struct {
 	Element       Element
 	ElementResist [elementalTypeCount]int
 	Drops         []ItemDrop
-	Skills        []EnemySkill
+	// SkillIDs are keys into enemySkillTable (enemy_skill.go), taken from
+	// the spreadsheet's Skills column.
+	SkillIDs []string
 }

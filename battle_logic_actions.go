@@ -779,7 +779,7 @@ func (s *BattleScene) updateHealTargetSelect() {
 		return
 	}
 	s.game.Audio.PlaySEByKey("heal")
-	// 回復のアニメは最後に自分が回復を受ける部分まで描かれているので、
+	// 回復・補助のアニメは最後に自分が効果を受ける部分まで描かれているので、
 	// 自分が対象に入っていない時はその手前で終える。
 	castRow, castFrames, cut := s.skillSpriteAnim(p, skillIdx)
 	if cut > 0 && !slices.Contains(targets, p) {

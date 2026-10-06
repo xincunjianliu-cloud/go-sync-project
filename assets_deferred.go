@@ -279,16 +279,19 @@ func (g *Game) bossImageAssets(idx int) []bossImageAsset {
 		{fmt.Sprintf("assets/images/battle/boss_%d.png", n), &g.BossImgs[idx]},
 		{fmt.Sprintf("assets/images/battle/boss_%d_icon.png", n), &g.BossIconImgs[idx]},
 		{fmt.Sprintf("assets/images/battle/boss_%d_icon_large.png", n), &g.BossIconLargeImgs[idx]},
-		{fmt.Sprintf("assets/images/battle/battle_bg_boss_%d.png", n), &g.BossBgImgs[idx]},
 	}
 }
 
-// prepareBossImages はbossesのボスの画像のうち、まだのものを優先度prioで
-// 裏でデコードし始め、全部終わって(成功・失敗どちらでも)いるかを返す。
-// デコード中のものを、より高い優先度で頼み直すと取得の順番が繰り上がる。
+// prepareBossImages はbossesのボスの画像(専用の戦闘背景があればそれも)のうち、
+// まだのものを優先度prioで裏でデコードし始め、全部終わって(成功・失敗
+// どちらでも)いるかを返す。デコード中のものを、より高い優先度で頼み直すと
+// 取得の順番が繰り上がる。
 func (g *Game) prepareBossImages(bosses []int, prio int) bool {
 	ready := true
 	for _, idx := range bosses {
+		if key, ok := bossBattleBgKey(idx); ok && !g.prepareBattleBgs([]string{key}, prio) {
+			ready = false
+		}
 		for _, a := range g.bossImageAssets(idx) {
 			if *a.slot != nil || g.asyncImageFailed[a.path] {
 				continue
