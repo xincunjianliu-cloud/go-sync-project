@@ -29693,18 +29693,6 @@
      "y": 1120
     },
     {
-     "height": 0,
-     "id": 77,
-     "name": "",
-     "opacity": 1,
-     "rotation": 0,
-     "type": "",
-     "visible": true,
-     "width": 32,
-     "x": 3232,
-     "y": 640
-    },
-    {
      "height": 32,
      "id": 78,
      "name": "梯子3",

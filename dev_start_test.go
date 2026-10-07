@@ -5,7 +5,7 @@ import "testing"
 func TestNormalizeDevMapPath(t *testing.T) {
 	for in, want := range map[string]string{
 		`C:\Users\a\OneDrive\デスクトップ\rpg\assets\maps\water_b.tmj`: "assets/maps/water_b.tmj",
-		`"D:/work/マップ一式/assets/maps/school_1.tmj"`:               "assets/maps/school_1.tmj",
+		`"D:/work/go-sync-project/assets/maps/school_1.tmj"`:     "assets/maps/school_1.tmj",
 		"water_b.tmj":             "assets/maps/water_b.tmj",
 		"assets/maps/water_b.tmj": "assets/maps/water_b.tmj",
 		"":                        "",
