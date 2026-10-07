@@ -222,7 +222,7 @@ func legacyToClass(obj map[string]any) (string, []any, bool) {
 	}
 	textOrStory := func() {
 		if id, ok := strings.CutPrefix(p["text"], storyTextPrefix); ok {
-			add("会話データ", "string", "会話", id, enumNone)
+			add("会話データ", "string", "", id, "")
 		} else {
 			add("セリフ", "string", "", p["text"], "")
 		}

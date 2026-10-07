@@ -71,7 +71,9 @@ func classEnums() []struct {
 	Values []string
 	Flags  bool
 } {
-	var items, enemies, bgms, stories, bgs []string
+	// 会話データは頻繁に増えるので一覧にせず、名前を直接書く欄にしている
+	// (無い名前は TestMapObjects が止める)。
+	var items, enemies, bgms, bgs []string
 	for _, it := range ItemDatabase {
 		items = append(items, it.Name)
 	}
@@ -81,10 +83,6 @@ func classEnums() []struct {
 	for _, b := range bgmLabels {
 		bgms = append(bgms, b.Label)
 	}
-	for id := range storyDialogues {
-		stories = append(stories, id)
-	}
-	sort.Strings(stories)
 	if names, err := listBattleBgNames(); err == nil {
 		bgs = names
 	}
@@ -101,7 +99,6 @@ func classEnums() []struct {
 		{"敵", enemies, true},
 		{"曲", bgms, false},
 		{"戦闘背景", append([]string{enumDefault}, bgs...), false},
-		{"会話", append([]string{enumNone}, stories...), false},
 		{"ボス", bosses, false},
 		{"向き", append([]string{enumKeep}, dirLabels...), false},
 	}

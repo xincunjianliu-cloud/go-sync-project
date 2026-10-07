@@ -106,7 +106,7 @@ var tiledClasses = []tiledClass{
 	{Name: "会話", UseAs: "object", Color: "#ff8e7cc3", Type: evTypeEvent,
 		Members: append([]classMember{
 			{Name: "セリフ", Type: "string", Default: ""},
-			{Name: "会話データ", Type: "string", Enum: "会話", Default: enumNone},
+			{Name: "会話データ", Type: "string", Default: ""},
 			{Name: "2回目からのセリフ", Type: "string", Default: "", Key: "repeattext"},
 		}, objectiveMembers...),
 		apply: func(v map[string]string, set func(string, string)) {
@@ -154,7 +154,7 @@ var tiledClasses = []tiledClass{
 	{Name: "イベント", UseAs: "object", Color: "#ff674ea7", Type: "trigger",
 		Members: append([]classMember{
 			{Name: "セリフ", Type: "string", Default: ""},
-			{Name: "会話データ", Type: "string", Enum: "会話", Default: enumNone},
+			{Name: "会話データ", Type: "string", Default: ""},
 			{Name: "ボス戦", Type: "string", Enum: "ボス", Default: enumNone},
 			{Name: "歩く道順", Type: "string", Default: "", Key: "route"},
 			{Name: "すぐ始める", Type: "bool", Default: false},
