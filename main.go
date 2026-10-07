@@ -22,6 +22,7 @@ func main() {
 
 	// フォントやタイトル画面の画像はNewGame内でバックグラウンド読み込みが
 	// 始まり、ウィンドウは読み込み中もローディング表示を出しながらすぐ開く。
+	parseDevFlags()
 	g := NewGame()
 
 	if err := ebiten.RunGame(g); err != nil {

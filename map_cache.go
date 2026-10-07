@@ -36,11 +36,13 @@ func loadTiledMap(path string) (TiledMap, error) {
 	if err != nil {
 		return TiledMap{}, fmt.Errorf("マップ解析失敗 %s: %w", path, err)
 	}
+	applyTiledClasses(&tmap, path)
 	tmap.tilesets, err = resolveMapTilesets(path, tmap.Tilesets)
 	if err != nil {
 		return TiledMap{}, fmt.Errorf("マップのタイルセット読み込み失敗 %s: %w", path, err)
 	}
 	tmap.wallGIDs = tilesetWallGIDs(tmap.tilesets)
+	tmap.tileAnims = tilesetAnimations(tmap.tilesets)
 	buildLeverTileIndex(&tmap)
 
 	tiledMapCacheMu.Lock()

@@ -493,6 +493,9 @@ func (g *Game) pumpBootAssets() {
 		}
 
 		g.currentScene = NewTitleScene(g)
+		if *devStartMap != "" {
+			g.startDevMap()
+		}
 		// 曲がまだ届いていなければ、届いてデコードでき次第フェードインする。
 		g.Audio.PlayBGMFadeIn(bgmTitle, 2.0)
 		g.prewarmSE()

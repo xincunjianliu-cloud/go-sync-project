@@ -117,7 +117,7 @@ func (s *FieldScene) drawWorld(screen *ebiten.Image) {
 
 	eventsDrawn, playerDrawn := false, false
 	for i, layer := range s.tileMap.Layers {
-		if layer.Type == "tilelayer" {
+		if layer.Type == "tilelayer" && layer.drawn() {
 			s.drawTileLayer(screen, layer, camX, camY)
 		}
 		if i == eventsLayerIdx {
@@ -178,43 +178,51 @@ func (s *FieldScene) drawEncounterEffect(screen *ebiten.Image) {
 // buildMapTileImages はマップで使われているタイルを、GIDごとにタイルセット
 // 画像から切り出しておく。描画のたびにSubImageを作らずに済む。
 func buildMapTileImages(tmap TiledMap) ([]*ebiten.Image, error) {
+	// 置かれているタイルと、そのアニメーションのコマを全部切り出す。
+	needed := map[int]bool{}
 	maxGID := 0
 	for _, layer := range tmap.Layers {
 		for _, id := range layer.Data {
-			maxGID = max(maxGID, id&^gidFlagMask)
+			gid := id &^ gidFlagMask
+			if gid == 0 || needed[gid] {
+				continue
+			}
+			needed[gid] = true
+			maxGID = max(maxGID, gid)
+			for _, f := range tmap.tileAnims[gid] {
+				needed[f.GID] = true
+				maxGID = max(maxGID, f.GID)
+			}
 		}
 	}
 	tiles := make([]*ebiten.Image, maxGID+1)
 	sheets := map[string]*ebiten.Image{}
-	for _, layer := range tmap.Layers {
-		for _, id := range layer.Data {
-			gid := id &^ gidFlagMask
-			if gid == 0 || tiles[gid] != nil {
-				continue
-			}
-			ts, ok := findTileset(tmap.tilesets, gid)
-			if !ok || ts.imagePath == "" {
-				// どのタイルセットにも属さない番号(テストで検出する)は描かない。
-				continue
-			}
-			sheet, ok := sheets[ts.imagePath]
-			if !ok {
-				img, err := loadTilesetImage(ts.imagePath)
-				if err != nil {
-					return nil, err
-				}
-				sheet = img
-				sheets[ts.imagePath] = img
-			}
-			x0, y0, x1, y1 := ts.tileRect(gid - ts.firstGID)
-			tiles[gid] = sheet.SubImage(image.Rect(x0, y0, x1, y1)).(*ebiten.Image)
+	for gid := range needed {
+		ts, ok := findTileset(tmap.tilesets, gid)
+		if !ok || ts.imagePath == "" {
+			// どのタイルセットにも属さない番号(テストで検出する)は描かない。
+			continue
 		}
+		sheet, ok := sheets[ts.imagePath]
+		if !ok {
+			img, err := loadTilesetImage(ts.imagePath)
+			if err != nil {
+				return nil, err
+			}
+			sheet = img
+			sheets[ts.imagePath] = img
+		}
+		x0, y0, x1, y1 := ts.tileRect(gid - ts.firstGID)
+		tiles[gid] = sheet.SubImage(image.Rect(x0, y0, x1, y1)).(*ebiten.Image)
 	}
 	return tiles, nil
 }
 
 func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX, camY float64) {
 	op := &ebiten.DrawImageOptions{}
+	if a := layer.opacity(); a < 1 {
+		op.ColorScale.ScaleAlpha(a)
+	}
 	leverOnly := isLeverOpenLayer(layer)
 	for i, id := range layer.Data {
 		if id == 0 {
@@ -224,6 +232,9 @@ func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX,
 			continue
 		}
 		gid := id &^ gidFlagMask
+		if frames, ok := s.tileMap.tileAnims[gid]; ok {
+			gid = animFrameGID(frames, int64(s.tileAnimMs))
+		}
 		if gid >= len(s.tileImgs) || s.tileImgs[gid] == nil {
 			continue
 		}

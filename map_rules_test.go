@@ -1,0 +1,410 @@
+//go:build !js
+
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"path"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+// マップの書き間違いのチェック。ゲーム中はエラーにならず「何も起きない」
+// ものを、ここで全部止める(docs/マップオブジェクトプロパティ一覧.md の内容)。
+// ドア・着地点は TestMapWarps、レバーは TestMapLeverObjects が見る。
+
+// ゲームが読む名札の名前。これ以外は書き間違いとして止める。
+var (
+	knownObjectProps = map[string]bool{
+		"type": true, "text": true, "repeattext": true,
+		"objectiveid": true, "objectiveorder": true, "bossid": true,
+		"keys": true, "lever": true, "passable": true, "img": true,
+		"id": true, "oneway": true, "spots": true,
+		"instant": true, "route": true, "maxcount": true,
+		"targetmap": true, "targetpoint": true, "requireboss": true, "dir": true,
+	}
+	knownMapProps      = map[string]bool{"bgm": true, "displayname": true, "autoheal": true, "battlebg": true}
+	knownTileLayerProp = map[string]bool{"leveropen": true}
+	knownObjectTypes   = map[string]bool{"": true, evTypeEvent: true, "trigger": true, "boss": true, "enemy": true, "darkness": true}
+)
+
+const maxBossID = len(Game{}.BossDefeatedFlags)
+
+// tmjRaw は TiledMap に無い、チェックだけに使う項目。
+type tmjRaw struct {
+	Orientation string `json:"orientation"`
+	Infinite    bool   `json:"infinite"`
+	TileWidth   int    `json:"tilewidth"`
+	TileHeight  int    `json:"tileheight"`
+	Layers      []struct {
+		Name    string `json:"name"`
+		Type    string `json:"type"`
+		Objects []struct {
+			ID       int    `json:"id"`
+			Template string `json:"template"`
+			GID      int    `json:"gid"`
+		} `json:"objects"`
+	} `json:"layers"`
+}
+
+func allMapFiles(t *testing.T) []string {
+	t.Helper()
+	paths, err := fs.Glob(embeddedAssets, "assets/maps/*.tmj")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return paths
+}
+
+func ensureStoryDialoguesLoaded() {
+	if len(storyDialogues) == 0 {
+		loadStoryDialogues("assets/dialogues")
+	}
+}
+
+func TestMapSettings(t *testing.T) {
+	for _, mapPath := range allMapFiles(t) {
+		data, err := embeddedAssets.ReadFile(mapPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var raw tmjRaw
+		if err := json.Unmarshal(data, &raw); err != nil {
+			t.Errorf("%s: 読めません(タイルレイヤーの形式は CSV にしてください): %v", mapPath, err)
+			continue
+		}
+		if raw.Orientation != "orthogonal" {
+			t.Errorf("%s: マップの向きは「直交(orthogonal)」にしてください(今: %s)", mapPath, raw.Orientation)
+		}
+		if raw.Infinite {
+			t.Errorf("%s: 無限マップになっています。マップのプロパティで「無限」のチェックを外してください", mapPath)
+		}
+		if raw.TileWidth != 32 || raw.TileHeight != 32 {
+			t.Errorf("%s: タイルの大きさは 32×32 にしてください(今: %d×%d)", mapPath, raw.TileWidth, raw.TileHeight)
+		}
+		for _, l := range raw.Layers {
+			for _, o := range l.Objects {
+				if o.Template != "" {
+					t.Errorf("%s: レイヤー%q のオブジェクト(id%d)がテンプレート(.tx)を使っています。テンプレートは使えません", mapPath, l.Name, o.ID)
+				}
+				if o.GID != 0 {
+					t.Errorf("%s: レイヤー%q のオブジェクト(id%d)はタイルを置くオブジェクトです。ゲームには表示されません。絵はタイルレイヤーに描き、しかけは四角形で置いてください", mapPath, l.Name, o.ID)
+				}
+			}
+		}
+
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range tmap.Properties {
+			name := strings.ToLower(p.Name)
+			if !knownMapProps[name] {
+				t.Errorf("%s: マップの名札 %q はゲームで使われません(綴りの間違い？ 使えるのは bgm / displayname / autoheal / battlebg)", mapPath, p.Name)
+			}
+		}
+		if key, ok := tmap.mapBGMKey(); ok {
+			if _, found := bgmByKey[key]; !found {
+				t.Errorf("%s: bgm=%q という曲はありません", mapPath, key)
+			}
+		}
+		if bg := mapPropString(tmap, "battlebg"); bg != "" {
+			if _, err := fs.Stat(embeddedAssets, "assets/images/battle/bg/"+bg+".png"); err != nil {
+				t.Errorf("%s: battlebg=%q の画像 assets/images/battle/bg/%s.png がありません", mapPath, bg, bg)
+			}
+		}
+		for _, p := range tmap.Properties {
+			if strings.EqualFold(p.Name, "autoheal") {
+				if _, ok := propBool(p.Value); !ok {
+					t.Errorf("%s: autoheal は true か false にしてください(今: %v)", mapPath, p.Value)
+				}
+			}
+		}
+
+		for _, layer := range tmap.Layers {
+			switch {
+			case layer.Type == "tilelayer":
+				for _, p := range layer.Properties {
+					if !knownTileLayerProp[strings.ToLower(p.Name)] {
+						t.Errorf("%s: タイルレイヤー%q の名札 %q はゲームで使われません(使えるのは leveropen)", mapPath, layer.Name, p.Name)
+					}
+				}
+			case layer.Type != "objectgroup":
+			case strings.HasPrefix(layer.Name, "events"), layer.Name == "collision":
+			case layer.Name == "player":
+				if len(layer.Objects) > 0 {
+					t.Errorf("%s: player レイヤーにはオブジェクトを置かないでください(%d個あります。しかけは events レイヤーへ)", mapPath, len(layer.Objects))
+				}
+			default:
+				if len(layer.Objects) > 0 {
+					t.Errorf("%s: オブジェクトレイヤー%q のオブジェクトは動きません。しかけは events で始まる名前のレイヤーに、通れない場所は collision に置いてください", mapPath, layer.Name)
+				}
+			}
+		}
+	}
+}
+
+func mapPropString(tmap TiledMap, name string) string {
+	for _, p := range tmap.Properties {
+		if strings.EqualFold(p.Name, name) {
+			return fmt.Sprintf("%v", p.Value)
+		}
+	}
+	return ""
+}
+
+func TestMapObjects(t *testing.T) {
+	ensureStoryDialoguesLoaded()
+	items := map[string]bool{}
+	for _, it := range ItemDatabase {
+		items[it.ID] = true
+	}
+	enemies := map[string]bool{}
+	for _, e := range EnemyDatabase {
+		enemies[e.Name] = true
+	}
+
+	// 鍵と目的地はマップをまたいで対応するので、先に全部集める。
+	keyChests := map[string]bool{}
+	objectiveIDs := map[string]string{}
+	mapPaths := allMapFiles(t)
+	maps := map[string]TiledMap{}
+	for _, mapPath := range mapPaths {
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		maps[mapPath] = tmap
+		forEachEventObject(tmap, func(obj TiledObject, p map[string]string) {
+			if isKeyChestObj(p) {
+				keyChests[strings.TrimPrefix(p["text"], chestKeyTextPrefix)] = true
+			}
+		})
+	}
+
+	for _, mapPath := range mapPaths {
+		tmap := maps[mapPath]
+		errf := func(obj TiledObject, format string, args ...any) {
+			t.Errorf("%s: オブジェクト(id%d): %s", mapPath, obj.ID, fmt.Sprintf(format, args...))
+		}
+		leverIDs := map[string]int{}
+		blockIDs := map[string]bool{}
+		spotIDs := map[string]bool{}
+		var blockDoors []TiledObject
+
+		forEachEventObject(tmap, func(obj TiledObject, p map[string]string) {
+			for _, prop := range obj.Properties {
+				if !knownObjectProps[strings.ToLower(prop.Name)] {
+					errf(obj, "名札 %q はゲームで使われません(綴りの間違い？)", prop.Name)
+				}
+			}
+			if !knownObjectTypes[p["type"]] {
+				errf(obj, "type=%q という種類はありません(使えるのは event / trigger / boss / enemy / darkness)", p["type"])
+			}
+			for _, name := range []string{"bossid", "requireboss"} {
+				if v, ok := p[name]; ok {
+					if n, ok := propInt(v); !ok || n < 1 || n > maxBossID {
+						errf(obj, "%s は 1〜%d の数字にしてください(今: %q)", name, maxBossID, v)
+					}
+				}
+			}
+			if v, ok := p["dir"]; ok {
+				if n, ok := propInt(v); !ok || n < 0 || n > 3 {
+					errf(obj, "dir は 0(下)・1(左)・2(右)・3(上) のどれかにしてください(今: %q)", v)
+				}
+			}
+			if v, ok := p["objectiveorder"]; ok {
+				if _, ok := propInt(v); !ok {
+					errf(obj, "objectiveorder は数字にしてください(今: %q)", v)
+				}
+			}
+			for _, name := range []string{"instant", "oneway", "passable"} {
+				if v, ok := p[name]; ok {
+					if _, ok := propBool(v); !ok {
+						errf(obj, "%s は true か false にしてください(今: %q)", name, v)
+					}
+				}
+			}
+			if id := p["objectiveid"]; id != "" {
+				if other, dup := objectiveIDs[id]; dup {
+					errf(obj, "objectiveid=%q は %s でも使われています。目的地の名前は全部のマップで重ならないようにしてください", id, other)
+				}
+				objectiveIDs[id] = fmt.Sprintf("%s のid%d", mapPath, obj.ID)
+			}
+
+			text := p["text"]
+			switch p["type"] {
+			case evTypeEvent:
+				switch {
+				case isKeyChestObj(p):
+					if strings.TrimPrefix(text, chestKeyTextPrefix) == "" {
+						errf(obj, "鍵の宝箱に鍵の名前がありません(event_chest_key_鍵の名前)")
+					}
+				case isItemChestObj(p):
+					if id := strings.TrimPrefix(text, chestTextPrefix); id == "" {
+						errf(obj, "宝箱の中身が選ばれていません")
+					} else if !items[id] {
+						errf(obj, "宝箱のアイテム %q がありません(item.go の ItemDatabase の ID と同じにしてください)", id)
+					}
+				case strings.HasPrefix(text, storyTextPrefix):
+					if id := strings.TrimPrefix(text, storyTextPrefix); storyDialogues[id].First.Commands == nil {
+						errf(obj, "会話データ %q がありません(assets/dialogues/story の会話の名前と同じにしてください)", id)
+					}
+				case isLeverControlledWallObj(p):
+					// レバーとのつながりは TestMapLeverObjects が見る。
+				case isWallObj(p):
+					for _, key := range splitKeyNames(p["keys"]) {
+						if !keyChests[key] {
+							errf(obj, "壁の鍵 %q が入った宝箱(event_chest_key_%s)がどのマップにもありません", key, key)
+						}
+					}
+				case isLeverObj(p):
+					if p["id"] == "" {
+						errf(obj, "レバーに id がありません")
+					}
+					leverIDs[p["id"]]++
+				case isBlockObj(p):
+					if p["id"] == "" {
+						errf(obj, "押すブロックに id がありません(id が無いとブロックが出ません)")
+					}
+					blockIDs[p["id"]] = true
+				case isBlockSpotObj(p):
+					if p["id"] == "" {
+						errf(obj, "ブロックを乗せる場所に id がありません")
+					}
+					spotIDs[p["id"]] = true
+				case isBlockDoorObj(p):
+					blockDoors = append(blockDoors, obj)
+				case strings.HasPrefix(text, "event_"):
+					errf(obj, "text=%q は決まった言葉の書き間違いのようです(event_chest_ / event_wall / event_lever / event_block / event_blockspot / event_blockdoor / event_story_)", text)
+				}
+			case "trigger":
+				if err := checkRoute(p["route"]); err != "" {
+					errf(obj, "route=%q: %s", p["route"], err)
+				}
+				if strings.HasPrefix(text, storyTextPrefix) {
+					if id := strings.TrimPrefix(text, storyTextPrefix); storyDialogues[id].First.Commands == nil {
+						errf(obj, "会話データ %q がありません", id)
+					}
+				}
+			case "boss":
+				if _, ok := p["bossid"]; !ok {
+					errf(obj, "ボスに bossid がありません(無いとボスが出ません)")
+				}
+			case "enemy":
+				names := splitKeyNames(text)
+				if len(names) == 0 {
+					errf(obj, "敵が出る場所に敵の名前(text)がありません")
+				}
+				for _, name := range names {
+					if !enemies[name] {
+						errf(obj, "敵 %q がいません(tools/genstats/seed/enemies.csv の Name と同じにしてください)", name)
+					}
+				}
+				if v, ok := p["maxcount"]; ok {
+					if n, ok := propInt(v); !ok || n < 1 || n > 4 {
+						errf(obj, "maxcount は 1〜4 にしてください(今: %q)", v)
+					}
+				}
+			}
+		})
+
+		for id, n := range leverIDs {
+			if n > 1 && id != "" {
+				t.Errorf("%s: レバーの id %q が%d個あります。1つのマップの中では別々の名前にしてください", mapPath, id, n)
+			}
+		}
+		for _, door := range blockDoors {
+			spots := splitKeyNames(objProps(door)["spots"])
+			if len(spots) == 0 {
+				t.Errorf("%s: オブジェクト(id%d): ブロック扉に spots がありません(このままだと開きません)", mapPath, door.ID)
+			}
+			for _, s := range spots {
+				if !spotIDs[s] {
+					t.Errorf("%s: オブジェクト(id%d): ブロック扉の spots にある %q の、乗せる場所(event_blockspot, id=%s)がありません", mapPath, door.ID, s, s)
+				}
+			}
+		}
+		if len(spotIDs) > 0 && len(blockIDs) == 0 {
+			t.Errorf("%s: ブロックを乗せる場所はあるのに、押すブロック(event_block)がありません", mapPath)
+		}
+	}
+}
+
+// collision の四角が、通れるレバー壁(机の橋など)をふさいでいないこと。
+func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
+	for _, mapPath := range allMapFiles(t) {
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var walls []TiledObject
+		forEachEventObject(tmap, func(obj TiledObject, p map[string]string) {
+			if isLeverControlledWallObj(p) && !isLeverWallVisualOnly(p) {
+				walls = append(walls, obj)
+			}
+		})
+		for _, layer := range tmap.Layers {
+			if layer.Name != "collision" {
+				continue
+			}
+			for _, c := range layer.Objects {
+				if c.Width <= 0 || c.Height <= 0 || len(c.Polygon) > 0 {
+					continue
+				}
+				for _, w := range walls {
+					if rectsOverlap(c.X, c.Y, c.X+c.Width, c.Y+c.Height, w.X, w.Y, w.X+w.Width, w.Y+w.Height) {
+						t.Errorf("%s: collision の四角(id%d)が、レバーで通れるようになる壁(id%d)に重なっています。レバーを上げても通れません", mapPath, c.ID, w.ID)
+					}
+				}
+			}
+		}
+	}
+}
+
+func forEachEventObject(tmap TiledMap, fn func(TiledObject, map[string]string)) {
+	for _, layer := range tmap.Layers {
+		if !strings.HasPrefix(layer.Name, "events") {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			fn(obj, objProps(obj))
+		}
+	}
+}
+
+// checkRoute はトリガーの route(例: up120,right64)の書き方を確かめる。
+func checkRoute(route string) string {
+	if route == "" {
+		return ""
+	}
+	for step := range strings.SplitSeq(route, ",") {
+		step = strings.TrimSpace(step)
+		ok := false
+		for _, dir := range []string{"down", "left", "right", "up"} {
+			if dist, found := strings.CutPrefix(step, dir); found {
+				if _, err := strconv.ParseFloat(dist, 64); err == nil {
+					ok = true
+				}
+			}
+		}
+		if !ok {
+			return fmt.Sprintf("%q は書き方が違います。up/down/left/right + 距離(例: up120)をカンマでつないでください", step)
+		}
+	}
+	return ""
+}
+
+// 書き間違いを本当に見つけられるかを、わざと間違えたマップで確かめる。
+func TestMapRuleHelpers(t *testing.T) {
+	if checkRoute("up120,right64") != "" || checkRoute("") != "" {
+		t.Error("正しい route を間違いと判定しました")
+	}
+	if checkRoute("upp120") == "" || checkRoute("up") == "" {
+		t.Error("間違った route を見逃しました")
+	}
+	_ = path.Join
+}

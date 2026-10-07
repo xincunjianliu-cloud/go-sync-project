@@ -1,0 +1,545 @@
+{
+    "automappingRulesFile": "",
+    "commands": [
+        {
+            "arguments": "/c tools\\playmap\\play.bat %mapfile",
+            "command": "cmd",
+            "enabled": true,
+            "name": "このマップで遊ぶ",
+            "saveBeforeExecute": true,
+            "shortcut": "F5",
+            "showOutput": true,
+            "workingDirectory": "%projectpath"
+        }
+    ],
+    "extensionsPath": "extensions",
+    "folders": [
+        "assets/maps",
+        "assets/tilesets"
+    ],
+    "properties": [],
+    "propertyTypes": [
+        {
+            "id": 1,
+            "name": "アイテム",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "(選んでください)",
+                "ポーション",
+                "ハイポーション",
+                "エーテル",
+                "エリクサー",
+                "フェニックスの尾",
+                "万能薬"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "id": 2,
+            "name": "敵",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "スライム1",
+                "スライム2",
+                "スライム3",
+                "ゴブリン1",
+                "ゴブリン2",
+                "ゴブリン3",
+                "オーク1",
+                "オーク2",
+                "オーク3",
+                "コボルト1",
+                "コボルト2",
+                "コボルト3",
+                "リザードマン1",
+                "リザードマン2",
+                "リザードマン3",
+                "ワイルドウルフ1",
+                "ワイルドウルフ2",
+                "ワイルドウルフ3",
+                "ジャイアントバット1",
+                "ジャイアントバット2",
+                "ジャイアントバット3",
+                "マッドプラント1",
+                "マッドプラント2",
+                "マッドプラント3",
+                "ストーンゴーレム1",
+                "ストーンゴーレム2",
+                "ストーンゴーレム3",
+                "スケルトン1",
+                "スケルトン2",
+                "スケルトン3"
+            ],
+            "valuesAsFlags": true
+        },
+        {
+            "id": 3,
+            "name": "曲",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "フィールド1",
+                "フィールド2",
+                "フィールド3",
+                "フィールド4",
+                "タイトル",
+                "戦闘",
+                "ボス戦",
+                "ラスボス戦",
+                "エンディング",
+                "会話・平和",
+                "会話・緊迫",
+                "会話・恐怖",
+                "会話・悲しみ"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "id": 4,
+            "name": "戦闘背景",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "(いつもの)",
+                "school"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "id": 5,
+            "name": "会話",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "(なし)",
+                "example_opening",
+                "example_scene"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "id": 6,
+            "name": "ボス",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "(なし)",
+                "1",
+                "2",
+                "3",
+                "4"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "id": 7,
+            "name": "向き",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "(そのまま)",
+                "下",
+                "左",
+                "右",
+                "上"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ff3c78d8",
+            "drawFill": true,
+            "id": 8,
+            "members": [
+                {
+                    "name": "行き先マップ",
+                    "type": "file",
+                    "value": ""
+                },
+                {
+                    "name": "着地点",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "倒すまで通れないボス",
+                    "propertyType": "ボス",
+                    "type": "string",
+                    "value": "(なし)"
+                }
+            ],
+            "name": "ドア",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff6aa84f",
+            "drawFill": true,
+            "id": 9,
+            "members": [
+                {
+                    "name": "向き",
+                    "propertyType": "向き",
+                    "type": "string",
+                    "value": "(そのまま)"
+                }
+            ],
+            "name": "着地点",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff8e7cc3",
+            "drawFill": true,
+            "id": 10,
+            "members": [
+                {
+                    "name": "セリフ",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "会話データ",
+                    "propertyType": "会話",
+                    "type": "string",
+                    "value": "(なし)"
+                },
+                {
+                    "name": "2回目からのセリフ",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "目的地の名前",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "目的地の順番",
+                    "type": "int",
+                    "value": 0
+                },
+                {
+                    "name": "達成するボス",
+                    "propertyType": "ボス",
+                    "type": "string",
+                    "value": "(なし)"
+                }
+            ],
+            "name": "会話",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffe69138",
+            "drawFill": true,
+            "id": 11,
+            "members": [
+                {
+                    "name": "中身",
+                    "propertyType": "アイテム",
+                    "type": "string",
+                    "value": "(選んでください)"
+                }
+            ],
+            "name": "宝箱",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#fff1c232",
+            "drawFill": true,
+            "id": 12,
+            "members": [
+                {
+                    "name": "鍵の名前",
+                    "type": "string",
+                    "value": ""
+                }
+            ],
+            "name": "鍵の宝箱",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff999999",
+            "drawFill": true,
+            "id": 13,
+            "members": [
+                {
+                    "name": "必要な鍵",
+                    "type": "string",
+                    "value": ""
+                }
+            ],
+            "name": "鍵の壁",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffcc0000",
+            "drawFill": true,
+            "id": 14,
+            "members": [
+                {
+                    "name": "レバーの名前",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "一度きり",
+                    "type": "bool",
+                    "value": false
+                }
+            ],
+            "name": "レバー",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffe06666",
+            "drawFill": true,
+            "id": 15,
+            "members": [
+                {
+                    "name": "レバーの名前",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "見た目だけ",
+                    "type": "bool",
+                    "value": false
+                }
+            ],
+            "name": "レバーの壁",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffb45f06",
+            "drawFill": true,
+            "id": 16,
+            "members": [
+                {
+                    "name": "ブロックの名前",
+                    "type": "string",
+                    "value": ""
+                }
+            ],
+            "name": "ブロック",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#fff6b26b",
+            "drawFill": true,
+            "id": 17,
+            "members": [
+                {
+                    "name": "置き場の名前",
+                    "type": "string",
+                    "value": ""
+                }
+            ],
+            "name": "ブロック置き場",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff783f04",
+            "drawFill": true,
+            "id": 18,
+            "members": [
+                {
+                    "name": "置き場の名前",
+                    "type": "string",
+                    "value": ""
+                }
+            ],
+            "name": "ブロック扉",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff674ea7",
+            "drawFill": true,
+            "id": 19,
+            "members": [
+                {
+                    "name": "セリフ",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "会話データ",
+                    "propertyType": "会話",
+                    "type": "string",
+                    "value": "(なし)"
+                },
+                {
+                    "name": "ボス戦",
+                    "propertyType": "ボス",
+                    "type": "string",
+                    "value": "(なし)"
+                },
+                {
+                    "name": "歩く道順",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "すぐ始める",
+                    "type": "bool",
+                    "value": false
+                },
+                {
+                    "name": "目的地の名前",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "目的地の順番",
+                    "type": "int",
+                    "value": 0
+                }
+            ],
+            "name": "イベント",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff990000",
+            "drawFill": true,
+            "id": 20,
+            "members": [
+                {
+                    "name": "ボス番号",
+                    "propertyType": "ボス",
+                    "type": "string",
+                    "value": "(なし)"
+                },
+                {
+                    "name": "目的地の名前",
+                    "type": "string",
+                    "value": ""
+                }
+            ],
+            "name": "ボス",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#40ff0000",
+            "drawFill": true,
+            "id": 21,
+            "members": [
+                {
+                    "name": "出る敵",
+                    "propertyType": "敵",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "一度に出る最大数",
+                    "type": "int",
+                    "value": 1
+                }
+            ],
+            "name": "敵が出る場所",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#80000000",
+            "drawFill": true,
+            "id": 22,
+            "members": [
+                {
+                    "name": "明るくするレバー",
+                    "type": "string",
+                    "value": ""
+                }
+            ],
+            "name": "暗い場所",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff3d85c6",
+            "drawFill": true,
+            "id": 23,
+            "members": [
+                {
+                    "name": "地名",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "曲",
+                    "propertyType": "曲",
+                    "type": "string",
+                    "value": "フィールド1"
+                },
+                {
+                    "name": "戦闘背景",
+                    "propertyType": "戦闘背景",
+                    "type": "string",
+                    "value": "(いつもの)"
+                },
+                {
+                    "name": "入ると全回復",
+                    "type": "bool",
+                    "value": false
+                }
+            ],
+            "name": "マップ設定",
+            "type": "class",
+            "useAs": [
+                "map"
+            ]
+        },
+        {
+            "color": "#ffe06666",
+            "drawFill": true,
+            "id": 24,
+            "members": [],
+            "name": "レバーで出るレイヤー",
+            "type": "class",
+            "useAs": [
+                "layer"
+            ]
+        }
+    ]
+}

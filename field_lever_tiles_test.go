@@ -38,3 +38,19 @@ func TestLeverOpenTilesFollowLever(t *testing.T) {
 		t.Errorf("レバー%sを上げても机が出ません", lever)
 	}
 }
+
+// Tiledで非表示にしたレイヤーはゲームでも描かない。leveropenレイヤーだけは
+// レバーで出し入れするので、非表示でも描く。
+func TestHiddenLayersAreNotDrawn(t *testing.T) {
+	no, yes := false, true
+	if (TiledLayer{Visible: &no}).drawn() {
+		t.Error("非表示のレイヤーが描かれます")
+	}
+	if !(TiledLayer{Visible: &yes}).drawn() || !(TiledLayer{}).drawn() {
+		t.Error("表示のレイヤーが描かれません")
+	}
+	lever := TiledLayer{Visible: &no, Properties: []TiledProperty{{Name: "leveropen", Value: true}}}
+	if !lever.drawn() {
+		t.Error("非表示のleveropenレイヤーが描かれません")
+	}
+}

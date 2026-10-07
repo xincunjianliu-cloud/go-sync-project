@@ -155,6 +155,16 @@ func TestTilesetFiles(t *testing.T) {
 		if cols != def.Columns || def.TileCount > rows*cols {
 			t.Errorf("%s: 列数%d・タイル数%dが画像(%d列x%d行)と合いません", p, def.Columns, def.TileCount, cols, rows)
 		}
+		for _, tile := range def.Tiles {
+			for _, f := range tile.Animation {
+				if f.TileID < 0 || f.TileID >= def.TileCount {
+					t.Errorf("%s: タイル%d のアニメーションのコマ(タイル%d)がタイルセットの外です", p, tile.ID, f.TileID)
+				}
+				if f.Duration <= 0 {
+					t.Errorf("%s: タイル%d のアニメーションのコマの長さが0です(1ミリ秒以上にしてください)", p, tile.ID)
+				}
+			}
+		}
 	}
 }
 

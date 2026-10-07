@@ -54,6 +54,14 @@ type tilesetDef struct {
 type tiledTileDef struct {
 	ID         int             `json:"id"`
 	Properties []TiledProperty `json:"properties"`
+	// Animation はTiledのタイルアニメーション(タイルセットエディタで作る)。
+	Animation []tileFrame `json:"animation"`
+}
+
+// tileFrame はアニメーションの1コマ。TileIDは同じタイルセットの中の番号。
+type tileFrame struct {
+	TileID   int `json:"tileid" xml:"tileid,attr"`
+	Duration int `json:"duration" xml:"duration,attr"` // ミリ秒
 }
 
 // mapTileset はマップが使うタイルセットを、パスを解決した状態で持つ。
@@ -171,6 +179,7 @@ type tsxTileset struct {
 	Tiles []struct {
 		ID         int           `xml:"id,attr"`
 		Properties []tsxProperty `xml:"properties>property"`
+		Animation  []tileFrame   `xml:"animation>frame"`
 	} `xml:"tile"`
 }
 
@@ -193,7 +202,7 @@ func parseTSX(data []byte) (tilesetDef, error) {
 		Spacing:     x.Spacing,
 	}
 	for _, t := range x.Tiles {
-		td := tiledTileDef{ID: t.ID}
+		td := tiledTileDef{ID: t.ID, Animation: t.Animation}
 		for _, p := range t.Properties {
 			td.Properties = append(td.Properties, TiledProperty{Name: p.Name, Type: p.Type, Value: tsxPropertyValue(p)})
 		}
@@ -214,6 +223,56 @@ func tsxPropertyValue(p tsxProperty) any {
 		}
 	}
 	return p.Value
+}
+
+// animFrame はマップ上でのアニメーションの1コマ(GIDに直したもの)。
+type animFrame struct {
+	GID      int
+	Duration int // ミリ秒
+}
+
+// tilesetAnimations はアニメーションの付いたタイルを、GID→コマの並びで返す。
+// コマの長さが0以下のものは捨てる(Tiledで0にすると止まって見えるだけなので)。
+func tilesetAnimations(tilesets []mapTileset) map[int][]animFrame {
+	var anims map[int][]animFrame
+	for _, ts := range tilesets {
+		for _, t := range ts.def.Tiles {
+			var frames []animFrame
+			for _, f := range t.Animation {
+				if f.Duration > 0 {
+					frames = append(frames, animFrame{GID: ts.firstGID + f.TileID, Duration: f.Duration})
+				}
+			}
+			if len(frames) == 0 {
+				continue
+			}
+			if anims == nil {
+				anims = map[int][]animFrame{}
+			}
+			anims[ts.firstGID+t.ID] = frames
+		}
+	}
+	return anims
+}
+
+// animFrameGID は経過時間(ミリ秒)のときに見せるコマのGIDを返す。
+// マップ全体で同じ時計を使うので、同じアニメーションのタイルはそろって動く。
+func animFrameGID(frames []animFrame, elapsedMs int64) int {
+	total := 0
+	for _, f := range frames {
+		total += f.Duration
+	}
+	if total <= 0 {
+		return frames[0].GID
+	}
+	t := int(elapsedMs % int64(total))
+	for _, f := range frames {
+		if t < f.Duration {
+			return f.GID
+		}
+		t -= f.Duration
+	}
+	return frames[len(frames)-1].GID
 }
 
 // tilesetWallGIDs はカスタムプロパティ wall=true が付いたタイルのGIDを集める。

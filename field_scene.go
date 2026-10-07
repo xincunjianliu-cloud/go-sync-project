@@ -35,12 +35,16 @@ type TiledMap struct {
 	Layers     []TiledLayer    `json:"layers"`
 	Properties []TiledProperty `json:"properties"`
 	Tilesets   []TiledTileset  `json:"tilesets"`
+	// Class はTiledのマップのクラス(マップ設定)。tiled_classes.go 参照。
+	Class string `json:"class"`
 
 	// tilesets はTilesetsを解決したもの(外部タイルセットの読み込み済み)。
 	// wallGIDs は wall=true のプロパティが付いたタイルのGID。どちらも
 	// loadTiledMapが埋める。
 	tilesets []mapTileset
 	wallGIDs map[int]bool
+	// tileAnims はアニメーションの付いたタイル(GID→コマ)。loadTiledMapが埋める。
+	tileAnims map[int][]animFrame
 
 	// leverCellLevers はマスの番号ごとに、そのマスを覆うレバー壁のレバーID
 	// (覆っていなければ空)。leverWallsWithTiles はleveropenレイヤーのタイルが
@@ -116,6 +120,27 @@ type TiledLayer struct {
 	Type       string          `json:"type"`
 	Objects    []TiledObject   `json:"objects"`
 	Properties []TiledProperty `json:"properties"`
+	// Visible/OpacityはTiledの目のアイコンと不透明度。ポインタなのは、
+	// 項目が無いとき(古い形式)に「表示・不透明」として扱うため。
+	Visible *bool    `json:"visible"`
+	Opacity *float64 `json:"opacity"`
+	// Class はレイヤーのクラス(レバーで出るレイヤー)。
+	Class string `json:"class"`
+}
+
+// drawn はTiledで表示になっているタイルレイヤーか。非表示のレイヤーは
+// ゲームでも描かない(当たり判定は残る。kabeレイヤーを非表示にすると
+// 見えない壁になる)。leveropenレイヤーはレバーで出し入れするものなので、
+// Tiledで非表示にしていても描く。
+func (l TiledLayer) drawn() bool {
+	return l.Visible == nil || *l.Visible || isLeverOpenLayer(l)
+}
+
+func (l TiledLayer) opacity() float32 {
+	if l.Opacity == nil {
+		return 1
+	}
+	return float32(*l.Opacity)
 }
 
 type TiledObject struct {
@@ -127,6 +152,9 @@ type TiledObject struct {
 	Name       string          `json:"name"`
 	Polygon    []TiledPoint    `json:"polygon"`
 	Properties []TiledProperty `json:"properties"`
+	// Class はTiledのオブジェクトのクラス(宝箱・ドアなど)。JSONでは"type"に
+	// 入る。読み込み時に従来の名札に読み替える(tiled_classes.go)。
+	Class string `json:"type"`
 }
 
 type TiledPoint struct {
@@ -279,7 +307,9 @@ type FieldScene struct {
 	game    *Game
 	tileMap TiledMap
 	// tileImgs はGID(反転フラグを除く)ごとのタイル画像。使われていないGIDはnil。
-	tileImgs           []*ebiten.Image
+	tileImgs []*ebiten.Image
+	// tileAnimMs はタイルアニメーションの時計(ミリ秒)。
+	tileAnimMs         float64
 	collisions         []CollisionRect
 	collisionPolygons  []CollisionPolygon
 	playerCfg          FieldPlayerConfig

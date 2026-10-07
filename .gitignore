@@ -24,3 +24,6 @@
 /save_*.json
 /save_thumb_*.png
 /settings.json
+
+# Tiledのセッション(開いていたファイルなど。PCごと)
+*.tiled-session

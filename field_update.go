@@ -76,6 +76,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if s == nil {
 		return s
 	}
+	s.tileAnimMs += dt * 1000
 
 	s.applyFieldDebugCheats()
 
