@@ -21,7 +21,7 @@ $zipName = 'マップ一式.zip'
 $syncDirs = @('assets\maps', 'assets\tilesets', 'assets\images\tiles')
 # 相手のPCが最初に展開したときに使えるよう、bat とこのスクリプト、Tiledの
 # プロジェクトファイル(一覧から選ぶクラス・F5で試し遊び)も入れる。
-$guide = 'docs\マップオブジェクトプロパティ一覧.md'
+$guide = 'docs\マップ作りガイド.md'
 $toolFiles = @('マップを送る.bat', 'マップを受け取る.bat', 'tools\mapsync\mapsync.ps1', 'rpg.tiled-project', 'tools\playmap\play.bat', $guide)
 # 受け取るときに取り込むもの(動いている bat とこのスクリプトは置き換えない)。
 function Test-Receivable([string]$entry) {
