@@ -35,19 +35,40 @@ const maxBossID = len(Game{}.BossDefeatedFlags)
 
 // tmjRaw は TiledMap に無い、チェックだけに使う項目。
 type tmjRaw struct {
-	Orientation string `json:"orientation"`
-	Infinite    bool   `json:"infinite"`
-	TileWidth   int    `json:"tilewidth"`
-	TileHeight  int    `json:"tileheight"`
-	Layers      []struct {
-		Name    string `json:"name"`
-		Type    string `json:"type"`
-		Objects []struct {
-			ID       int    `json:"id"`
-			Template string `json:"template"`
-			GID      int    `json:"gid"`
-		} `json:"objects"`
-	} `json:"layers"`
+	Orientation string     `json:"orientation"`
+	Infinite    bool       `json:"infinite"`
+	TileWidth   int        `json:"tilewidth"`
+	TileHeight  int        `json:"tileheight"`
+	Layers      []rawLayer `json:"layers"`
+}
+
+// rawLayer は、ゲームが使わない(無視してしまう)レイヤーの設定を調べるためのもの。
+type rawLayer struct {
+	Name      string     `json:"name"`
+	Type      string     `json:"type"`
+	OffsetX   float64    `json:"offsetx"`
+	OffsetY   float64    `json:"offsety"`
+	ParallaxX *float64   `json:"parallaxx"`
+	ParallaxY *float64   `json:"parallaxy"`
+	TintColor string     `json:"tintcolor"`
+	Layers    []rawLayer `json:"layers"`
+	Objects   []struct {
+		ID       int     `json:"id"`
+		Template string  `json:"template"`
+		GID      int     `json:"gid"`
+		Rotation float64 `json:"rotation"`
+		Ellipse  bool    `json:"ellipse"`
+	} `json:"objects"`
+}
+
+// allRawLayers はグループの中も含めて全部のレイヤーを返す。
+func allRawLayers(layers []rawLayer) []rawLayer {
+	var out []rawLayer
+	for _, l := range layers {
+		out = append(out, l)
+		out = append(out, allRawLayers(l.Layers)...)
+	}
+	return out
 }
 
 func allMapFiles(t *testing.T) []string {
@@ -85,8 +106,26 @@ func TestMapSettings(t *testing.T) {
 		if raw.TileWidth != 32 || raw.TileHeight != 32 {
 			t.Errorf("%s: タイルの大きさは 32×32 にしてください(今: %d×%d)", mapPath, raw.TileWidth, raw.TileHeight)
 		}
-		for _, l := range raw.Layers {
+		for _, l := range allRawLayers(raw.Layers) {
+			if l.Type == "imagelayer" {
+				t.Errorf("%s: 画像レイヤー%q はゲームに表示されません。絵はタイルセットにしてタイルレイヤーに描いてください", mapPath, l.Name)
+			}
+			if l.OffsetX != 0 || l.OffsetY != 0 {
+				t.Errorf("%s: レイヤー%q がずらしてあります(オフセット)。ゲームではずれないので 0 に戻してください", mapPath, l.Name)
+			}
+			if (l.ParallaxX != nil && *l.ParallaxX != 1) || (l.ParallaxY != nil && *l.ParallaxY != 1) {
+				t.Errorf("%s: レイヤー%q に視差(パララックス)が付いています。ゲームでは使えないので 1 に戻してください", mapPath, l.Name)
+			}
+			if l.TintColor != "" {
+				t.Errorf("%s: レイヤー%q に色合い(ティント)が付いています。ゲームでは使えないので外してください", mapPath, l.Name)
+			}
 			for _, o := range l.Objects {
+				if o.Rotation != 0 {
+					t.Errorf("%s: レイヤー%q のオブジェクト(id%d)が回転しています。ゲームでは回転しないので 0 に戻してください", mapPath, l.Name, o.ID)
+				}
+				if o.Ellipse && l.Name == "collision" {
+					t.Errorf("%s: collision の楕円(id%d)は四角として扱われます。四角形か多角形で置いてください", mapPath, o.ID)
+				}
 				if o.Template != "" {
 					t.Errorf("%s: レイヤー%q のオブジェクト(id%d)がテンプレート(.tx)を使っています。テンプレートは使えません", mapPath, l.Name, o.ID)
 				}

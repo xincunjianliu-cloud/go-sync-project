@@ -36,6 +36,7 @@ func loadTiledMap(path string) (TiledMap, error) {
 	if err != nil {
 		return TiledMap{}, fmt.Errorf("マップ解析失敗 %s: %w", path, err)
 	}
+	tmap.Layers = flattenLayerGroups(tmap.Layers)
 	applyTiledClasses(&tmap, path)
 	tmap.tilesets, err = resolveMapTilesets(path, tmap.Tilesets)
 	if err != nil {

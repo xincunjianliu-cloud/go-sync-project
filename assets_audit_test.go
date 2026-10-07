@@ -127,6 +127,15 @@ func TestTilesetFiles(t *testing.T) {
 			t.Errorf("%v", err)
 			continue
 		}
+		// ゲームが使わない(黙って無視する)タイルセットの設定。
+		if raw, err := embeddedAssets.ReadFile(p); err == nil {
+			if bytes.Contains(raw, []byte("<objectgroup")) || bytes.Contains(raw, []byte(`"objectgroup"`)) {
+				t.Errorf("%s: タイルの当たり判定エディタで形が描いてあります。ゲームでは使われないので、通れなくしたいタイルには wall=true を付けてください", p)
+			}
+			if bytes.Contains(raw, []byte("<tileoffset")) || bytes.Contains(raw, []byte(`"tileoffset"`)) {
+				t.Errorf("%s: タイルのずらし(描画オフセット)が設定してあります。ゲームではずれないので 0 に戻してください", p)
+			}
+		}
 		img := resolveRelativeAssetPath(p, def.Image)
 		if !strings.HasPrefix(img, "assets/images/") {
 			t.Errorf("%s: 画像が assets/images/ の外を指しています: %s (先に画像をassets/images/tiles/へコピーしてからTiledで指定してください)", p, def.Image)

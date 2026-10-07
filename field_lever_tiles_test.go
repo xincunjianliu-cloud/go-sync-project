@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // water_bの机レイヤー(leveropen)は、対応するレバーを上げたときだけ出る。
 func TestLeverOpenTilesFollowLever(t *testing.T) {
@@ -52,5 +55,33 @@ func TestHiddenLayersAreNotDrawn(t *testing.T) {
 	lever := TiledLayer{Visible: &no, Properties: []TiledProperty{{Name: "leveropen", Value: true}}}
 	if !lever.drawn() {
 		t.Error("非表示のleveropenレイヤーが描かれません")
+	}
+}
+
+// グループレイヤー(Tiledのフォルダ)の中のレイヤーも、順番どおりに使われる。
+// グループの非表示・不透明度は中のレイヤーに引き継がれる。
+func TestFlattenLayerGroups(t *testing.T) {
+	no := false
+	half := 0.5
+	layers := flattenLayerGroups([]TiledLayer{
+		{Name: "床", Type: "tilelayer"},
+		{Name: "グループ", Type: "group", Opacity: &half, Layers: []TiledLayer{
+			{Name: "events", Type: "objectgroup"},
+			{Name: "中のグループ", Type: "group", Visible: &no, Layers: []TiledLayer{{Name: "影", Type: "tilelayer"}}},
+		}},
+		{Name: "屋根", Type: "tilelayer"},
+	})
+	var names []string
+	for _, l := range layers {
+		names = append(names, l.Name)
+	}
+	if got := strings.Join(names, ","); got != "床,events,影,屋根" {
+		t.Fatalf("並び = %s", got)
+	}
+	if layers[2].drawn() {
+		t.Error("非表示のグループの中のレイヤーが描かれます")
+	}
+	if a := layers[2].opacity(); a != 0.5 {
+		t.Errorf("不透明度 = %v(グループの0.5を引き継ぐはず)", a)
 	}
 }

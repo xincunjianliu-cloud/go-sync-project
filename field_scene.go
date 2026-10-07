@@ -126,6 +126,44 @@ type TiledLayer struct {
 	Opacity *float64 `json:"opacity"`
 	// Class はレイヤーのクラス(レバーで出るレイヤー)。
 	Class string `json:"class"`
+	// Layers はグループレイヤー(Tiledのフォルダ)の中身。読み込み時に
+	// flattenLayerGroups で平らに並べ直すので、ゲームの処理では空。
+	Layers []TiledLayer `json:"layers"`
+}
+
+// flattenLayerGroups はグループレイヤーの中身を、Tiledの重なり順のまま
+// 1列に並べ直す。グループを非表示にすると中も非表示、不透明度は掛け合わせる
+// (Tiledの見た目と同じ)。
+func flattenLayerGroups(layers []TiledLayer) []TiledLayer {
+	hasGroup := false
+	for _, l := range layers {
+		if l.Type == "group" {
+			hasGroup = true
+			break
+		}
+	}
+	if !hasGroup {
+		return layers
+	}
+	var out []TiledLayer
+	for _, l := range layers {
+		if l.Type != "group" {
+			out = append(out, l)
+			continue
+		}
+		for _, child := range flattenLayerGroups(l.Layers) {
+			if l.Visible != nil && !*l.Visible {
+				hidden := false
+				child.Visible = &hidden
+			}
+			if a := l.opacity(); a < 1 {
+				o := float64(a * child.opacity())
+				child.Opacity = &o
+			}
+			out = append(out, child)
+		}
+	}
+	return out
 }
 
 // drawn はTiledで表示になっているタイルレイヤーか。非表示のレイヤーは
