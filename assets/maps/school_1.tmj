@@ -52959,14 +52959,14 @@
      "opacity": 1,
      "properties": [
       {
-       "name": "行き先マップ",
-       "type": "file",
-       "value": "water_b.tmj"
-      },
-      {
        "name": "着地点",
        "type": "string",
        "value": "梯子3"
+      },
+      {
+       "name": "行き先マップ",
+       "type": "file",
+       "value": "water_b.tmj"
       }
      ],
      "rotation": 0,
@@ -82329,7 +82329,7 @@
   }
  ],
  "nextlayerid": 27,
- "nextobjectid": 61,
+ "nextobjectid": 65,
  "orientation": "orthogonal",
  "properties": [
   {
@@ -82362,6 +82362,6 @@
  ],
  "tilewidth": 32,
  "type": "map",
- "version": "1.10",
+ "version": "1.11",
  "width": 120
 }
