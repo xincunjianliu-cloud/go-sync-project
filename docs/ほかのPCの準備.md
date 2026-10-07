@@ -9,7 +9,7 @@
 
 ## 2. Tiled でプロジェクトを開く
 
-1. Tiled を起動
+1. Tiled を起動(版は **1.12 以上**。「ヘルプ」→「Tiledについて」で確かめる。古ければ `mapeditor.org` から入れ直す)
 2. 「**プロジェクト**」→「**Open Project...**」(英語のまま出る)→ 作業フォルダの `rpg.tiled-project`
 3. 左にマップの一覧が出れば成功(次からは自動で開く)
 
@@ -39,14 +39,6 @@
 
 ---
 
-## 準備が済んだら:毎日の流れ
+## 準備が済んだら
 
-**作業を始めるとき**
-1. Tiled を閉じる
-2. GitHub Desktop で **Fetch origin → Pull origin**
-
-**作業が終わったとき**
-1. GitHub Desktop の左下に一言書く
-2. **Commit to main → Push origin**
-
-**同じマップを2台以上で同時に直さない。**
+毎日の作業は `docs\作業の手順.md`、マップの作り方は `docs\マップ作りガイド.md` を見る。
