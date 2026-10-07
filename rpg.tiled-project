@@ -2,12 +2,22 @@
     "automappingRulesFile": "",
     "commands": [
         {
+            "arguments": "/c tools\\playmap\\play.bat -noencounter %mapfile",
+            "command": "cmd",
+            "enabled": true,
+            "name": "このマップで遊ぶ(敵なし)",
+            "saveBeforeExecute": true,
+            "shortcut": "F5",
+            "showOutput": true,
+            "workingDirectory": "%projectpath"
+        },
+        {
             "arguments": "/c tools\\playmap\\play.bat %mapfile",
             "command": "cmd",
             "enabled": true,
-            "name": "このマップで遊ぶ",
+            "name": "このマップで遊ぶ(敵あり)",
             "saveBeforeExecute": true,
-            "shortcut": "F5",
+            "shortcut": "Shift+F5",
             "showOutput": true,
             "workingDirectory": "%projectpath"
         }

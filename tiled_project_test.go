@@ -107,6 +107,21 @@ func classEnums() []struct {
 	}
 }
 
+// playCommand はTiledの「このマップで遊ぶ」コマンド(tools/playmap/play.bat)。
+// extra は play.bat に渡すゲームの追加オプション。
+func playCommand(name, shortcut, extra string) map[string]any {
+	return map[string]any{
+		"name":              name,
+		"command":           "cmd",
+		"arguments":         `/c tools\playmap\play.bat` + extra + ` %mapfile`,
+		"workingDirectory":  "%projectpath",
+		"shortcut":          shortcut,
+		"showOutput":        true,
+		"saveBeforeExecute": true,
+		"enabled":           true,
+	}
+}
+
 // tiledProjectJSON は rpg.tiled-project の中身(JSONにする前の形)。
 func tiledProjectJSON() map[string]any {
 	var types []any
@@ -135,16 +150,10 @@ func tiledProjectJSON() map[string]any {
 	}
 	return map[string]any{
 		"automappingRulesFile": "",
-		"commands": []any{map[string]any{
-			"name":              "このマップで遊ぶ",
-			"command":           "cmd",
-			"arguments":         `/c tools\playmap\play.bat %mapfile`,
-			"workingDirectory":  "%projectpath",
-			"shortcut":          "F5",
-			"showOutput":        true,
-			"saveBeforeExecute": true,
-			"enabled":           true,
-		}},
+		"commands": []any{
+			playCommand("このマップで遊ぶ(敵なし)", "F5", " -noencounter"),
+			playCommand("このマップで遊ぶ(敵あり)", "Shift+F5", ""),
+		},
 		"extensionsPath": "extensions",
 		"folders":        []string{"assets/maps", "assets/tilesets"},
 		"properties":     []any{},

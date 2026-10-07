@@ -747,7 +747,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if moved && actualMovedDist > 0 {
 		if s.safetyDistance > 0 {
 			s.safetyDistance -= encounterMovedDist
-		} else if targetEnemiesStr != "" {
+		} else if targetEnemiesStr != "" && !*devNoEncounter {
 			// 戦闘の画像はロード地点で読み込み済み(scene_prep.go先頭を参照)。
 			s.walkCooldown += encounterMovedDist
 			if s.walkCooldown >= 32.0 {

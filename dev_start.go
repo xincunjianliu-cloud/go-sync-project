@@ -13,9 +13,12 @@ import (
 //
 //	-spawn <着地点の名前>  … 立つ場所(省略時は start_point、無ければ最初の
 //	                          着地点、それも無ければマップの真ん中)
+//	-noencounter          … 歩いていて敵に出会わない(F5。Shift+F5 は出会う)。
+//	                          ボスやイベントの戦闘は起きる
 var (
-	devStartMap   = flag.String("map", "", "このマップから始める(試し遊び用)")
-	devStartSpawn = flag.String("spawn", "", "-map で始めるときの着地点の名前")
+	devStartMap    = flag.String("map", "", "このマップから始める(試し遊び用)")
+	devStartSpawn  = flag.String("spawn", "", "-map で始めるときの着地点の名前")
+	devNoEncounter = flag.Bool("noencounter", false, "歩いていて敵に出会わない(試し遊び用)")
 )
 
 // parseDevFlags はコマンドラインを読み、-map をゲーム内のパス
