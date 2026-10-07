@@ -109,6 +109,18 @@
         },
         {
             "id": 5,
+            "name": "会話",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "(なし)",
+                "example_opening",
+                "example_scene"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "id": 6,
             "name": "ボス",
             "storageType": "string",
             "type": "enum",
@@ -122,7 +134,7 @@
             "valuesAsFlags": false
         },
         {
-            "id": 6,
+            "id": 7,
             "name": "向き",
             "storageType": "string",
             "type": "enum",
@@ -138,7 +150,7 @@
         {
             "color": "#ff3c78d8",
             "drawFill": true,
-            "id": 7,
+            "id": 8,
             "members": [
                 {
                     "name": "行き先マップ",
@@ -166,7 +178,7 @@
         {
             "color": "#ff6aa84f",
             "drawFill": true,
-            "id": 8,
+            "id": 9,
             "members": [
                 {
                     "name": "向き",
@@ -184,7 +196,7 @@
         {
             "color": "#ff8e7cc3",
             "drawFill": true,
-            "id": 9,
+            "id": 10,
             "members": [
                 {
                     "name": "セリフ",
@@ -193,8 +205,9 @@
                 },
                 {
                     "name": "会話データ",
+                    "propertyType": "会話",
                     "type": "string",
-                    "value": ""
+                    "value": "(なし)"
                 },
                 {
                     "name": "2回目からのセリフ",
@@ -227,7 +240,7 @@
         {
             "color": "#ffe69138",
             "drawFill": true,
-            "id": 10,
+            "id": 11,
             "members": [
                 {
                     "name": "中身",
@@ -245,7 +258,7 @@
         {
             "color": "#fff1c232",
             "drawFill": true,
-            "id": 11,
+            "id": 12,
             "members": [
                 {
                     "name": "鍵の名前",
@@ -262,7 +275,7 @@
         {
             "color": "#ff999999",
             "drawFill": true,
-            "id": 12,
+            "id": 13,
             "members": [
                 {
                     "name": "必要な鍵",
@@ -279,7 +292,7 @@
         {
             "color": "#ffcc0000",
             "drawFill": true,
-            "id": 13,
+            "id": 14,
             "members": [
                 {
                     "name": "レバーの名前",
@@ -301,7 +314,7 @@
         {
             "color": "#ffe06666",
             "drawFill": true,
-            "id": 14,
+            "id": 15,
             "members": [
                 {
                     "name": "レバーの名前",
@@ -323,7 +336,7 @@
         {
             "color": "#ffb45f06",
             "drawFill": true,
-            "id": 15,
+            "id": 16,
             "members": [
                 {
                     "name": "ブロックの名前",
@@ -340,7 +353,7 @@
         {
             "color": "#fff6b26b",
             "drawFill": true,
-            "id": 16,
+            "id": 17,
             "members": [
                 {
                     "name": "置き場の名前",
@@ -357,7 +370,7 @@
         {
             "color": "#ff783f04",
             "drawFill": true,
-            "id": 17,
+            "id": 18,
             "members": [
                 {
                     "name": "置き場の名前",
@@ -374,7 +387,7 @@
         {
             "color": "#ff674ea7",
             "drawFill": true,
-            "id": 18,
+            "id": 19,
             "members": [
                 {
                     "name": "セリフ",
@@ -383,8 +396,9 @@
                 },
                 {
                     "name": "会話データ",
+                    "propertyType": "会話",
                     "type": "string",
-                    "value": ""
+                    "value": "(なし)"
                 },
                 {
                     "name": "ボス戦",
@@ -422,7 +436,7 @@
         {
             "color": "#ff990000",
             "drawFill": true,
-            "id": 19,
+            "id": 20,
             "members": [
                 {
                     "name": "ボス番号",
@@ -445,7 +459,7 @@
         {
             "color": "#40ff0000",
             "drawFill": true,
-            "id": 20,
+            "id": 21,
             "members": [
                 {
                     "name": "出る敵",
@@ -468,7 +482,7 @@
         {
             "color": "#80000000",
             "drawFill": true,
-            "id": 21,
+            "id": 22,
             "members": [
                 {
                     "name": "明るくするレバー",
@@ -485,7 +499,7 @@
         {
             "color": "#ff3d85c6",
             "drawFill": true,
-            "id": 22,
+            "id": 23,
             "members": [
                 {
                     "name": "地名",
@@ -519,7 +533,7 @@
         {
             "color": "#ffe06666",
             "drawFill": true,
-            "id": 23,
+            "id": 24,
             "members": [],
             "name": "レバーで出るレイヤー",
             "type": "class",
