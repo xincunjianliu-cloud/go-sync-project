@@ -19,3 +19,8 @@
 
 # Claude Code のローカル設定（個人環境ごとの設定なので共有しない）
 .claude/
+# セーブデータと設定(PCごとの記録なので共有しない)
+/save.json
+/save_*.json
+/save_thumb_*.png
+/settings.json

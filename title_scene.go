@@ -244,6 +244,10 @@ type SaveData struct {
 	SeenSkillUpgradeTutorial bool                  `json:"seen_skill_upgrade_tutorial"`
 	BlockPositions           map[string][2]float64 `json:"block_positions"`
 	UnlockedBlockDoors       map[string]bool       `json:"unlocked_block_doors"`
+
+	// spawnPoint は読み込み後の再開位置をスポーン地点名で指すとき(削除したマップに
+	// いたセーブなど)に入る。空ならPlayerX/PlayerYから再開する。保存はしない。
+	spawnPoint string
 }
 
 func saveFilePath(slot int) string {
@@ -294,6 +298,7 @@ func LoadGame(slot int) (*SaveData, error) {
 		// スキルを技表の順に並べ替える前のセーブは、古い並びの位置で持っている。
 		data.PlayerSkillLv = skillLevelsFromNames(skillLevelsByName(data.PlayerSkillLv, legacySkillOrderOf))
 	}
+	migrateSaveMapPaths(&data)
 	return &data, nil
 }
 
@@ -420,7 +425,7 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
 		s.game.ChangeSceneAtLoadPoint(d.CurrentMap, func() Scene {
-			field, err := NewRoomScene(s.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
+			field, err := NewRoomScene(s.game, d.CurrentMap, d.PlayerX, d.PlayerY, d.spawnPoint, d.PlayerDir)
 			if err != nil {
 				return nil
 			}

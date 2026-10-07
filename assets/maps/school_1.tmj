@@ -894,7 +894,7 @@
                         {
                          "name":"targetmap",
                          "type":"string",
-                         "value":"assets\/maps\/woter_MAP_B.tmj"
+                         "value":"assets\/maps\/water_b.tmj"
                         }, 
                         {
                          "name":"targetpoint",
@@ -1520,50 +1520,23 @@
         {
          "name":"displayname",
          "type":"string",
-         "value":"K"
+         "value":"学校"
         }],
  "renderorder":"right-down",
  "tiledversion":"1.12.1",
  "tileheight":32,
  "tilesets":[
         {
-         "columns":29,
          "firstgid":1,
-         "image":"..\/..\/..\/..\/Downloads\/Tile_set_School_Set (12).png",
-         "imageheight":1152,
-         "imagewidth":928,
-         "margin":0,
-         "name":"Tile_set_School_Set (12)",
-         "spacing":0,
-         "tilecount":1044,
-         "tileheight":32,
-         "tilewidth":32
+         "source":"..\/tilesets\/school.tsx"
         }, 
         {
-         "columns":1,
          "firstgid":1045,
-         "image":"..\/..\/..\/..\/Downloads\/unnamed.png",
-         "imageheight":64,
-         "imagewidth":32,
-         "margin":0,
-         "name":"unnamed",
-         "spacing":0,
-         "tilecount":2,
-         "tileheight":32,
-         "tilewidth":32
+         "source":"..\/tilesets\/water.tsx"
         }, 
         {
-         "columns":1,
          "firstgid":1047,
-         "image":"..\/..\/..\/..\/Downloads\/unnamed (1).png",
-         "imageheight":32,
-         "imagewidth":32,
-         "margin":0,
-         "name":"unnamed (1)",
-         "spacing":0,
-         "tilecount":1,
-         "tileheight":32,
-         "tilewidth":32
+         "source":"..\/tilesets\/desk.tsx"
         }],
  "tilewidth":32,
  "type":"map",

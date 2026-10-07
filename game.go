@@ -76,8 +76,6 @@ type Game struct {
 	EnemyImgs          map[string]*ebiten.Image
 	EnemyIconImgs      map[string]*ebiten.Image
 	EnemyIconLargeImgs map[string]*ebiten.Image
-	Tilesets           map[string]*ebiten.Image
-	TileImg            *ebiten.Image
 	SpriteSheet        *ebiten.Image
 	BossSpriteSheets   [4]*ebiten.Image
 	BossImgs           [4]*ebiten.Image
@@ -394,7 +392,6 @@ func (g *Game) ResetForNewGame() {
 
 func NewGame() *Game {
 	g := &Game{
-		Tilesets:             make(map[string]*ebiten.Image),
 		CharaImgs:            make(map[string]*ebiten.Image),
 		charaSlugs:           buildCharaSlugs(),
 		charaImgMissing:      make(map[string]bool),

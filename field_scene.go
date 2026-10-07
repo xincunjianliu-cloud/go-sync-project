@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -36,13 +35,12 @@ type TiledMap struct {
 	Layers     []TiledLayer    `json:"layers"`
 	Properties []TiledProperty `json:"properties"`
 	Tilesets   []TiledTileset  `json:"tilesets"`
-}
 
-// TiledTileset はTiledが.tmjに埋め込むタイルセット定義のうち、画像パスの
-// 解決に使うフィールドだけを取り出したもの。複数タイルセットの合成には
-// 対応しておらず、常に先頭の1件(Tilesets[0])だけを使用する。
-type TiledTileset struct {
-	Image string `json:"image"`
+	// tilesets はTilesetsを解決したもの(外部タイルセットの読み込み済み)。
+	// wallGIDs は wall=true のプロパティが付いたタイルのGID。どちらも
+	// loadTiledMapが埋める。
+	tilesets []mapTileset
+	wallGIDs map[int]bool
 }
 
 // mapBGMKey はマップ全体のカスタムプロパティ"bgm"の値を返す。
@@ -89,27 +87,11 @@ func (m TiledMap) mapAutoHeal() bool {
 
 var tilesetImageCache = map[string]*ebiten.Image{}
 
-// resolveTilesetImagePath はTiledが.tmjに書き出す、マップファイルからの
-// 相対パス(例: "../images/field/Foo.png")を、assets/maps/を基準にした
-// リポジトリ内の実パスに変換する。
-func resolveTilesetImagePath(image string) string {
-	image = strings.ReplaceAll(image, "\\", "/")
-	return path.Clean(path.Join("assets/maps", image))
-}
-
-// mapTilesetImage は.tmj自身が指すタイルセット画像(Tilesets[0].Image)を
-// 読み込む。新しいマップを追加したり、既存マップのタイルセット画像を
-// 別のPNGに差し替えたりしても、Tiled側でその画像を指定するだけで
-// 自動的に反映される(コード側に画像を個別登録する必要はない)。
-// 同じ画像を複数マップが使い回す場合は2回目以降キャッシュから返す。
-// 起動時のバックグラウンド読み込みで全マップ分を先にキャッシュへ入れておく
-// (assets_deferred.go参照)ので、通常はここで同期デコードは発生しない。
-func mapTilesetImage(tmap TiledMap) (*ebiten.Image, error) {
-	imgPath, ok := mapTilesetImagePath(tmap)
-	if !ok {
-		return nil, fmt.Errorf("マップにタイルセットが設定されていません")
-	}
-
+// loadTilesetImage はタイルセット画像を読み込む。同じ画像を複数マップが
+// 使い回す場合は2回目以降キャッシュから返す。起動時のバックグラウンド
+// 読み込みで全マップ分を先にキャッシュへ入れておく(assets_deferred.go参照)
+// ので、通常はここで同期デコードは発生しない。
+func loadTilesetImage(imgPath string) (*ebiten.Image, error) {
 	if img, ok := tilesetImageCache[imgPath]; ok {
 		return img, nil
 	}
@@ -262,9 +244,10 @@ type CollisionPolygon struct {
 }
 
 type FieldScene struct {
-	game               *Game
-	tileMap            TiledMap
-	mapTileImg         *ebiten.Image
+	game    *Game
+	tileMap TiledMap
+	// tileImgs はGID(反転フラグを除く)ごとのタイル画像。使われていないGIDはnil。
+	tileImgs           []*ebiten.Image
 	collisions         []CollisionRect
 	collisionPolygons  []CollisionPolygon
 	playerCfg          FieldPlayerConfig
@@ -522,13 +505,9 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 		spawnY = 320
 	}
 
-	targetTileImg := game.Tilesets["default"]
-	if len(tmap.Tilesets) > 0 && tmap.Tilesets[0].Image != "" {
-		img, err := mapTilesetImage(tmap)
-		if err != nil {
-			return nil, fmt.Errorf("タイルセット画像の読み込みに失敗しました(%s): %w", mapPath, err)
-		}
-		targetTileImg = img
+	tileImgs, err := buildMapTileImages(tmap)
+	if err != nil {
+		return nil, fmt.Errorf("タイルセット画像の読み込みに失敗しました(%s): %w", mapPath, err)
 	}
 
 	playerCfg, playerSheet, err := LoadFieldPlayerConfig(fieldPlayerConfigPath)
@@ -540,7 +519,7 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	scene := &FieldScene{
 		game:              game,
 		tileMap:           tmap,
-		mapTileImg:        targetTileImg,
+		tileImgs:          tileImgs,
 		playerCfg:         playerCfg,
 		px:                spawnX,
 		py:                spawnY,

@@ -539,7 +539,7 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.UnlockedBlockDoors = d.UnlockedBlockDoors
 
 	m.game.ChangeSceneAtLoadPoint(d.CurrentMap, func() Scene {
-		field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, "", d.PlayerDir)
+		field, err := NewRoomScene(m.game, d.CurrentMap, d.PlayerX, d.PlayerY, d.spawnPoint, d.PlayerDir)
 		if err != nil {
 			// 暗転していた場合はメニュー画面へ戻る。
 			m.game.Audio.PlaySEByKey("error")

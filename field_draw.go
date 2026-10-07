@@ -98,14 +98,6 @@ func (s *FieldScene) drawWorld(screen *ebiten.Image) {
 	camX += s.screenShakeX
 	camY += s.screenShakeY
 
-	tilesetCols := 1
-	if s.tileMap.TileWidth > 0 {
-		tilesetCols = s.mapTileImg.Bounds().Dx() / s.tileMap.TileWidth
-		if tilesetCols <= 0 {
-			tilesetCols = 1
-		}
-	}
-
 	// events/playerレイヤーの位置はTiled側のレイヤー順で決まる。マップ制作者が
 	// レイヤーパネルで並べ替えるだけで、装飾タイルと設置物・プレイヤーの
 	// 前後関係を変更できるようにするため、タイル描画ループの中で
@@ -126,7 +118,7 @@ func (s *FieldScene) drawWorld(screen *ebiten.Image) {
 	eventsDrawn, playerDrawn := false, false
 	for i, layer := range s.tileMap.Layers {
 		if layer.Type == "tilelayer" {
-			s.drawTileLayer(screen, layer, camX, camY, tilesetCols)
+			s.drawTileLayer(screen, layer, camX, camY)
 		}
 		if i == eventsLayerIdx {
 			s.drawMapEvents(screen, camX, camY)
@@ -183,22 +175,82 @@ func (s *FieldScene) drawEncounterEffect(screen *ebiten.Image) {
 	}
 }
 
-func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX, camY float64, tilesetCols int) {
+// buildMapTileImages はマップで使われているタイルを、GIDごとにタイルセット
+// 画像から切り出しておく。描画のたびにSubImageを作らずに済む。
+func buildMapTileImages(tmap TiledMap) ([]*ebiten.Image, error) {
+	maxGID := 0
+	for _, layer := range tmap.Layers {
+		for _, id := range layer.Data {
+			maxGID = max(maxGID, id&^gidFlagMask)
+		}
+	}
+	tiles := make([]*ebiten.Image, maxGID+1)
+	sheets := map[string]*ebiten.Image{}
+	for _, layer := range tmap.Layers {
+		for _, id := range layer.Data {
+			gid := id &^ gidFlagMask
+			if gid == 0 || tiles[gid] != nil {
+				continue
+			}
+			ts, ok := findTileset(tmap.tilesets, gid)
+			if !ok || ts.imagePath == "" {
+				// どのタイルセットにも属さない番号(テストで検出する)は描かない。
+				continue
+			}
+			sheet, ok := sheets[ts.imagePath]
+			if !ok {
+				img, err := loadTilesetImage(ts.imagePath)
+				if err != nil {
+					return nil, err
+				}
+				sheet = img
+				sheets[ts.imagePath] = img
+			}
+			x0, y0, x1, y1 := ts.tileRect(gid - ts.firstGID)
+			tiles[gid] = sheet.SubImage(image.Rect(x0, y0, x1, y1)).(*ebiten.Image)
+		}
+	}
+	return tiles, nil
+}
+
+func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX, camY float64) {
+	op := &ebiten.DrawImageOptions{}
 	for i, id := range layer.Data {
 		if id == 0 {
 			continue
 		}
-		tx := (i % s.tileMap.Width) * s.tileMap.TileWidth
-		ty := (i / s.tileMap.Width) * s.tileMap.TileHeight
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(tx)+camX, float64(ty)+camY)
-		tileID := id - 1
+		gid := id &^ gidFlagMask
+		if gid >= len(s.tileImgs) || s.tileImgs[gid] == nil {
+			continue
+		}
+		tile := s.tileImgs[gid]
+		tw, th := float64(tile.Bounds().Dx()), float64(tile.Bounds().Dy())
+		tx := float64((i % s.tileMap.Width) * s.tileMap.TileWidth)
+		ty := float64((i / s.tileMap.Width) * s.tileMap.TileHeight)
 
-		sx := (tileID % tilesetCols) * s.tileMap.TileWidth
-		sy := (tileID / tilesetCols) * s.tileMap.TileHeight
-		rect := image.Rect(sx, sy, sx+s.tileMap.TileWidth, sy+s.tileMap.TileHeight)
-
-		screen.DrawImage(s.mapTileImg.SubImage(rect).(*ebiten.Image), op)
+		op.GeoM.Reset()
+		if id&(gidFlipH|gidFlipV|gidFlipD) != 0 {
+			// Tiledと同じ順(対角線→左右→上下)で、タイルの中心を軸に反転する。
+			op.GeoM.Translate(-tw/2, -th/2)
+			if id&gidFlipD != 0 {
+				var swap ebiten.GeoM
+				swap.SetElement(0, 0, 0)
+				swap.SetElement(0, 1, 1)
+				swap.SetElement(1, 0, 1)
+				swap.SetElement(1, 1, 0)
+				op.GeoM.Concat(swap)
+			}
+			if id&gidFlipH != 0 {
+				op.GeoM.Scale(-1, 1)
+			}
+			if id&gidFlipV != 0 {
+				op.GeoM.Scale(1, -1)
+			}
+			op.GeoM.Translate(tw/2, th/2)
+		}
+		// マップのマスより大きいタイルは、Tiledと同じくマスの左下にそろえる。
+		op.GeoM.Translate(tx+camX, ty+camY+float64(s.tileMap.TileHeight)-th)
+		screen.DrawImage(tile, op)
 	}
 }
 

@@ -33,7 +33,7 @@ type scenePrep struct {
 	// tier はこの段階(assetTier)までの画像の読み込み完了を待つ。
 	tier assetTier
 	// mapPath はフィールド画面へ切り替えるときの行き先のマップ。そのマップの
-	// タイルセット画像を先にデコードしてtilesetImageCacheへ入れておく。
+	// タイルセット画像(複数あれば全部)を先にデコードしてtilesetImageCacheへ入れておく。
 	mapPath string
 	// loadPoint ならロード地点として扱う。Loadingを出し、mapPathのマップで
 	// 使うBGM(loadPointBGM)と、そのマップにいるボスの画像もそろえる。
@@ -139,7 +139,7 @@ func (g *Game) scenePrepReady(prep scenePrep) bool {
 	if !ok {
 		return ready
 	}
-	if p, ok := mapTilesetImagePath(tmap); ok {
+	for _, p := range mapTilesetImagePaths(tmap) {
 		g.prepareTileset(p, prioUrgent)
 		if g.asyncImagePending[p] {
 			ready = false
@@ -229,7 +229,7 @@ func (g *Game) prepareMap(mapPath string) {
 	if !ok {
 		return
 	}
-	if p, ok := mapTilesetImagePath(tmap); ok {
+	for _, p := range mapTilesetImagePaths(tmap) {
 		g.prepareTileset(p, prioSoon)
 	}
 	if bgm, ok := mapBGMPath(tmap); ok {

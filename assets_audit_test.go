@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"image"
 	"io/fs"
 	"sort"
 	"strings"
@@ -64,23 +66,94 @@ func TestBattleBgsExist(t *testing.T) {
 	}
 }
 
-// どのマップも、タイルセット画像が存在すること(無いとそのマップに入れない)。
-func TestMapTilesetsExist(t *testing.T) {
-	if err := BuildObjectiveAndMapIndex(); err != nil {
+// マップのタイルセットの決まり(tileset.goの冒頭を参照)。
+// マップ一覧に載っていない作りかけのマップも含め、assets/maps の全.tmjを見る。
+func TestMapTilesets(t *testing.T) {
+	mapPaths, err := fs.Glob(embeddedAssets, "assets/maps/*.tmj")
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mapPath := range allMapPaths {
+	for _, mapPath := range mapPaths {
 		tmap, err := loadTiledMap(mapPath)
 		if err != nil {
 			t.Errorf("%s: %v", mapPath, err)
 			continue
 		}
-		p, ok := mapTilesetImagePath(tmap)
-		if !ok {
+		if len(tmap.tilesets) == 0 {
+			t.Errorf("%s: タイルセットが設定されていません", mapPath)
+		}
+		for i, ts := range tmap.tilesets {
+			if ts.source == "" {
+				t.Errorf("%s: タイルセット%q がマップに埋め込まれています。Tiledでassets/tilesets/の外部タイルセット(.tsx)を使ってください", mapPath, ts.def.Name)
+			} else if !strings.HasPrefix(ts.source, "assets/tilesets/") {
+				t.Errorf("%s: タイルセットは assets/tilesets/ に置いてください: %s", mapPath, ts.source)
+			}
+			for _, other := range tmap.tilesets[i+1:] {
+				if ts.firstGID < other.firstGID+other.def.TileCount && other.firstGID < ts.firstGID+ts.def.TileCount {
+					t.Errorf("%s: タイルセット %s と %s の番号(firstgid)が重なっています", mapPath, ts.source, other.source)
+				}
+			}
+		}
+		for _, layer := range tmap.Layers {
+			bad := map[int]int{}
+			for _, id := range layer.Data {
+				if gid := id &^ gidFlagMask; gid != 0 {
+					if _, ok := findTileset(tmap.tilesets, gid); !ok {
+						bad[gid]++
+					}
+				}
+			}
+			for gid, n := range bad {
+				t.Errorf("%s: レイヤー%q のタイル番号%d(%d個)がどのタイルセットにもありません", mapPath, layer.Name, gid, n)
+			}
+		}
+	}
+}
+
+// assets/tilesets の全タイルセットが、assets内の画像を指し、画像の実際の
+// 大きさと.tsxの記述が一致していること。画像の横幅が変わるとタイル番号が
+// ずれて全マップが崩れるので、Tiledで開き直して保存するまでここで止める。
+func TestTilesetFiles(t *testing.T) {
+	paths, err := fs.Glob(embeddedAssets, "assets/tilesets/*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("assets/tilesets にタイルセットがありません")
+	}
+	for _, p := range paths {
+		def, err := loadTilesetDef(p)
+		if err != nil {
+			t.Errorf("%v", err)
 			continue
 		}
-		if _, err := embeddedAssets.ReadFile(p); err != nil {
-			t.Errorf("%s のタイルセット画像がありません: %s", mapPath, p)
+		img := resolveRelativeAssetPath(p, def.Image)
+		if !strings.HasPrefix(img, "assets/images/") {
+			t.Errorf("%s: 画像が assets/images/ の外を指しています: %s (先に画像をassets/images/tiles/へコピーしてからTiledで指定してください)", p, def.Image)
+			continue
+		}
+		data, err := embeddedAssets.ReadFile(img)
+		if err != nil {
+			t.Errorf("%s: 画像がありません: %s", p, img)
+			continue
+		}
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil {
+			t.Errorf("%s: %v", img, err)
+			continue
+		}
+		if cfg.Width != def.ImageWidth || cfg.Height != def.ImageHeight {
+			t.Errorf("%s: 画像 %s の大きさが %dx%d に変わっています(.tsxは%dx%d)。Tiledでタイルセットを開いて保存し直し、タイル番号がずれていないか確かめてください",
+				p, img, cfg.Width, cfg.Height, def.ImageWidth, def.ImageHeight)
+		}
+		if def.TileWidth <= 0 || def.TileHeight <= 0 || def.Columns <= 0 {
+			t.Errorf("%s: タイルの大きさ・列数が不正です", p)
+			continue
+		}
+		rows := (def.ImageHeight - 2*def.Margin + def.Spacing) / (def.TileHeight + def.Spacing)
+		cols := (def.ImageWidth - 2*def.Margin + def.Spacing) / (def.TileWidth + def.Spacing)
+		if cols != def.Columns || def.TileCount > rows*cols {
+			t.Errorf("%s: 列数%d・タイル数%dが画像(%d列x%d行)と合いません", p, def.Columns, def.TileCount, cols, rows)
 		}
 	}
 }
@@ -127,7 +200,7 @@ func TestListUnreferencedImages(t *testing.T) {
 	}
 	for _, mapPath := range allMapPaths {
 		if tmap, err := loadTiledMap(mapPath); err == nil {
-			if p, ok := mapTilesetImagePath(tmap); ok {
+			for _, p := range mapTilesetImagePaths(tmap) {
 				used[p] = true
 			}
 			if key, ok := tmap.mapBattleBgKey(); ok {
@@ -160,5 +233,73 @@ func TestListUnreferencedImages(t *testing.T) {
 	sort.Strings(unused)
 	for _, p := range unused {
 		t.Logf("どこからも読まれていない画像: %s", p)
+	}
+}
+
+// ワープ(targetmapを持つオブジェクト)の行き先のマップがあり、targetpointと
+// 同じ名前の着地点が行き先にあること。また、assets/maps のどのマップも開始
+// マップからワープでたどれること(たどれないマップは目的地案内やドアの
+// 経路探索の対象に入らない)。綴りミスはゲーム中ではエラーにならず
+// 既定の座標に飛ぶだけなので、ここで止める。
+func TestMapWarps(t *testing.T) {
+	mapPaths, err := fs.Glob(embeddedAssets, "assets/maps/*.tmj")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spawnNames := map[string]map[string]bool{}
+	for _, mapPath := range mapPaths {
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			t.Fatalf("%s: %v", mapPath, err)
+		}
+		names := map[string]bool{}
+		for _, layer := range tmap.Layers {
+			if strings.HasPrefix(layer.Name, "events") {
+				for _, obj := range layer.Objects {
+					if obj.Name != "" {
+						names[obj.Name] = true
+					}
+				}
+			}
+		}
+		spawnNames[mapPath] = names
+	}
+	for _, mapPath := range mapPaths {
+		tmap, _ := loadTiledMap(mapPath)
+		for _, layer := range tmap.Layers {
+			if !strings.HasPrefix(layer.Name, "events") {
+				continue
+			}
+			for _, obj := range layer.Objects {
+				p := objProps(obj)
+				target := p["targetmap"]
+				if target == "" {
+					continue
+				}
+				names, ok := spawnNames[target]
+				if !ok {
+					t.Errorf("%s: ワープ(id%d)の行き先 %q のマップがありません", mapPath, obj.ID, target)
+					continue
+				}
+				if point := p["targetpoint"]; point == "" {
+					t.Errorf("%s: ワープ(id%d)に targetpoint がありません", mapPath, obj.ID)
+				} else if !names[point] {
+					t.Errorf("%s: ワープ(id%d)の着地点 %q が %s にありません(着地点オブジェクトの「名前」欄と一致させてください)", mapPath, obj.ID, point, target)
+				}
+			}
+		}
+	}
+
+	if err := BuildObjectiveAndMapIndex(); err != nil {
+		t.Fatal(err)
+	}
+	reachable := map[string]bool{}
+	for _, p := range allMapPaths {
+		reachable[p] = true
+	}
+	for _, mapPath := range mapPaths {
+		if !reachable[mapPath] {
+			t.Errorf("%s: 開始マップ(%s)からワープでたどれません。どこかのマップにこのマップへのワープを置いてください", mapPath, startMapPath)
+		}
 	}
 }

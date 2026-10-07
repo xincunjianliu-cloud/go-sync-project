@@ -130,37 +130,39 @@ func (g *Game) loadHeavyAssetsAsync() {
 }
 
 // mapTilesetAssignments はBuildObjectiveAndMapIndexが見つけた全マップの
-// タイルセット画像を、mapTilesetImageのキャッシュへ先に入れておくための
+// タイルセット画像を、tilesetImageCacheへ先に入れておくための
 // 一覧を返す。これが無いと、初めて入るマップのタイルセット画像を
 // ドア移動やロードの瞬間に同期デコードすることになり、画面が固まる。
 // 最初のマップのものはフィールド段階、それ以外は後回しの段階にする。
-// alreadyに同じパスがある画像(デフォルトのタイルセット)は二重に読まない。
+// alreadyに同じパスがある画像は二重に読まない。
 func mapTilesetAssignments(already []deferredAssetAssign) []deferredAssetAssign {
 	seen := make(map[string]bool, len(already))
 	for _, a := range already {
 		seen[a.path] = true
 	}
 	var out []deferredAssetAssign
-	for _, mapPath := range allMapPaths {
+	// 複数のマップが同じ画像を使うので、最初のマップを先に見てフィールド段階に入れる。
+	for _, mapPath := range append([]string{startMapPath}, allMapPaths...) {
 		tmap, err := loadTiledMap(mapPath)
 		if err != nil {
 			continue
 		}
-		p, ok := mapTilesetImagePath(tmap)
-		if !ok || seen[p] {
-			continue
-		}
-		seen[p] = true
 		tier := assetTierRest
 		if mapPath == startMapPath {
 			tier = assetTierField
 		}
-		out = append(out, deferredAssetAssign{
-			path:     p,
-			tier:     tier,
-			assign:   func(g *Game, img *ebiten.Image) { tilesetImageCache[p] = img },
-			optional: true,
-		})
+		for _, p := range mapTilesetImagePaths(tmap) {
+			if seen[p] {
+				continue
+			}
+			seen[p] = true
+			out = append(out, deferredAssetAssign{
+				path:     p,
+				tier:     tier,
+				assign:   func(g *Game, img *ebiten.Image) { tilesetImageCache[p] = img },
+				optional: true,
+			})
+		}
 	}
 	return out
 }
@@ -239,9 +241,6 @@ func (g *Game) finishHeavyAssets() {
 func (g *Game) onTierReady(tier assetTier) {
 	switch tier {
 	case assetTierField:
-		if g.heavyAssetsErr == nil {
-			g.TileImg = g.Tilesets["default"]
-		}
 		// 「はじめから」で最初に流れる曲。
 		if tmap, err := loadTiledMap(startMapPath); err == nil {
 			p, _ := mapBGMPath(tmap)
@@ -331,14 +330,6 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	}
 
 	// ---- フィールド段階: 歩く・会話・メニュー ----
-
-	// 各マップ自身のタイルセット画像は.tmjの"tilesets"欄からmapTilesetImageが
-	// 都度読み込むため、ここでの事前登録は不要。"default"は、万一マップに
-	// タイルセットが設定されていない場合のフォールバック用に残しておく。
-	add(assetTierField, "assets/images/field/Tile_set_School_Set.png", func(g *Game, img *ebiten.Image) {
-		g.Tilesets["default"] = img
-		tilesetImageCache["assets/images/field/Tile_set_School_Set.png"] = img
-	})
 	add(assetTierField, "assets/images/field/player_walk.png", func(g *Game, img *ebiten.Image) {
 		g.SpriteSheet = img
 		preloadedPlayerSprites["assets/images/field/player_walk.png"] = img

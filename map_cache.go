@@ -36,6 +36,11 @@ func loadTiledMap(path string) (TiledMap, error) {
 	if err != nil {
 		return TiledMap{}, fmt.Errorf("マップ解析失敗 %s: %w", path, err)
 	}
+	tmap.tilesets, err = resolveMapTilesets(path, tmap.Tilesets)
+	if err != nil {
+		return TiledMap{}, fmt.Errorf("マップのタイルセット読み込み失敗 %s: %w", path, err)
+	}
+	tmap.wallGIDs = tilesetWallGIDs(tmap.tilesets)
 
 	tiledMapCacheMu.Lock()
 	tiledMapCache[path] = tmap
@@ -50,12 +55,4 @@ func peekTiledMap(path string) (TiledMap, bool) {
 	defer tiledMapCacheMu.Unlock()
 	m, ok := tiledMapCache[path]
 	return m, ok
-}
-
-// mapTilesetImagePath は.tmjが指すタイルセット画像の実パスを返す。
-func mapTilesetImagePath(tmap TiledMap) (string, bool) {
-	if len(tmap.Tilesets) == 0 || tmap.Tilesets[0].Image == "" {
-		return "", false
-	}
-	return resolveTilesetImagePath(tmap.Tilesets[0].Image), true
 }

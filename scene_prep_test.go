@@ -12,17 +12,19 @@ func TestChangeSceneToMapWaitsForTileset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tilesetPath, ok := mapTilesetImagePath(tmap)
-	if !ok {
+	tilesetPaths := mapTilesetImagePaths(tmap)
+	if len(tilesetPaths) == 0 {
 		t.Fatal("start map has no tileset")
 	}
-	saved, hadSaved := tilesetImageCache[tilesetPath]
-	delete(tilesetImageCache, tilesetPath)
-	t.Cleanup(func() {
-		if hadSaved {
-			tilesetImageCache[tilesetPath] = saved
-		}
-	})
+	for _, p := range tilesetPaths {
+		saved, hadSaved := tilesetImageCache[p]
+		delete(tilesetImageCache, p)
+		t.Cleanup(func() {
+			if hadSaved {
+				tilesetImageCache[p] = saved
+			}
+		})
+	}
 
 	field := &stubScene{"field"}
 	g := newLoadingTestGame(&stubScene{"title"})
@@ -32,7 +34,12 @@ func TestChangeSceneToMapWaitsForTileset(t *testing.T) {
 	built := 0
 	g.ChangeSceneToMap(startMapPath, func() Scene {
 		built++
-		_, builtWithTileset = tilesetImageCache[tilesetPath]
+		builtWithTileset = true
+		for _, p := range tilesetPaths {
+			if _, ok := tilesetImageCache[p]; !ok {
+				builtWithTileset = false
+			}
+		}
 		return field
 	}, 0.1)
 	if built != 0 {

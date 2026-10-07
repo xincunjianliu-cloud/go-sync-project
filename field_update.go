@@ -861,7 +861,10 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 		}
 		index := tileY*s.tileMap.Width + tileX
 		for _, layer := range s.tileMap.Layers {
-			if layer.Name == wallTileLayerName && index >= 0 && index < len(layer.Data) && layer.Data[index] != 0 {
+			if index >= len(layer.Data) || layer.Data[index] == 0 {
+				continue
+			}
+			if layer.Name == wallTileLayerName || s.tileMap.wallGIDs[layer.Data[index]&^gidFlagMask] {
 				return true
 			}
 		}
