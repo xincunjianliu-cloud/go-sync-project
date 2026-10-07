@@ -886,43 +886,20 @@
          "name":"events",
          "objects":[
                 {
-                 "height":32,
-                 "id":19,
-                 "name":"\u68af\u5b50B",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"targetmap",
-                         "type":"string",
-                         "value":"assets\/msps\/woter_MAP_0.tmj"
-                        }, 
-                        {
-                         "name":"targetpoint",
-                         "type":"string",
-                         "value":"\u68af\u5b50A"
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":32,
-                 "x":224,
-                 "y":576
-                }, 
-                {
                  "height":64,
                  "id":20,
-                 "name":"\u68af\u5b50C",
+                 "name":"",
                  "opacity":1,
                  "properties":[
                         {
                          "name":"targetmap",
                          "type":"string",
-                         "value":"assets\/msps\/woter_MAP_B.tmj"
+                         "value":"assets\/maps\/woter_MAP_B.tmj"
                         }, 
                         {
                          "name":"targetpoint",
                          "type":"string",
-                         "value":"\u68af\u5b50D"
+                         "value":"\u68af\u5b503"
                         }],
                  "rotation":0,
                  "type":"",
@@ -991,7 +968,7 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"inspect"
+                         "value":"event"
                         }],
                  "rotation":0,
                  "type":"",
@@ -1487,26 +1464,8 @@
                 }, 
                 {
                  "height":32,
-                 "id":58,
-                 "name":"\u68af\u5b50A",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"dir",
-                         "type":"int",
-                         "value":0
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":32,
-                 "x":224,
-                 "y":608
-                }, 
-                {
-                 "height":32,
                  "id":59,
-                 "name":"\u68af\u5b50D",
+                 "name":"\u68af\u5b502",
                  "opacity":1,
                  "properties":[
                         {
@@ -1515,7 +1474,7 @@
                          "value":1
                         }],
                  "rotation":0,
-                 "type":"\u68af\u5b50B",
+                 "type":"",
                  "visible":true,
                  "width":32,
                  "x":3648,
