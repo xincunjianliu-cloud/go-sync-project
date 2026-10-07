@@ -41,6 +41,13 @@ type TiledMap struct {
 	// loadTiledMapが埋める。
 	tilesets []mapTileset
 	wallGIDs map[int]bool
+
+	// leverCellLevers はマスの番号ごとに、そのマスを覆うレバー壁のレバーID
+	// (覆っていなければ空)。leverWallsWithTiles はleveropenレイヤーのタイルが
+	// 置かれたレバー壁(オブジェクトID)。どちらもleveropenレイヤーがある
+	// マップでだけloadTiledMapが埋める(field_lever_tiles.go参照)。
+	leverCellLevers     []string
+	leverWallsWithTiles map[int]bool
 }
 
 // mapBGMKey はマップ全体のカスタムプロパティ"bgm"の値を返す。
@@ -77,9 +84,8 @@ func (m TiledMap) mapDisplayName() (string, bool) {
 func (m TiledMap) mapAutoHeal() bool {
 	for _, p := range m.Properties {
 		if strings.EqualFold(p.Name, "autoheal") {
-			if b, ok := p.Value.(bool); ok {
-				return b
-			}
+			b, _ := propBool(p.Value)
+			return b
 		}
 	}
 	return false
@@ -105,10 +111,11 @@ func loadTilesetImage(imgPath string) (*ebiten.Image, error) {
 }
 
 type TiledLayer struct {
-	Data    []int         `json:"data"`
-	Name    string        `json:"name"`
-	Type    string        `json:"type"`
-	Objects []TiledObject `json:"objects"`
+	Data       []int           `json:"data"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Objects    []TiledObject   `json:"objects"`
+	Properties []TiledProperty `json:"properties"`
 }
 
 type TiledObject struct {
@@ -141,25 +148,50 @@ func objProps(obj TiledObject) map[string]string {
 	return m
 }
 
+// objPropInt と objPropBool は、Tiledで種類をstringのまま数字や"true"を
+// 書いた場合も受け付ける(名札を足したときの既定がstringのため)。
 func objPropInt(obj TiledObject, name string) (int, bool) {
 	name = strings.ToLower(name)
 	for _, p := range obj.Properties {
 		if strings.ToLower(p.Name) == name {
-			if v, ok := p.Value.(float64); ok {
-				return int(v), true
-			}
+			return propInt(p.Value)
 		}
 	}
 	return 0, false
+}
+
+func propInt(v any) (int, bool) {
+	switch v := v.(type) {
+	case float64:
+		return int(v), true
+	case string:
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func propBool(v any) (bool, bool) {
+	switch v := v.(type) {
+	case bool:
+		return v, true
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "true":
+			return true, true
+		case "false":
+			return false, true
+		}
+	}
+	return false, false
 }
 
 func objPropBool(obj TiledObject, name string) (bool, bool) {
 	name = strings.ToLower(name)
 	for _, p := range obj.Properties {
 		if strings.ToLower(p.Name) == name {
-			if v, ok := p.Value.(bool); ok {
-				return v, true
-			}
+			return propBool(p.Value)
 		}
 	}
 	return false, false
@@ -392,6 +424,16 @@ type FieldScene struct {
 }
 
 func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpawnName string, startDir int) (*FieldScene, error) {
+	return newRoomScene(game, mapPath, startX, startY, targetSpawnName, startDir, false)
+}
+
+// NewRoomSceneAfterBattle は戦闘からフィールドへ戻るときに使う。マップに
+// 「入った」わけではないので、地名の表示と自動回復(autoheal)はしない。
+func NewRoomSceneAfterBattle(game *Game, mapPath string, x, y float64, dir int) (*FieldScene, error) {
+	return newRoomScene(game, mapPath, x, y, "", dir, true)
+}
+
+func newRoomScene(game *Game, mapPath string, startX, startY float64, targetSpawnName string, startDir int, fromBattle bool) (*FieldScene, error) {
 	tmap, err := loadTiledMap(mapPath)
 	if err != nil {
 		return nil, err
@@ -550,12 +592,12 @@ func NewRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	scene.mapBGM, _ = mapBGMPath(tmap)
 	game.prefetchAroundMap(mapPath, tmap)
 
-	if name, ok := tmap.mapDisplayName(); ok {
+	if name, ok := tmap.mapDisplayName(); ok && !fromBattle {
 		scene.mapNameBannerActive = true
 		scene.mapNameBannerText = name
 	}
 
-	if tmap.mapAutoHeal() {
+	if tmap.mapAutoHeal() && !fromBattle {
 		scene.healParty()
 		if game.SeenAutoHealMapIntro == nil {
 			game.SeenAutoHealMapIntro = make(map[string]bool)

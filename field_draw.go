@@ -215,8 +215,12 @@ func buildMapTileImages(tmap TiledMap) ([]*ebiten.Image, error) {
 
 func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX, camY float64) {
 	op := &ebiten.DrawImageOptions{}
+	leverOnly := isLeverOpenLayer(layer)
 	for i, id := range layer.Data {
 		if id == 0 {
+			continue
+		}
+		if leverOnly && !s.leverTileShown(i) {
 			continue
 		}
 		gid := id &^ gidFlagMask
@@ -402,6 +406,10 @@ func (s *FieldScene) drawLeverWalls(screen *ebiten.Image, camX, camY float64) {
 				continue
 			}
 			if !s.wallIsOpen(obj) {
+				continue
+			}
+			// leveropenレイヤーのタイルを置いた壁は、そのタイルが見た目になる。
+			if s.tileMap.leverWallsWithTiles[obj.ID] {
 				continue
 			}
 

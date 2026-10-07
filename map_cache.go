@@ -41,6 +41,7 @@ func loadTiledMap(path string) (TiledMap, error) {
 		return TiledMap{}, fmt.Errorf("マップのタイルセット読み込み失敗 %s: %w", path, err)
 	}
 	tmap.wallGIDs = tilesetWallGIDs(tmap.tilesets)
+	buildLeverTileIndex(&tmap)
 
 	tiledMapCacheMu.Lock()
 	tiledMapCache[path] = tmap

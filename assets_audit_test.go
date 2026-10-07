@@ -303,3 +303,63 @@ func TestMapWarps(t *testing.T) {
 		}
 	}
 }
+
+// leverプロパティを持つオブジェクトは、壁(type=event, text=event_wall)か
+// 暗闇(type=darkness)でないとゲームに無視される。参照するレバーも同じマップに
+// あること。leveropenレイヤーのタイルはレバー壁の範囲に置くこと(範囲外は
+// 一生表示されない)。どれもゲーム中はエラーにならず何も起きないだけなので、
+// ここで止める。
+func TestMapLeverObjects(t *testing.T) {
+	mapPaths, err := fs.Glob(embeddedAssets, "assets/maps/*.tmj")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mapPath := range mapPaths {
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			t.Fatalf("%s: %v", mapPath, err)
+		}
+		levers := map[string]bool{}
+		for _, layer := range tmap.Layers {
+			if strings.HasPrefix(layer.Name, "events") {
+				for _, obj := range layer.Objects {
+					if p := objProps(obj); isLeverObj(p) {
+						levers[p["id"]] = true
+					}
+				}
+			}
+		}
+		for _, layer := range tmap.Layers {
+			if !strings.HasPrefix(layer.Name, "events") {
+				continue
+			}
+			for _, obj := range layer.Objects {
+				p := objProps(obj)
+				lever := p["lever"]
+				if lever == "" {
+					continue
+				}
+				if !isWallObj(p) && p["type"] != "darkness" {
+					t.Errorf("%s: オブジェクト(id%d)に lever がありますが、ほかの種類(type/text)になっているため壁になりません。レバー壁なら type と text を消すか type=event, text=event_wall にしてください", mapPath, obj.ID)
+				}
+				if !levers[lever] {
+					t.Errorf("%s: オブジェクト(id%d)の lever=%q のレバー(text=event_lever, id=%q)がこのマップにありません", mapPath, obj.ID, lever, lever)
+				}
+			}
+		}
+		for _, layer := range tmap.Layers {
+			if layer.Type != "tilelayer" || !isLeverOpenLayer(layer) {
+				continue
+			}
+			n := 0
+			for i, id := range layer.Data {
+				if id != 0 && (i >= len(tmap.leverCellLevers) || tmap.leverCellLevers[i] == "") {
+					n++
+				}
+			}
+			if n > 0 {
+				t.Errorf("%s: leveropenレイヤー%q のタイル%d個がレバー壁の範囲の外にあり、表示されません", mapPath, layer.Name, n)
+			}
+		}
+	}
+}

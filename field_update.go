@@ -864,6 +864,9 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 			if index >= len(layer.Data) || layer.Data[index] == 0 {
 				continue
 			}
+			if isLeverOpenLayer(layer) && !s.leverTileShown(index) {
+				continue
+			}
 			if layer.Name == wallTileLayerName || s.tileMap.wallGIDs[layer.Data[index]&^gidFlagMask] {
 				return true
 			}

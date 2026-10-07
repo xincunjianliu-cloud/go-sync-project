@@ -448,7 +448,7 @@ func (s *BattleScene) restoreDefeatedPartyHP() {
 
 func (s *BattleScene) exitBattleToField() {
 	s.restoreDefeatedPartyHP()
-	field, _ := NewRoomScene(s.game, s.originMap, s.originX, s.originY, "", s.originDir)
+	field, _ := NewRoomSceneAfterBattle(s.game, s.originMap, s.originX, s.originY, s.originDir)
 	if after, ok := strings.CutPrefix(s.enemyType, "boss_"); ok {
 		numStr := after
 		if bossNum, err := strconv.Atoi(numStr); err == nil {

@@ -222,7 +222,7 @@ func tilesetWallGIDs(tilesets []mapTileset) map[int]bool {
 	for _, ts := range tilesets {
 		for _, t := range ts.def.Tiles {
 			for _, p := range t.Properties {
-				if b, ok := p.Value.(bool); ok && b && strings.EqualFold(p.Name, "wall") {
+				if b, _ := propBool(p.Value); b && strings.EqualFold(p.Name, "wall") {
 					if walls == nil {
 						walls = map[int]bool{}
 					}

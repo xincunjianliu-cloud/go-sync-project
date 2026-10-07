@@ -602,7 +602,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 		if s.battleLogTimer <= 0 {
 			if s.fleeSucceeded {
 				s.restoreDefeatedPartyHP()
-				field, _ := NewRoomScene(s.game, s.originMap, s.originX, s.originY, "", s.originDir)
+				field, _ := NewRoomSceneAfterBattle(s.game, s.originMap, s.originX, s.originY, s.originDir)
 				return field
 			}
 			s.battlePhase = phasePlayerMenu

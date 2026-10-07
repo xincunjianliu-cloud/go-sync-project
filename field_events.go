@@ -54,7 +54,12 @@ func isChestObj(p map[string]string) bool {
 	return isKeyChestObj(p) || isItemChestObj(p)
 }
 
+// isWallObj は壁オブジェクトか。type=event, text=event_wall のほか、
+// type/textを書かずにleverだけを付けたオブジェクトもレバー壁として扱う。
 func isWallObj(p map[string]string) bool {
+	if p["type"] == "" && p["text"] == "" && p["lever"] != "" {
+		return true
+	}
 	return p["type"] == evTypeEvent && p["text"] == evTextWall
 }
 
