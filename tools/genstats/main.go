@@ -7,7 +7,7 @@
 //
 //	go run ./tools/genstats
 //
-// The enemy and boss sheets have a 17th column, Skills, listing skill
+// The enemy and boss sheets may have a 17th column, Skills, listing skill
 // IDs from enemySkillTable (enemy_skill.go), e.g. "tackle,bite". Unknown
 // IDs stop generation with an error.
 package main
@@ -71,10 +71,9 @@ type bossRow struct {
 	Skills                      []string
 }
 
-// skillsColumn is the required 17th column (Skills) of the enemy and boss
-// sheets: skill IDs from enemySkillTable, e.g. "tackle,bite". A sheet whose
-// Skills cells are all empty stops generation (it would wipe every skill); an
-// individual empty cell (or a short row) means "normal attack only".
+// skillsColumn is the optional 17th column (Skills) of the enemy and boss
+// sheets: skill IDs from enemySkillTable, e.g. "tackle,bite". Rows with only
+// 16 columns, or an empty cell, mean "normal attack only".
 const skillsColumn = 16
 
 // skillTablePath is where enemySkillTable lives; genstats reads its keys so
@@ -120,10 +119,9 @@ func parseSkills(row []string, n int, known map[string]bool) ([]string, error) {
 	return fields, nil
 }
 
-// hasAnySkill reports whether at least one row has a non-empty Skills cell.
-func hasAnySkill(rows [][]string) bool {
+func hasSkillsColumn(rows [][]string) bool {
 	for _, row := range rows {
-		if len(row) > skillsColumn && strings.TrimSpace(row[skillsColumn]) != "" {
+		if len(row) > skillsColumn {
 			return true
 		}
 	}
@@ -189,12 +187,11 @@ func run() error {
 		return fmt.Errorf("bosses: %w", err)
 	}
 
-	// Skills が1つも書かれていないまま取り込むと全員の技が消えるので、書き出す前に止める。
-	if !hasAnySkill(enemiesCSV) {
-		return fmt.Errorf("enemies: 敵のシートの Skills 列(17列目)が全部空です。このまま取り込むと敵の技がすべて消えるので止めました")
+	if !hasSkillsColumn(enemiesCSV) {
+		fmt.Fprintln(os.Stderr, "genstats: warning: enemies sheet has no Skills column (17th); every enemy will use only its normal attack")
 	}
-	if !hasAnySkill(bossesCSV) {
-		return fmt.Errorf("bosses: ボスのシートの Skills 列(17列目)が全部空です。このまま取り込むとボスの技がすべて消えるので止めました")
+	if !hasSkillsColumn(bossesCSV) {
+		fmt.Fprintln(os.Stderr, "genstats: warning: bosses sheet has no Skills column (17th); every boss will use only its normal attack")
 	}
 
 	src, err := generate(playerStats, playerExp, enemies, bosses)
