@@ -1342,7 +1342,7 @@
          "name":"\u30bf\u30a4\u30eb\u30ec\u30a4\u30e4\u30fc15",
          "opacity":1,
          "type":"tilelayer",
-         "visible":true,
+         "visible":false,
          "width":120,
          "x":0,
          "y":0
