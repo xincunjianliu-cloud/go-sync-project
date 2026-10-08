@@ -541,7 +541,7 @@
             ]
         },
         {
-            "color": "#ffe06666",
+            "color": "#fff4cccc",
             "drawFill": true,
             "id": 24,
             "members": [],
@@ -563,7 +563,7 @@
             ]
         },
         {
-            "color": "#ff674ea7",
+            "color": "#ff45818e",
             "drawFill": true,
             "id": 26,
             "members": [],
@@ -574,7 +574,7 @@
             ]
         },
         {
-            "color": "#ff3d85c6",
+            "color": "#ffa64d79",
             "drawFill": true,
             "id": 27,
             "members": [],

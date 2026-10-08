@@ -6,8 +6,10 @@ import (
 
 var wallKeyGroupsCache map[string][]string
 
+// splitKeyNames はカンマでつないだ名前を分ける。全角の「、」「，」でもよい。
 func splitKeyNames(raw string) []string {
 	var names []string
+	raw = strings.NewReplacer("、", ",", "，", ",").Replace(raw)
 	for part := range strings.SplitSeq(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part != "" {

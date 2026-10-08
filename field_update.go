@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/rand"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -688,28 +687,9 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 						s.pendingCutsceneRoute = []MoveStep{}
 
-						if routeStr != "" && routeStr != "<nil>" {
-							steps := strings.SplitSeq(routeStr, ",")
-							for step := range steps {
-								step = strings.TrimSpace(step)
-								var dir int
-								var distStr string
-								if strings.HasPrefix(step, "down") {
-									dir = 0
-									distStr = strings.TrimPrefix(step, "down")
-								} else if strings.HasPrefix(step, "left") {
-									dir = 1
-									distStr = strings.TrimPrefix(step, "left")
-								} else if strings.HasPrefix(step, "right") {
-									dir = 2
-									distStr = strings.TrimPrefix(step, "right")
-								} else if strings.HasPrefix(step, "up") {
-									dir = 3
-									distStr = strings.TrimPrefix(step, "up")
-								}
-								dist, _ := strconv.ParseFloat(distStr, 64)
-								s.pendingCutsceneRoute = append(s.pendingCutsceneRoute, MoveStep{Dir: dir, Dist: dist})
-							}
+						steps, _ := parseRoute(strings.TrimSuffix(routeStr, "<nil>"))
+						if len(steps) > 0 {
+							s.pendingCutsceneRoute = append(s.pendingCutsceneRoute, steps...)
 						} else {
 							s.pendingCutsceneRoute = append(s.pendingCutsceneRoute, MoveStep{Dir: s.dir, Dist: 0})
 						}

@@ -213,7 +213,7 @@ var tiledClasses = []tiledClass{
 				set("startmap", "true")
 			}
 		}},
-	{Name: "レバーで出るレイヤー", UseAs: "layer", Color: "#ffe06666",
+	{Name: "レバーで出るレイヤー", UseAs: "layer", Color: "#fff4cccc",
 		apply: func(v map[string]string, set func(string, string)) {
 			set("leveropen", "true")
 		}},
@@ -223,12 +223,12 @@ var tiledClasses = []tiledClass{
 			set("blocking", "true")
 		}},
 	// 宝箱・ドアなどのしかけを置くオブジェクトレイヤー。
-	{Name: eventsLayerClass, UseAs: "layer", Color: "#ff674ea7",
+	{Name: eventsLayerClass, UseAs: "layer", Color: "#ff45818e",
 		apply: func(v map[string]string, set func(string, string)) {
 			set("eventlayer", "true")
 		}},
 	// 主人公を描く重なり順の位置。何も置かない。
-	{Name: playerLayerClass, UseAs: "layer", Color: "#ff3d85c6",
+	{Name: playerLayerClass, UseAs: "layer", Color: "#ffa64d79",
 		apply: func(v map[string]string, set func(string, string)) {
 			set("playerlayer", "true")
 		}},

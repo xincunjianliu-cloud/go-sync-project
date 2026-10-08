@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"strings"
 )
 
@@ -70,7 +71,20 @@ func devSpawn(tmap TiledMap, requested string) (spawnName string, x, y float64) 
 }
 
 // startDevMap はタイトル画面の代わりに -map のマップから始める。
+// マップにまちがいがあれば、先に一覧を見せる(map_check_scene.go)。
 func (g *Game) startDevMap() {
+	issues := devMapIssues()
+	if len(issues) == 0 {
+		g.startDevMapNow()
+		return
+	}
+	for _, is := range issues {
+		fmt.Println("まちがい:", is)
+	}
+	g.currentScene = newMapCheckScene(g, *devStartMap, issues, g.startDevMapNow)
+}
+
+func (g *Game) startDevMapNow() {
 	mapPath := *devStartMap
 	tmap, err := loadTiledMap(mapPath)
 	if err != nil {

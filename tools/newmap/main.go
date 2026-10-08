@@ -5,10 +5,10 @@
 //
 // 中身:
 //   - タイルセット: assets/tilesets の .tsx を全部付ける
-//   - レイヤー(下から): 床 / 壁 / しかけ / 主人公の高さ / 主人公より上 / 通れない四角
+//   - レイヤー(下から): 床 / 壁(通れない) / しかけ / ━━ 主人公 ━━ / 主人公より上 / 見えない壁
 //     (床と主人公より上以外は、働きに合ったクラスを付けてある)
 //   - マップのクラスは「マップ設定」(地名などはTiledで書く)
-//   - events に着地点 start_point を1つ(真ん中)。すぐF5で試せる
+//   - しかけレイヤーに着地点 start_point を1つ(真ん中)。すぐF5で試せる
 //
 // 既にある名前のマップは上書きしない。
 package main
@@ -146,11 +146,11 @@ func newMap(w, h int, tilesets []map[string]any) map[string]any {
 		"infinite":         false,
 		"layers": []any{
 			tileLayer(1, "床"),
-			withClass(tileLayer(2, "壁"), "通れないレイヤー"),
+			withClass(tileLayer(2, "壁(通れない)"), "通れないレイヤー"),
 			withClass(objectLayer(3, "しかけ", []any{start}), "しかけレイヤー"),
-			withClass(objectLayer(4, "主人公の高さ", []any{}), "主人公の高さ"),
+			withClass(objectLayer(4, "━━ 主人公 ━━", []any{}), "主人公の高さ"),
 			tileLayer(5, "主人公より上"),
-			withClass(objectLayer(6, "通れない四角", []any{}), "通れないレイヤー"),
+			withClass(objectLayer(6, "見えない壁", []any{}), "通れないレイヤー"),
 		},
 		"nextlayerid":  7,
 		"nextobjectid": 2,

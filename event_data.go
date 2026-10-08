@@ -163,19 +163,27 @@ type storyDialogueFileJSON struct {
 // 一覧取得ができない(静的ファイルとしてfetchするだけ)ため、ネイティブ版と
 // 挙動を揃えるためにあえてこの一覧ファイルを使っている。
 func loadStoryDialogues(dir string) {
+	for id, entry := range readStoryDialogues(dir) {
+		storyDialogues[id] = entry
+	}
+}
+
+// readStoryDialogues は会話ファイルを読んで、新しい一覧で返す(storyDialogues は変えない)。
+func readStoryDialogues(dir string) map[string]storyDialogueEntry {
+	out := map[string]storyDialogueEntry{}
 	storyDir := path.Join(dir, "story")
 	indexPath := path.Join(storyDir, "_index.json")
 
 	indexData, err := loadAssetBytesCached(indexPath)
 	if err != nil {
 		log.Printf("会話ファイル一覧の読み込み失敗 %s: %v", indexPath, err)
-		return
+		return out
 	}
 
 	var files []string
 	if err := json.Unmarshal(indexData, &files); err != nil {
 		log.Printf("会話ファイル一覧の構文エラー %s: %v", indexPath, err)
-		return
+		return out
 	}
 
 	filePaths := make([]string, len(files))
@@ -198,15 +206,16 @@ func loadStoryDialogues(dir string) {
 		}
 
 		for id, entry := range fileJSON {
-			if _, dup := storyDialogues[id]; dup {
+			if _, dup := out[id]; dup {
 				log.Printf("会話idが重複しています: %q (%s)", id, filePath)
 			}
-			storyDialogues[id] = storyDialogueEntry{
+			out[id] = storyDialogueEntry{
 				First:  filterEmptyCommands(convertBossDialogue(entry.First)),
 				Repeat: filterEmptyCommands(convertBossDialogue(entry.Repeat)),
 			}
 		}
 	}
+	return out
 }
 
 func GetEventCommands(eventID string, game *Game) BossDialogue {

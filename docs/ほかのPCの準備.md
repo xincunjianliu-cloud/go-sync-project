@@ -6,6 +6,7 @@
 2. メインPCと**同じGitHubアカウント**でサインイン
 3. 「**Clone a repository**」→ `go-sync-project` を選ぶ →「Clone」
 4. できたフォルダが**作業フォルダ**。GitHub Desktop の「**Show in Explorer**」でいつでも開ける
+5. **Go** が入っていなければ、`go.dev/dl` から Windows 用(`.msi`)を入れる(F5 の試し遊びと `go run ...` のコマンドに要る。入っていないと F5 で「Go is not installed」と出る)
 
 ## 2. Tiled でプロジェクトを開く
 
