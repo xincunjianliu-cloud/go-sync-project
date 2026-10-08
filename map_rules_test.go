@@ -26,9 +26,15 @@ var (
 		"route": true, "maxcount": true,
 		"targetmap": true, "targetpoint": true, "requireboss": true, "dir": true,
 	}
-	knownMapProps      = map[string]bool{"bgm": true, "displayname": true, "autoheal": true, "battlebg": true}
+	knownMapProps      = map[string]bool{"bgm": true, "displayname": true, "autoheal": true, "battlebg": true, "startmap": true}
 	knownTileLayerProp = map[string]bool{"leveropen": true, "blocking": true, "playerlayer": true}
 	knownObjectTypes   = map[string]bool{"": true, evTypeEvent: true, "trigger": true, "boss": true, "enemy": true, "darkness": true}
+
+	// objFieldLabel は読み替えたあとの名札を、Tiledに出る欄の名前に戻す(エラー文用)。
+	objFieldLabel = map[string]string{
+		"bossid": "ボス番号・ボス戦", "requireboss": "倒すまで通れないボス",
+		"oneway": "一度きり", "passable": "見た目だけ",
+	}
 )
 
 const maxBossID = len(Game{}.BossDefeatedFlags)
@@ -143,28 +149,29 @@ func TestMapSettings(t *testing.T) {
 		for _, p := range tmap.Properties {
 			name := strings.ToLower(p.Name)
 			if !knownMapProps[name] {
-				t.Errorf("%s: マップの名札 %q はゲームで使われません(綴りの間違い？ 使えるのは bgm / displayname / autoheal / battlebg)", mapPath, p.Name)
+				t.Errorf("%s: マップに、ゲームで使われないプロパティ %q があります。マップ設定の欄(地名・曲・戦闘背景・入ると全回復・ゲームの最初のマップ)だけを使ってください", mapPath, p.Name)
 			}
 		}
 		if key, ok := tmap.mapBGMKey(); ok {
 			if _, found := bgmByKey[key]; !found {
-				t.Errorf("%s: bgm=%q という曲はありません", mapPath, key)
+				t.Errorf("%s: マップ設定の「曲」%q という曲はありません。一覧から選び直してください", mapPath, key)
 			}
 		}
 		if bg := mapPropString(tmap, "battlebg"); bg != "" {
 			if _, err := fs.Stat(embeddedAssets, "assets/images/battle/bg/"+bg+".png"); err != nil {
-				t.Errorf("%s: battlebg=%q の画像 assets/images/battle/bg/%s.png がありません", mapPath, bg, bg)
+				t.Errorf("%s: マップ設定の「戦闘背景」%q の画像 assets/images/battle/bg/%s.png がありません", mapPath, bg, bg)
 			}
 		}
 		for _, p := range tmap.Properties {
 			if strings.EqualFold(p.Name, "autoheal") {
 				if _, ok := propBool(p.Value); !ok {
-					t.Errorf("%s: autoheal は true か false にしてください(今: %v)", mapPath, p.Value)
+					t.Errorf("%s: マップ設定の「入ると全回復」はチェックで選んでください(今: %v)", mapPath, p.Value)
 				}
 			}
 		}
 
 		players := 0
+		spawnNames := map[string]int{}
 		for _, layer := range tmap.Layers {
 			// 前の決まり(レイヤーの名前で働きが決まる)のままのレイヤー。
 			if want := oldLayerNameClass(layer); want != "" {
@@ -173,11 +180,24 @@ func TestMapSettings(t *testing.T) {
 			if isPlayerLayer(layer) {
 				players++
 			}
+			for _, o := range layer.Objects {
+				switch {
+				case isEventsLayer(layer) && o.Class == "":
+					t.Errorf("%s: しかけレイヤー%q の四角(id%d)にクラスが選ばれていません(このままでは何も起きません)。クラスを選ぶか、要らなければ消してください", mapPath, layer.Name, o.ID)
+				case isEventsLayer(layer) && o.Class == "着地点":
+					if o.Name == "" {
+						t.Errorf("%s: 着地点(id%d)の「名前(Name)」が空です。ドアの「着地点」と同じ名前を書いてください", mapPath, o.ID)
+					}
+					spawnNames[o.Name]++
+				case isBlockingLayer(layer) && o.Class != "":
+					t.Errorf("%s: しかけ「%s」(id%d)が通れないレイヤー%q に置いてあります。しかけはしかけレイヤーに置いてください", mapPath, o.Class, o.ID, layer.Name)
+				}
+			}
 			switch {
 			case layer.Type == "tilelayer":
 				for _, p := range layer.Properties {
 					if !knownTileLayerProp[strings.ToLower(p.Name)] {
-						t.Errorf("%s: タイルレイヤー%q の名札 %q はゲームで使われません(使えるのは leveropen・blocking)", mapPath, layer.Name, p.Name)
+						t.Errorf("%s: タイルレイヤー%q に、ゲームで使われないプロパティ %q があります。要らなければ消してください(働きはクラスで選ぶ)", mapPath, layer.Name, p.Name)
 					}
 				}
 			case layer.Type != "objectgroup":
@@ -190,6 +210,11 @@ func TestMapSettings(t *testing.T) {
 				if len(layer.Objects) > 0 {
 					t.Errorf("%s: オブジェクトレイヤー%q のオブジェクトは動きません。しかけはクラス「%s」の、通れない場所はクラス「%s」のレイヤーに置いてください", mapPath, layer.Name, eventsLayerClass, blockingLayerClass)
 				}
+			}
+		}
+		for name, n := range spawnNames {
+			if name != "" && n > 1 {
+				t.Errorf("%s: 着地点の名前 %q が%d個あります。1つのマップの中では別々の名前にしてください(ドアがどちらに着くか分からなくなる)", mapPath, name, n)
 			}
 		}
 		if players != 1 {
@@ -263,39 +288,39 @@ func TestMapObjects(t *testing.T) {
 		forEachEventObject(tmap, func(obj TiledObject, p map[string]string) {
 			for _, prop := range obj.Properties {
 				if !knownObjectProps[strings.ToLower(prop.Name)] {
-					errf(obj, "名札 %q はゲームで使われません(綴りの間違い？)", prop.Name)
+					errf(obj, "ゲームで使われないプロパティ %q があります。要らなければ消してください", prop.Name)
 				}
 			}
 			if !knownObjectTypes[p["type"]] {
-				errf(obj, "type=%q という種類はありません(使えるのは event / trigger / boss / enemy / darkness)", p["type"])
+				errf(obj, "種類 %q というしかけはありません。クラスを一覧から選び直してください", p["type"])
 			}
 			for _, name := range []string{"bossid", "requireboss"} {
 				if v, ok := p[name]; ok {
 					if n, ok := propInt(v); !ok || n < 1 || n > maxBossID {
-						errf(obj, "%s は 1〜%d の数字にしてください(今: %q)", name, maxBossID, v)
+						errf(obj, "「%s」は 1〜%d から選んでください(今: %q)", objFieldLabel[name], maxBossID, v)
 					}
 				}
 			}
 			if v, ok := p["dir"]; ok {
 				if n, ok := propInt(v); !ok || n < 0 || n > 3 {
-					errf(obj, "dir は 0(下)・1(左)・2(右)・3(上) のどれかにしてください(今: %q)", v)
+					errf(obj, "着地点の「向き」を一覧から選び直してください(今: %q)", v)
 				}
 			}
 			if v, ok := p["objectiveorder"]; ok {
 				if _, ok := propInt(v); !ok {
-					errf(obj, "objectiveorder は数字にしてください(今: %q)", v)
+					errf(obj, "「目的地の順番」は数字にしてください(今: %q)", v)
 				}
 			}
 			for _, name := range []string{"oneway", "passable"} {
 				if v, ok := p[name]; ok {
 					if _, ok := propBool(v); !ok {
-						errf(obj, "%s は true か false にしてください(今: %q)", name, v)
+						errf(obj, "「%s」はチェックで選んでください(今: %q)", objFieldLabel[name], v)
 					}
 				}
 			}
 			if id := p["objectiveid"]; id != "" {
 				if other, dup := objectiveIDs[id]; dup {
-					errf(obj, "objectiveid=%q は %s でも使われています。目的地の名前は全部のマップで重ならないようにしてください", id, other)
+					errf(obj, "目的地の名前 %q は %s でも使われています。目的地の名前は全部のマップで重ならないようにしてください", id, other)
 				}
 				objectiveIDs[id] = fmt.Sprintf("%s のid%d", mapPath, obj.ID)
 			}
@@ -306,72 +331,72 @@ func TestMapObjects(t *testing.T) {
 				switch {
 				case isKeyChestObj(p):
 					if strings.TrimPrefix(text, chestKeyTextPrefix) == "" {
-						errf(obj, "鍵の宝箱に鍵の名前がありません(event_chest_key_鍵の名前)")
+						errf(obj, "「鍵の宝箱」の「鍵の名前」が空です")
 					}
 				case isItemChestObj(p):
 					if id := strings.TrimPrefix(text, chestTextPrefix); id == "" {
-						errf(obj, "宝箱の中身が選ばれていません")
+						errf(obj, "「宝箱」の「中身」が選ばれていません")
 					} else if !items[id] {
-						errf(obj, "宝箱のアイテム %q がありません(item.go の ItemDatabase の ID と同じにしてください)", id)
+						errf(obj, "「宝箱」の中身 %q というアイテムはありません。一覧から選び直してください", id)
 					}
 				case strings.HasPrefix(text, storyTextPrefix):
 					if id := strings.TrimPrefix(text, storyTextPrefix); storyDialogues[id].First.Commands == nil {
-						errf(obj, "会話データ %q がありません(assets/dialogues/story の会話の名前と同じにしてください)", id)
+						errf(obj, "「会話データ」%q という会話がありません。go run ./tools/update を打ってから一覧で選び直してください", id)
 					}
 				case isLeverControlledWallObj(p):
 					// レバーとのつながりは TestMapLeverObjects が見る。
 				case isWallObj(p):
 					for _, key := range splitKeyNames(p["keys"]) {
 						if !keyChests[key] {
-							errf(obj, "壁の鍵 %q が入った宝箱(event_chest_key_%s)がどのマップにもありません", key, key)
+							errf(obj, "「鍵の壁」の必要な鍵 %q が入った「鍵の宝箱」が、どのマップにもありません", key)
 						}
 					}
 				case isLeverObj(p):
 					if p["id"] == "" {
-						errf(obj, "レバーに id がありません")
+						errf(obj, "「レバー」の「レバーの名前」が空です")
 					}
 					leverIDs[p["id"]]++
 				case isBlockObj(p):
 					if p["id"] == "" {
-						errf(obj, "押すブロックに id がありません(id が無いとブロックが出ません)")
+						errf(obj, "「ブロック」の「ブロックの名前」が空です(空だとブロックが出ません)")
 					}
 					blockIDs[p["id"]] = true
 				case isBlockSpotObj(p):
 					if p["id"] == "" {
-						errf(obj, "ブロックを乗せる場所に id がありません")
+						errf(obj, "「ブロック置き場」の「置き場の名前」が空です")
 					}
 					spotIDs[p["id"]] = true
 				case isBlockDoorObj(p):
 					blockDoors = append(blockDoors, obj)
 				case strings.HasPrefix(text, "event_"):
-					errf(obj, "text=%q は決まった言葉の書き間違いのようです(event_chest_ / event_wall / event_lever / event_block / event_blockspot / event_blockdoor / event_story_)", text)
+					errf(obj, "セリフ %q は、ゲームの決まった言葉(event_〜)の書き間違いのようです。ふつうのセリフなら event_ で始めないでください", text)
 				}
 			case "trigger":
 				if err := checkRoute(p["route"]); err != "" {
-					errf(obj, "route=%q: %s", p["route"], err)
+					errf(obj, "「歩く道順」%q: %s", p["route"], err)
 				}
 				if strings.HasPrefix(text, storyTextPrefix) {
 					if id := strings.TrimPrefix(text, storyTextPrefix); storyDialogues[id].First.Commands == nil {
-						errf(obj, "会話データ %q がありません", id)
+						errf(obj, "「会話データ」%q という会話がありません。go run ./tools/update を打ってから一覧で選び直してください", id)
 					}
 				}
 			case "boss":
 				if _, ok := p["bossid"]; !ok {
-					errf(obj, "ボスに bossid がありません(無いとボスが出ません)")
+					errf(obj, "「ボス」の「ボス番号」が選ばれていません(このままではボスが出ません)")
 				}
 			case "enemy":
 				names := splitKeyNames(text)
 				if len(names) == 0 {
-					errf(obj, "敵が出る場所に敵の名前(text)がありません")
+					errf(obj, "「敵が出る場所」の「出る敵」が選ばれていません")
 				}
 				for _, name := range names {
 					if !enemies[name] {
-						errf(obj, "敵 %q がいません(tools/genstats/seed/enemies.csv の Name と同じにしてください)", name)
+						errf(obj, "「出る敵」の %q という敵がいません。go run ./tools/update を打ってから一覧で選び直してください", name)
 					}
 				}
 				if v, ok := p["maxcount"]; ok {
 					if n, ok := propInt(v); !ok || n < 1 || n > 4 {
-						errf(obj, "maxcount は 1〜4 にしてください(今: %q)", v)
+						errf(obj, "「一度に出る最大数」は 1〜4 にしてください(今: %q)", v)
 					}
 				}
 			}
@@ -379,22 +404,22 @@ func TestMapObjects(t *testing.T) {
 
 		for id, n := range leverIDs {
 			if n > 1 && id != "" {
-				t.Errorf("%s: レバーの id %q が%d個あります。1つのマップの中では別々の名前にしてください", mapPath, id, n)
+				t.Errorf("%s: 「レバーの名前」%q のレバーが%d個あります。1つのマップの中では別々の名前にしてください", mapPath, id, n)
 			}
 		}
 		for _, door := range blockDoors {
 			spots := splitKeyNames(objProps(door)["spots"])
 			if len(spots) == 0 {
-				t.Errorf("%s: オブジェクト(id%d): ブロック扉に spots がありません(このままだと開きません)", mapPath, door.ID)
+				t.Errorf("%s: オブジェクト(id%d): 「ブロック扉」の「置き場の名前」が空です(このままだと開きません)", mapPath, door.ID)
 			}
 			for _, s := range spots {
 				if !spotIDs[s] {
-					t.Errorf("%s: オブジェクト(id%d): ブロック扉の spots にある %q の、乗せる場所(event_blockspot, id=%s)がありません", mapPath, door.ID, s, s)
+					t.Errorf("%s: オブジェクト(id%d): 「ブロック扉」の置き場の名前 %q の「ブロック置き場」がありません", mapPath, door.ID, s)
 				}
 			}
 		}
 		if len(spotIDs) > 0 && len(blockIDs) == 0 {
-			t.Errorf("%s: ブロックを乗せる場所はあるのに、押すブロック(event_block)がありません", mapPath)
+			t.Errorf("%s: 「ブロック置き場」はあるのに、押す「ブロック」がありません", mapPath)
 		}
 	}
 }
@@ -422,7 +447,7 @@ func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
 				}
 				for _, w := range walls {
 					if rectsOverlap(c.X, c.Y, c.X+c.Width, c.Y+c.Height, w.X, w.Y, w.X+w.Width, w.Y+w.Height) {
-						t.Errorf("%s: 通れないレイヤー%q の四角(id%d)が、レバーで通れるようになる壁(id%d)に重なっています。レバーを上げても通れません", mapPath, layer.Name, c.ID, w.ID)
+						t.Errorf("%s: 通れないレイヤー%q の四角(id%d)が、レバーで通れるようになる「レバーの壁」(id%d)に重なっています。レバーを上げても通れません", mapPath, layer.Name, c.ID, w.ID)
 					}
 				}
 			}
@@ -434,7 +459,7 @@ func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
 				x, y := float64(i%tmap.Width)*tw, float64(i/tmap.Width)*th
 				for _, w := range walls {
 					if x < w.X+w.Width && x+tw > w.X && y < w.Y+w.Height && y+th > w.Y {
-						t.Errorf("%s: 通れないレイヤー%q のタイル(%d列目・%d行目)が、レバーで通れるようになる壁(id%d)に重なっています。レバーを上げても通れません", mapPath, layer.Name, i%tmap.Width+1, i/tmap.Width+1, w.ID)
+						t.Errorf("%s: 通れないレイヤー%q のタイル(%d列目・%d行目)が、レバーで通れるようになる「レバーの壁」(id%d)に重なっています。レバーを上げても通れません", mapPath, layer.Name, i%tmap.Width+1, i/tmap.Width+1, w.ID)
 					}
 				}
 			}

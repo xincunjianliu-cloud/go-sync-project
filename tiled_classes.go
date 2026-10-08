@@ -199,6 +199,7 @@ var tiledClasses = []tiledClass{
 			{Name: "曲", Type: "string", Enum: "曲", Default: "フィールド1"},
 			{Name: "戦闘背景", Type: "string", Enum: "戦闘背景", Default: enumDefault},
 			{Name: "入ると全回復", Type: "bool", Default: false},
+			{Name: "ゲームの最初のマップ", Type: "bool", Default: false},
 		},
 		apply: func(v map[string]string, set func(string, string)) {
 			set("bgm", bgmKeyFromLabel(v["曲"]))
@@ -207,6 +208,9 @@ var tiledClasses = []tiledClass{
 			}
 			if v["入ると全回復"] == "true" {
 				set("autoheal", "true")
+			}
+			if v["ゲームの最初のマップ"] == "true" {
+				set("startmap", "true")
 			}
 		}},
 	{Name: "レバーで出るレイヤー", UseAs: "layer", Color: "#ffe06666",

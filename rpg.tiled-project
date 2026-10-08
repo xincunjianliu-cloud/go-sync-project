@@ -527,6 +527,11 @@
                     "name": "入ると全回復",
                     "type": "bool",
                     "value": false
+                },
+                {
+                    "name": "ゲームの最初のマップ",
+                    "type": "bool",
+                    "value": false
                 }
             ],
             "name": "マップ設定",

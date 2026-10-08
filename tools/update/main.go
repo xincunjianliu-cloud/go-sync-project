@@ -5,7 +5,8 @@
 //
 // 1. 会話を取り込む(tools/dialoguegen)
 // 2. 強さを取り込む(tools/genstats)
-// 3. rpg.tiled-project の一覧(会話・敵・戦闘背景など)を作り直す
+// 3. rpg.tiled-project の一覧(会話・敵・戦闘背景など)と、ゲームの最初のマップ
+//    (start_map_generated.go)を作り直す
 //
 // 1か2が失敗しても残りは進め、最後に失敗したものをまとめて表示する。
 package main
@@ -30,7 +31,7 @@ func main() {
 	steps := []step{
 		{label: "会話の取り込み", args: []string{"run", "./tools/dialoguegen"}},
 		{label: "強さの取り込み", args: []string{"run", "./tools/genstats"}},
-		{label: "Tiledの一覧の作り直し", args: []string{"test", "-count=1", "-run", "^TestTiledProjectUpToDate$", "."},
+		{label: "Tiledの一覧と最初のマップの作り直し", args: []string{"test", "-count=1", "-run", "^(TestTiledProjectUpToDate|TestStartMapUpToDate)$", "."},
 			env: []string{"UPDATE_TILED_PROJECT=1"}},
 	}
 	var failed []string

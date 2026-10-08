@@ -55,9 +55,19 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 			continue
 		}
 		isWall := isBlockingLayer(layer)
+		// ゲーム画面に出ないもの(非表示のレイヤー、まだレバーを上げていない
+		// 机の橋など)はミニマップにも出さない。通れないレイヤーは、見えない壁でも
+		// 歩ける形を表すので出す。
+		if !isWall && !layer.drawn() {
+			continue
+		}
+		leverOnly := isLeverOpenLayer(layer)
 
 		for i, id := range layer.Data {
 			if id == 0 {
+				continue
+			}
+			if leverOnly && !field.leverTileShown(i) {
 				continue
 			}
 			tx := float64(i%tm.Width) * float64(tm.TileWidth)

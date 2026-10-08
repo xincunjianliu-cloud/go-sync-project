@@ -5,11 +5,6 @@ import (
 	"sort"
 )
 
-// startMapPath はニューゲーム開始時に立つマップであり、マップ自動探索
-// (BuildObjectiveAndMapIndex)の起点でもある。ここから"targetmap"を
-// たどれないマップは目的地・ドア接続・鍵グループの対象にならない。
-const startMapPath = "assets/maps/school_1.tmj"
-
 type ObjectiveLocation struct {
 	MapPath string
 	X, Y    float64

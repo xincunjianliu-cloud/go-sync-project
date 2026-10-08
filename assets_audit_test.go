@@ -55,7 +55,7 @@ func TestBattleBgsExist(t *testing.T) {
 		}
 		if key, ok := tmap.mapBattleBgKey(); ok {
 			if _, err := embeddedAssets.ReadFile(battleBgImagePath(key)); err != nil {
-				t.Errorf("%s の戦闘背景(battlebg=%q)がありません: %s", mapPath, key, battleBgImagePath(key))
+				t.Errorf("%s: マップ設定の「戦闘背景」%q の画像がありません: %s", mapPath, key, battleBgImagePath(key))
 			}
 		}
 	}
@@ -297,13 +297,13 @@ func TestMapWarps(t *testing.T) {
 				}
 				names, ok := spawnNames[target]
 				if !ok {
-					t.Errorf("%s: ワープ(id%d)の行き先 %q のマップがありません", mapPath, obj.ID, target)
+					t.Errorf("%s: ドア(id%d)の「行き先マップ」%q がありません", mapPath, obj.ID, target)
 					continue
 				}
 				if point := p["targetpoint"]; point == "" {
-					t.Errorf("%s: ワープ(id%d)に targetpoint がありません", mapPath, obj.ID)
+					t.Errorf("%s: ドア(id%d)の「着地点」が空です", mapPath, obj.ID)
 				} else if !names[point] {
-					t.Errorf("%s: ワープ(id%d)の着地点 %q が %s にありません(着地点オブジェクトの「名前」欄と一致させてください)", mapPath, obj.ID, point, target)
+					t.Errorf("%s: ドア(id%d)の着地点 %q が %s にありません(行き先マップの着地点の「名前」と同じにしてください)", mapPath, obj.ID, point, target)
 				}
 			}
 		}
@@ -318,7 +318,7 @@ func TestMapWarps(t *testing.T) {
 	}
 	for _, mapPath := range mapPaths {
 		if !reachable[mapPath] {
-			t.Errorf("%s: 開始マップ(%s)からワープでたどれません。どこかのマップにこのマップへのワープを置いてください", mapPath, startMapPath)
+			t.Errorf("%s: ゲームの最初のマップ(%s)からドアでたどれません。どこかのマップに、このマップへのドアを置いてください", mapPath, startMapPath)
 		}
 	}
 }
@@ -362,7 +362,7 @@ func TestMapLeverObjects(t *testing.T) {
 					t.Errorf("%s: オブジェクト(id%d)に lever がありますが、ほかの種類(type/text)になっているため壁になりません。レバー壁なら type と text を消すか type=event, text=event_wall にしてください", mapPath, obj.ID)
 				}
 				if !levers[lever] {
-					t.Errorf("%s: オブジェクト(id%d)の lever=%q のレバー(text=event_lever, id=%q)がこのマップにありません", mapPath, obj.ID, lever, lever)
+					t.Errorf("%s: 「レバーの壁」(id%d)のレバーの名前 %q の「レバー」が、このマップにありません", mapPath, obj.ID, lever)
 				}
 			}
 		}
@@ -377,7 +377,7 @@ func TestMapLeverObjects(t *testing.T) {
 				}
 			}
 			if n > 0 {
-				t.Errorf("%s: leveropenレイヤー%q のタイル%d個がレバー壁の範囲の外にあり、表示されません", mapPath, layer.Name, n)
+				t.Errorf("%s: レバーで出るレイヤー%q の絵が%dマス、どの「レバーの壁」の範囲にも入っていないので出てきません", mapPath, layer.Name, n)
 			}
 		}
 	}
