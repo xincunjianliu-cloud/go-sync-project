@@ -167,7 +167,7 @@ func flattenLayerGroups(layers []TiledLayer) []TiledLayer {
 }
 
 // drawn はTiledで表示になっているタイルレイヤーか。非表示のレイヤーは
-// ゲームでも描かない(当たり判定は残る。kabeレイヤーを非表示にすると
+// ゲームでも描かない(当たり判定は残る。通れないレイヤーを非表示にすると
 // 見えない壁になる)。leveropenレイヤーはレバーで出し入れするものなので、
 // Tiledで非表示にしていても描く。
 func (l TiledLayer) drawn() bool {
@@ -550,7 +550,7 @@ func newRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	var collisionRects []CollisionRect
 	var collisionPolygons []CollisionPolygon
 	for _, layer := range tmap.Layers {
-		if layer.Name == "collision" && layer.Type == "objectgroup" {
+		if isBlockingLayer(layer) && layer.Type == "objectgroup" {
 			for _, obj := range layer.Objects {
 				if len(obj.Polygon) > 0 {
 					pts := make([]TiledPoint, len(obj.Polygon))

@@ -26,6 +26,9 @@ const (
 	enumKeep    = "(そのまま)"
 )
 
+// blockingLayerClass はレイヤーのクラス名(壁・水などを通れなくする)。
+const blockingLayerClass = "通れないレイヤー"
+
 type classMember struct {
 	Name string // Tiledに出る欄の名前
 	Type string // string / int / bool / file
@@ -205,6 +208,11 @@ var tiledClasses = []tiledClass{
 	{Name: "レバーで出るレイヤー", UseAs: "layer", Color: "#ffe06666",
 		apply: func(v map[string]string, set func(string, string)) {
 			set("leveropen", "true")
+		}},
+	// タイルレイヤーなら描いたタイル、オブジェクトレイヤーなら置いた四角が通れない。
+	{Name: blockingLayerClass, UseAs: "layer", Color: "#ff666666",
+		apply: func(v map[string]string, set func(string, string)) {
+			set("blocking", "true")
 		}},
 }
 

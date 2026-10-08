@@ -54,8 +54,7 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 		if layer.Type != "tilelayer" {
 			continue
 		}
-		isWall := layer.Name == wallTileLayerName
-		isFloor := layer.Name == floorTileLayerName
+		isWall := isBlockingLayer(layer)
 
 		for i, id := range layer.Data {
 			if id == 0 {
@@ -72,10 +71,8 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 			var c color.RGBA
 			if isWall {
 				c = color.RGBA{60, 70, 90, 255}
-			} else if isFloor {
-				c = color.RGBA{80, 90, 110, 255}
 			} else {
-				c = color.RGBA{70, 80, 100, 200}
+				c = color.RGBA{80, 90, 110, 255}
 			}
 			fillRect(screen, px, py, pw, ph, c)
 		}

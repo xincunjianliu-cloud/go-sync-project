@@ -24,13 +24,21 @@ const (
 	chestKeyTextPrefix = "event_chest_key_"
 	bossTextPrefix     = "event_boss_"
 	storyTextPrefix    = "event_story_"
-
-	// wallTileLayerName/floorTileLayerNameはタイルレイヤー名の規約。
-	// 当たり判定(field_update.go)とミニマップの色分け(menu_draw_misc.go)の
-	// 両方がこれを見るので、名前を変えるときはここだけ直せばよい。
-	wallTileLayerName  = "kabe"
-	floorTileLayerName = "yuka"
 )
+
+// isBlockingLayer はTiledでクラス「通れないレイヤー」にしたレイヤーか
+// (読み込み時に名札 blocking=true に読み替わる)。タイルレイヤーなら描いた
+// タイルが、オブジェクトレイヤーなら置いた四角・多角形が通れない。
+// 当たり判定(field_update.go / field_scene.go)とミニマップの色分け
+// (menu_draw_misc.go)がこれを見る。
+func isBlockingLayer(layer TiledLayer) bool {
+	for _, p := range layer.Properties {
+		if b, _ := propBool(p.Value); b && strings.EqualFold(p.Name, "blocking") {
+			return true
+		}
+	}
+	return false
+}
 
 // 会話データ中の演出命令。Speakerがsystemスピーカーの行は台詞ではなく
 // Textを命令として解釈する(tools/dialoguegenが生成する文字列と対応)。

@@ -27,7 +27,7 @@ var (
 		"targetmap": true, "targetpoint": true, "requireboss": true, "dir": true,
 	}
 	knownMapProps      = map[string]bool{"bgm": true, "displayname": true, "autoheal": true, "battlebg": true}
-	knownTileLayerProp = map[string]bool{"leveropen": true}
+	knownTileLayerProp = map[string]bool{"leveropen": true, "blocking": true}
 	knownObjectTypes   = map[string]bool{"": true, evTypeEvent: true, "trigger": true, "boss": true, "enemy": true, "darkness": true}
 )
 
@@ -45,6 +45,7 @@ type tmjRaw struct {
 // rawLayer は、ゲームが使わない(無視してしまう)レイヤーの設定を調べるためのもの。
 type rawLayer struct {
 	Name      string     `json:"name"`
+	Class     string     `json:"class"`
 	Type      string     `json:"type"`
 	OffsetX   float64    `json:"offsetx"`
 	OffsetY   float64    `json:"offsety"`
@@ -123,8 +124,8 @@ func TestMapSettings(t *testing.T) {
 				if o.Rotation != 0 {
 					t.Errorf("%s: レイヤー%q のオブジェクト(id%d)が回転しています。ゲームでは回転しないので 0 に戻してください", mapPath, l.Name, o.ID)
 				}
-				if o.Ellipse && l.Name == "collision" {
-					t.Errorf("%s: collision の楕円(id%d)は四角として扱われます。四角形か多角形で置いてください", mapPath, o.ID)
+				if o.Ellipse && l.Class == blockingLayerClass {
+					t.Errorf("%s: 通れないレイヤー%q の楕円(id%d)は四角として扱われます。四角形か多角形で置いてください", mapPath, l.Name, o.ID)
 				}
 				if o.Template != "" {
 					t.Errorf("%s: レイヤー%q のオブジェクト(id%d)がテンプレート(.tx)を使っています。テンプレートは使えません", mapPath, l.Name, o.ID)
@@ -164,22 +165,26 @@ func TestMapSettings(t *testing.T) {
 		}
 
 		for _, layer := range tmap.Layers {
+			// 前の決まり(名前が kabe / collision なら通れない)のままのレイヤー。
+			if (layer.Name == "kabe" || layer.Name == "collision") && !isBlockingLayer(layer) {
+				t.Errorf("%s: レイヤー%q は名前だけでは通れなくなりません。クラスを「%s」にしてください", mapPath, layer.Name, blockingLayerClass)
+			}
 			switch {
 			case layer.Type == "tilelayer":
 				for _, p := range layer.Properties {
 					if !knownTileLayerProp[strings.ToLower(p.Name)] {
-						t.Errorf("%s: タイルレイヤー%q の名札 %q はゲームで使われません(使えるのは leveropen)", mapPath, layer.Name, p.Name)
+						t.Errorf("%s: タイルレイヤー%q の名札 %q はゲームで使われません(使えるのは leveropen・blocking)", mapPath, layer.Name, p.Name)
 					}
 				}
 			case layer.Type != "objectgroup":
-			case strings.HasPrefix(layer.Name, "events"), layer.Name == "collision":
+			case strings.HasPrefix(layer.Name, "events"), isBlockingLayer(layer):
 			case layer.Name == "player":
 				if len(layer.Objects) > 0 {
 					t.Errorf("%s: player レイヤーにはオブジェクトを置かないでください(%d個あります。しかけは events レイヤーへ)", mapPath, len(layer.Objects))
 				}
 			default:
 				if len(layer.Objects) > 0 {
-					t.Errorf("%s: オブジェクトレイヤー%q のオブジェクトは動きません。しかけは events で始まる名前のレイヤーに、通れない場所は collision に置いてください", mapPath, layer.Name)
+					t.Errorf("%s: オブジェクトレイヤー%q のオブジェクトは動きません。しかけは events で始まる名前のレイヤーに、通れない場所はクラスを「通れないレイヤー」にしたレイヤーに置いてください", mapPath, layer.Name)
 				}
 			}
 		}
@@ -373,7 +378,7 @@ func TestMapObjects(t *testing.T) {
 	}
 }
 
-// collision の四角が、通れるレバー壁(机の橋など)をふさいでいないこと。
+// 通れないレイヤー(四角・タイル)が、通れるレバー壁(机の橋など)をふさいでいないこと。
 func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
 	for _, mapPath := range allMapFiles(t) {
 		tmap, err := loadTiledMap(mapPath)
@@ -387,7 +392,7 @@ func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
 			}
 		})
 		for _, layer := range tmap.Layers {
-			if layer.Name != "collision" {
+			if !isBlockingLayer(layer) {
 				continue
 			}
 			for _, c := range layer.Objects {
@@ -396,7 +401,19 @@ func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
 				}
 				for _, w := range walls {
 					if rectsOverlap(c.X, c.Y, c.X+c.Width, c.Y+c.Height, w.X, w.Y, w.X+w.Width, w.Y+w.Height) {
-						t.Errorf("%s: collision の四角(id%d)が、レバーで通れるようになる壁(id%d)に重なっています。レバーを上げても通れません", mapPath, c.ID, w.ID)
+						t.Errorf("%s: 通れないレイヤー%q の四角(id%d)が、レバーで通れるようになる壁(id%d)に重なっています。レバーを上げても通れません", mapPath, layer.Name, c.ID, w.ID)
+					}
+				}
+			}
+			tw, th := float64(tmap.TileWidth), float64(tmap.TileHeight)
+			for i, gid := range layer.Data {
+				if gid == 0 || tmap.Width == 0 {
+					continue
+				}
+				x, y := float64(i%tmap.Width)*tw, float64(i/tmap.Width)*th
+				for _, w := range walls {
+					if x < w.X+w.Width && x+tw > w.X && y < w.Y+w.Height && y+th > w.Y {
+						t.Errorf("%s: 通れないレイヤー%q のタイル(%d列目・%d行目)が、レバーで通れるようになる壁(id%d)に重なっています。レバーを上げても通れません", mapPath, layer.Name, i%tmap.Width+1, i/tmap.Width+1, w.ID)
 					}
 				}
 			}

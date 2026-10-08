@@ -545,6 +545,17 @@
             "useAs": [
                 "layer"
             ]
+        },
+        {
+            "color": "#ff666666",
+            "drawFill": true,
+            "id": 25,
+            "members": [],
+            "name": "通れないレイヤー",
+            "type": "class",
+            "useAs": [
+                "layer"
+            ]
         }
     ]
 }

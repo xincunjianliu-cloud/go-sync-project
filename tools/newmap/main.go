@@ -5,7 +5,8 @@
 //
 // 中身:
 //   - タイルセット: assets/tilesets の .tsx を全部付ける
-//   - レイヤー(下から): 床 / kabe / events / player / 主人公より上 / collision
+//   - レイヤー(下から): 床 / 壁 / events / player / 主人公より上 / 通れない四角
+//     (壁と通れない四角は、クラスを「通れないレイヤー」にしてある)
 //   - マップのクラスは「マップ設定」(地名などはTiledで書く)
 //   - events に着地点 start_point を1つ(真ん中)。すぐF5で試せる
 //
@@ -129,6 +130,11 @@ func newMap(w, h int, tilesets []map[string]any) map[string]any {
 			"type": "objectgroup", "visible": true, "x": 0, "y": 0,
 		}
 	}
+	// blocking はレイヤーのクラスを「通れないレイヤー」にする(壁・通れない四角)。
+	blocking := func(l map[string]any) map[string]any {
+		l["class"] = "通れないレイヤー"
+		return l
+	}
 	start := map[string]any{
 		"height": tileSize, "id": 1, "name": "start_point", "rotation": 0, "type": "着地点",
 		"visible": true, "width": tileSize, "x": (w / 2) * tileSize, "y": (h / 2) * tileSize,
@@ -140,11 +146,11 @@ func newMap(w, h int, tilesets []map[string]any) map[string]any {
 		"infinite":         false,
 		"layers": []any{
 			tileLayer(1, "床"),
-			tileLayer(2, "kabe"),
+			blocking(tileLayer(2, "壁")),
 			objectLayer(3, "events", []any{start}),
 			objectLayer(4, "player", []any{}),
 			tileLayer(5, "主人公より上"),
-			objectLayer(6, "collision", []any{}),
+			blocking(objectLayer(6, "通れない四角", []any{})),
 		},
 		"nextlayerid":  7,
 		"nextobjectid": 2,
