@@ -300,27 +300,6 @@ func generateLightMaskImage(size int) *ebiten.Image {
 	return ebiten.NewImageFromImage(img)
 }
 
-const blockTileSize = 32
-
-func generateBlockDoorImage(size int) *ebiten.Image {
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	fill := color.RGBA{110, 118, 138, 255}
-	border := color.RGBA{55, 60, 74, 255}
-	const borderW = 3
-
-	for y := range size {
-		for x := range size {
-			if x < borderW || y < borderW || x >= size-borderW || y >= size-borderW {
-				img.Set(x, y, border)
-			} else {
-				img.Set(x, y, fill)
-			}
-		}
-	}
-
-	return ebiten.NewImageFromImage(img)
-}
-
 func (g *Game) rememberedIndex(v int) int {
 	if !g.RememberCursor {
 		return 0
@@ -408,8 +387,6 @@ func NewGame() *Game {
 	g.EnemyIconLargeImgs = make(map[string]*ebiten.Image)
 
 	g.LightMaskImg = generateLightMaskImage(256)
-
-	g.BlockDoorImg = generateBlockDoorImage(blockTileSize)
 
 	g.Audio = NewAudioManager()
 	g.Audio.SetVolume(settings.BGMVolume)

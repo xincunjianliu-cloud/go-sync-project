@@ -352,6 +352,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	add(assetTierField, "assets/images/field/lever.png", func(g *Game, img *ebiten.Image) { g.LeverImg = img })
 	add(assetTierField, "assets/images/field/push_block.png", func(g *Game, img *ebiten.Image) { g.BlockImg = img })
 	add(assetTierField, "assets/images/field/push_block_spot.png", func(g *Game, img *ebiten.Image) { g.BlockSpotImg = img })
+	add(assetTierField, "assets/images/field/block_door.png", func(g *Game, img *ebiten.Image) { g.BlockDoorImg = img })
 
 	for i := range 4 {
 		bossName := BossNames[i]
