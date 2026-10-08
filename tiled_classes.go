@@ -157,15 +157,11 @@ var tiledClasses = []tiledClass{
 			{Name: "会話データ", Type: "string", Enum: "会話", Default: enumNone},
 			{Name: "ボス戦", Type: "string", Enum: "ボス", Default: enumNone},
 			{Name: "歩く道順", Type: "string", Default: "", Key: "route"},
-			{Name: "すぐ始める", Type: "bool", Default: false},
 		}, objectiveMembers[:2]...),
 		apply: func(v map[string]string, set func(string, string)) {
 			set("text", storyField(v, "セリフ"))
 			if b := v["ボス戦"]; b != "" && b != enumNone {
 				set("bossid", b)
-			}
-			if v["すぐ始める"] == "true" {
-				set("instant", "true")
 			}
 			if v["目的地の名前"] != "" {
 				set("objectiveid", v["目的地の名前"])

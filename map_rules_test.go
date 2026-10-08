@@ -23,7 +23,7 @@ var (
 		"objectiveid": true, "objectiveorder": true, "bossid": true,
 		"keys": true, "lever": true, "passable": true, "img": true,
 		"id": true, "oneway": true, "spots": true,
-		"instant": true, "route": true, "maxcount": true,
+		"route": true, "maxcount": true,
 		"targetmap": true, "targetpoint": true, "requireboss": true, "dir": true,
 	}
 	knownMapProps      = map[string]bool{"bgm": true, "displayname": true, "autoheal": true, "battlebg": true}
@@ -260,7 +260,7 @@ func TestMapObjects(t *testing.T) {
 					errf(obj, "objectiveorder は数字にしてください(今: %q)", v)
 				}
 			}
-			for _, name := range []string{"instant", "oneway", "passable"} {
+			for _, name := range []string{"oneway", "passable"} {
 				if v, ok := p[name]; ok {
 					if _, ok := propBool(v); !ok {
 						errf(obj, "%s は true か false にしてください(今: %q)", name, v)

@@ -643,7 +643,6 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 				if evType == evTypeTrigger {
 					bossID, hasBossID := objPropInt(obj, "bossid")
-					instant, _ := objPropBool(obj, "instant")
 
 					if hasBossID && isBossDefeated(s.game, bossID) {
 						continue
@@ -673,7 +672,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 						}
 						s.cutsceneHasBossID = hasBossID
 
-						if instant || routeStr == "" || routeStr == "<nil>" {
+						if routeStr == "" || routeStr == "<nil>" {
 							s.cutsceneMessage = s.pendingCutsceneMsg
 							s.cseFadeAlpha = 0
 							s.cseFadeMode = 2

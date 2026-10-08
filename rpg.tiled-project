@@ -422,11 +422,6 @@
                     "value": ""
                 },
                 {
-                    "name": "すぐ始める",
-                    "type": "bool",
-                    "value": false
-                },
-                {
                     "name": "目的地の名前",
                     "type": "string",
                     "value": ""

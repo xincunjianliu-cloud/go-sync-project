@@ -296,13 +296,12 @@ func legacyToClass(obj map[string]any) (string, []any, bool) {
 			return "会話", mem, true
 		}
 	case "trigger":
-		if !known("type", "text", "route", "instant", "bossid", "objectiveid", "objectiveorder") {
+		if !known("type", "text", "route", "bossid", "objectiveid", "objectiveorder") {
 			return "", nil, false
 		}
 		textOrStory()
 		add("ボス戦", "string", "ボス", boss(p["bossid"]), enumNone)
-		add("歩く道順", "string", "", p["route"], "")
-		add("すぐ始める", "bool", "", p["instant"] == "true", false)
+		add("歩く道順", "string", "", p["route"], "")
 		objective()
 		return "イベント", mem, true
 	case "boss":
@@ -356,7 +355,7 @@ func compareLoadedMaps(a, b []byte, mapPath string) string {
 			case v == "":
 			case k == "maxcount" && v == "1", k == "objectiveorder" && v == "0",
 				k == "bgm" && v == "field1", k == "passable" && v != "false",
-				k == "oneway" && v != "true", k == "instant" && v != "true", k == "autoheal" && v != "true":
+				k == "oneway" && v != "true", k == "autoheal" && v != "true":
 			default:
 				out[k] = v
 			}
