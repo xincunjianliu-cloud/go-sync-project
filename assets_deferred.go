@@ -349,8 +349,6 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	add(assetTierField, "assets/images/field/chest.png", func(g *Game, img *ebiten.Image) { g.ChestImg = img })
 	add(assetTierField, "assets/images/field/key_chest.png", func(g *Game, img *ebiten.Image) { g.KeyChestImg = img })
 	add(assetTierField, "assets/images/field/locked_wall.png", func(g *Game, img *ebiten.Image) { g.LockedWallImg = img })
-	add(assetTierField, "assets/images/field/lever_wall_open.png", func(g *Game, img *ebiten.Image) { g.LeverWallOpenImg = img })
-	add(assetTierField, "assets/images/field/lever_wall_open_deco.png", func(g *Game, img *ebiten.Image) { g.LeverWallOpenDecoImg = img })
 	add(assetTierField, "assets/images/field/lever.png", func(g *Game, img *ebiten.Image) { g.LeverImg = img })
 	add(assetTierField, "assets/images/field/push_block.png", func(g *Game, img *ebiten.Image) { g.BlockImg = img })
 	add(assetTierField, "assets/images/field/push_block_spot.png", func(g *Game, img *ebiten.Image) { g.BlockSpotImg = img })

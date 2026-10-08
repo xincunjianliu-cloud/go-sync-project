@@ -177,24 +177,10 @@ type Game struct {
 	MinimapPlayerIconImg    *ebiten.Image
 	MinimapObjectiveIconImg *ebiten.Image
 
-	ChestImg             *ebiten.Image
-	KeyChestImg          *ebiten.Image
-	LockedWallImg        *ebiten.Image
-	LeverWallOpenImg     *ebiten.Image
-	LeverWallOpenDecoImg *ebiten.Image
-	LeverImg             *ebiten.Image
-
-	// LeverWallOpenImgs/LeverWallOpenDecoImgsは、壁オブジェクトの"img"
-	// プロパティで場所ごとに絵を差し替えたい場合の追加分。キーはプロパティ値と
-	// 同じ名前。該当キーが無ければLeverWallOpenImg/LeverWallOpenDecoImgに
-	// フォールバックする(field_draw.goのdrawLeverWalls参照)。
-	// 新しい見た目を足す手順:
-	//   1. assets/images/field/lever_wall_open_<name>.png
-	//      (見た目だけの壁ならlever_wall_open_deco_<name>.png)を追加
-	//   2. assets_deferred.goのdeferredAssetAssignments()に1行登録
-	//   3. Tiledの壁オブジェクトにimg=<name>プロパティを設定
-	LeverWallOpenImgs     map[string]*ebiten.Image
-	LeverWallOpenDecoImgs map[string]*ebiten.Image
+	ChestImg      *ebiten.Image
+	KeyChestImg   *ebiten.Image
+	LockedWallImg *ebiten.Image
+	LeverImg      *ebiten.Image
 
 	BlockImg     *ebiten.Image
 	BlockSpotImg *ebiten.Image
@@ -420,8 +406,6 @@ func NewGame() *Game {
 	g.EnemyImgs = make(map[string]*ebiten.Image)
 	g.EnemyIconImgs = make(map[string]*ebiten.Image)
 	g.EnemyIconLargeImgs = make(map[string]*ebiten.Image)
-	g.LeverWallOpenImgs = make(map[string]*ebiten.Image)
-	g.LeverWallOpenDecoImgs = make(map[string]*ebiten.Image)
 
 	g.LightMaskImg = generateLightMaskImage(256)
 

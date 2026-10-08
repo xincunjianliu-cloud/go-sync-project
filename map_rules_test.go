@@ -21,7 +21,7 @@ var (
 	knownObjectProps = map[string]bool{
 		"type": true, "text": true, "repeattext": true,
 		"objectiveid": true, "objectiveorder": true, "bossid": true,
-		"keys": true, "lever": true, "passable": true, "img": true,
+		"keys": true, "lever": true, "passable": true,
 		"id": true, "oneway": true, "spots": true,
 		"route": true, "maxcount": true,
 		"targetmap": true, "targetpoint": true, "requireboss": true, "dir": true,
@@ -439,6 +439,51 @@ func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// レバーの壁が開いたときの見た目が「レバーで出るレイヤー」に描いてあること。
+// 描いていないと、レバーを上げても見た目が変わらない(既定の画像は無い)。
+func TestLeverWallsHaveOpenTiles(t *testing.T) {
+	for _, mapPath := range allMapFiles(t) {
+		tmap, err := loadTiledMap(mapPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var leverLayers []TiledLayer
+		for _, l := range tmap.Layers {
+			if l.Type == "tilelayer" && isLeverOpenLayer(l) {
+				leverLayers = append(leverLayers, l)
+			}
+		}
+		tw, th := tmap.TileWidth, tmap.TileHeight
+		if tw == 0 || th == 0 {
+			continue
+		}
+		forEachEventObject(tmap, func(obj TiledObject, p map[string]string) {
+			if !isLeverControlledWallObj(p) {
+				return
+			}
+			missing := 0
+			for cy := int(obj.Y) / th; cy*th < int(obj.Y+obj.Height); cy++ {
+				for cx := int(obj.X) / tw; cx*tw < int(obj.X+obj.Width); cx++ {
+					i := cy*tmap.Width + cx
+					drawn := false
+					for _, l := range leverLayers {
+						if i >= 0 && i < len(l.Data) && l.Data[i] != 0 {
+							drawn = true
+							break
+						}
+					}
+					if !drawn {
+						missing++
+					}
+				}
+			}
+			if missing > 0 {
+				t.Errorf("%s: レバーの壁(id%d, レバー %q)の開いたときの絵が %dマス足りません。クラス「レバーで出るレイヤー」のレイヤーに、開いたときの絵を描いてください", mapPath, obj.ID, p["lever"], missing)
+			}
+		})
 	}
 }
 

@@ -272,7 +272,6 @@ func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX,
 func (s *FieldScene) drawMapEvents(screen *ebiten.Image, camX, camY float64) {
 	s.drawChests(screen, camX, camY)
 	s.drawLockedWalls(screen, camX, camY)
-	s.drawLeverWalls(screen, camX, camY)
 	s.drawLevers(screen, camX, camY)
 	s.drawBlockSpots(screen, camX, camY)
 	s.drawBlocks(screen, camX, camY)
@@ -397,65 +396,6 @@ func (s *FieldScene) drawLockedWalls(screen *ebiten.Image, camX, camY float64) {
 			}
 
 			screen.DrawImage(img.SubImage(srcRect).(*ebiten.Image), op)
-		}
-	}
-}
-
-const leverWallTileSize = 32
-
-// drawLeverWalls はレバー連動の壁を描画する。閉状態では何も描かず、マップの
-// 壁タイルそのものの見た目に任せる。開いた時だけ、通行可能かどうかに応じた
-// 32×32の絵を、引き伸ばさずオブジェクトの範囲いっぱいに敷き詰めて表示する。
-func (s *FieldScene) drawLeverWalls(screen *ebiten.Image, camX, camY float64) {
-	for _, layer := range s.tileMap.Layers {
-		if !isEventsLayer(layer) {
-			continue
-		}
-		for _, obj := range layer.Objects {
-			p := objProps(obj)
-			if !isLeverControlledWallObj(p) {
-				continue
-			}
-			if !s.wallIsOpen(obj) {
-				continue
-			}
-			// leveropenレイヤーのタイルを置いた壁は、そのタイルが見た目になる。
-			if s.tileMap.leverWallsWithTiles[obj.ID] {
-				continue
-			}
-
-			img := s.game.LeverWallOpenImg
-			imgs := s.game.LeverWallOpenImgs
-			if isLeverWallVisualOnly(p) {
-				img = s.game.LeverWallOpenDecoImg
-				imgs = s.game.LeverWallOpenDecoImgs
-			}
-			if key := leverWallImageKey(p); key != "" && imgs[key] != nil {
-				img = imgs[key]
-			}
-			if img == nil {
-				continue
-			}
-
-			srcRect := image.Rect(0, 0, leverWallTileSize, leverWallTileSize)
-			tile := img.SubImage(srcRect).(*ebiten.Image)
-
-			cols := int(obj.Width) / leverWallTileSize
-			rows := int(obj.Height) / leverWallTileSize
-			if cols < 1 {
-				cols = 1
-			}
-			if rows < 1 {
-				rows = 1
-			}
-
-			for row := 0; row < rows; row++ {
-				for col := 0; col < cols; col++ {
-					op := &ebiten.DrawImageOptions{}
-					op.GeoM.Translate(obj.X+float64(col*leverWallTileSize)+camX, obj.Y+float64(row*leverWallTileSize)+camY)
-					screen.DrawImage(tile, op)
-				}
-			}
 		}
 	}
 }
