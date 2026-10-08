@@ -4,7 +4,6 @@ import (
 	"math"
 	"math/rand"
 	"slices"
-	"strings"
 )
 
 type FieldBlock struct {
@@ -148,7 +147,7 @@ func lerp(a, b, t float64) float64 {
 
 func (s *FieldScene) findBlockSpot(spotID string) (TiledObject, bool) {
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -186,7 +185,7 @@ func (s *FieldScene) blockDoorIsOpen(obj TiledObject) bool {
 
 func (s *FieldScene) spotBelongsToOpenDoor(spotID string) bool {
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -206,7 +205,7 @@ func (s *FieldScene) spotBelongsToOpenDoor(spotID string) bool {
 // sitting on its spot, and should no longer be pushable.
 func (s *FieldScene) blockIsLocked(b *FieldBlock) bool {
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -227,7 +226,7 @@ func (s *FieldScene) blockIsLocked(b *FieldBlock) bool {
 
 func (s *FieldScene) updateBlockDoors() {
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

@@ -88,6 +88,17 @@ func convertMapToClasses(data []byte, mapPath string) ([]byte, []string, error) 
 	for _, l := range layers {
 		layer := l.(map[string]any)
 		name, _ := layer["name"].(string)
+		// 前の決まり(レイヤーの名前で働きが決まる)を、レイヤーのクラスに直す。
+		if cls, _ := layer["class"].(string); cls == "" {
+			switch {
+			case name == "kabe" || name == "collision":
+				layer["class"] = blockingLayerClass
+			case strings.HasPrefix(name, "events") && layer["type"] == "objectgroup":
+				layer["class"] = eventsLayerClass
+			case name == "player":
+				layer["class"] = playerLayerClass
+			}
+		}
 		if layer["type"] == "tilelayer" {
 			props := propsOf(layer["properties"])
 			var rest []any
@@ -301,7 +312,7 @@ func legacyToClass(obj map[string]any) (string, []any, bool) {
 		}
 		textOrStory()
 		add("ボス戦", "string", "ボス", boss(p["bossid"]), enumNone)
-		add("歩く道順", "string", "", p["route"], "")
+		add("歩く道順", "string", "", p["route"], "")
 		objective()
 		return "イベント", mem, true
 	case "boss":

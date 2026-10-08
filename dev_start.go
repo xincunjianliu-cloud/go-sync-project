@@ -49,7 +49,7 @@ func devSpawn(tmap TiledMap, requested string) (spawnName string, x, y float64) 
 	}
 	first := ""
 	for _, layer := range tmap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

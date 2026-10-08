@@ -29,7 +29,7 @@ func newBlockDoorTestScene() (*FieldScene, *FieldBlock) {
 		tileMap: TiledMap{
 			Width: 100, Height: 100, TileWidth: 16, TileHeight: 16,
 			Layers: []TiledLayer{
-				{Name: "events", Type: "objectgroup", Objects: []TiledObject{spotObj, doorObj}},
+				{Name: "events", Type: "objectgroup", Properties: eventLayerProps, Objects: []TiledObject{spotObj, doorObj}},
 			},
 		},
 	}

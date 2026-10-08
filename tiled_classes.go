@@ -26,8 +26,12 @@ const (
 	enumKeep    = "(そのまま)"
 )
 
-// blockingLayerClass はレイヤーのクラス名(壁・水などを通れなくする)。
-const blockingLayerClass = "通れないレイヤー"
+// レイヤーのクラス名。働きのあるレイヤーは名前ではなくクラスで決める。
+const (
+	blockingLayerClass = "通れないレイヤー" // 壁・水などを通れなくする
+	eventsLayerClass   = "しかけレイヤー"  // 宝箱・ドアなどを置く
+	playerLayerClass   = "主人公の高さ"   // 主人公を描く重なり順
+)
 
 type classMember struct {
 	Name string // Tiledに出る欄の名前
@@ -213,6 +217,16 @@ var tiledClasses = []tiledClass{
 	{Name: blockingLayerClass, UseAs: "layer", Color: "#ff666666",
 		apply: func(v map[string]string, set func(string, string)) {
 			set("blocking", "true")
+		}},
+	// 宝箱・ドアなどのしかけを置くオブジェクトレイヤー。
+	{Name: eventsLayerClass, UseAs: "layer", Color: "#ff674ea7",
+		apply: func(v map[string]string, set func(string, string)) {
+			set("eventlayer", "true")
+		}},
+	// 主人公を描く重なり順の位置。何も置かない。
+	{Name: playerLayerClass, UseAs: "layer", Color: "#ff3d85c6",
+		apply: func(v map[string]string, set func(string, string)) {
+			set("playerlayer", "true")
 		}},
 }
 

@@ -273,7 +273,7 @@ func TestMapWarps(t *testing.T) {
 		}
 		names := map[string]bool{}
 		for _, layer := range tmap.Layers {
-			if strings.HasPrefix(layer.Name, "events") {
+			if isEventsLayer(layer) {
 				for _, obj := range layer.Objects {
 					if obj.Name != "" {
 						names[obj.Name] = true
@@ -286,7 +286,7 @@ func TestMapWarps(t *testing.T) {
 	for _, mapPath := range mapPaths {
 		tmap, _ := loadTiledMap(mapPath)
 		for _, layer := range tmap.Layers {
-			if !strings.HasPrefix(layer.Name, "events") {
+			if !isEventsLayer(layer) {
 				continue
 			}
 			for _, obj := range layer.Objects {
@@ -340,7 +340,7 @@ func TestMapLeverObjects(t *testing.T) {
 		}
 		levers := map[string]bool{}
 		for _, layer := range tmap.Layers {
-			if strings.HasPrefix(layer.Name, "events") {
+			if isEventsLayer(layer) {
 				for _, obj := range layer.Objects {
 					if p := objProps(obj); isLeverObj(p) {
 						levers[p["id"]] = true
@@ -349,7 +349,7 @@ func TestMapLeverObjects(t *testing.T) {
 			}
 		}
 		for _, layer := range tmap.Layers {
-			if !strings.HasPrefix(layer.Name, "events") {
+			if !isEventsLayer(layer) {
 				continue
 			}
 			for _, obj := range layer.Objects {

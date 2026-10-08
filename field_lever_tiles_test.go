@@ -66,7 +66,7 @@ func TestFlattenLayerGroups(t *testing.T) {
 	layers := flattenLayerGroups([]TiledLayer{
 		{Name: "床", Type: "tilelayer"},
 		{Name: "グループ", Type: "group", Opacity: &half, Layers: []TiledLayer{
-			{Name: "events", Type: "objectgroup"},
+			{Name: "events", Type: "objectgroup", Properties: eventLayerProps},
 			{Name: "中のグループ", Type: "group", Visible: &no, Layers: []TiledLayer{{Name: "影", Type: "tilelayer"}}},
 		}},
 		{Name: "屋根", Type: "tilelayer"},
@@ -85,3 +85,6 @@ func TestFlattenLayerGroups(t *testing.T) {
 		t.Errorf("不透明度 = %v(グループの0.5を引き継ぐはず)", a)
 	}
 }
+
+// eventLayerProps は、クラス「しかけレイヤー」を読み替えたあとの名札(テスト用)。
+var eventLayerProps = []TiledProperty{{Name: "eventlayer", Type: "string", Value: "true"}}

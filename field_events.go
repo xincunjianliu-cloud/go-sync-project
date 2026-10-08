@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-// マップの"events"レイヤーに置かれたオブジェクトのtype/textから種類を
+// マップのしかけレイヤーに置かれたオブジェクトのtype/textから種類を
 // 判定する処理をここに集約する。同じ文字列比較を複数ファイルにバラバラに
 // 書くと、命名規則を変えたときに直し漏れが起きやすいため、
 // 「このオブジェクトは宝箱か/壁か/レバーか」の判定はすべてここを経由する。
@@ -31,9 +31,19 @@ const (
 // タイルが、オブジェクトレイヤーなら置いた四角・多角形が通れない。
 // 当たり判定(field_update.go / field_scene.go)とミニマップの色分け
 // (menu_draw_misc.go)がこれを見る。
-func isBlockingLayer(layer TiledLayer) bool {
+func isBlockingLayer(layer TiledLayer) bool { return layerFlag(layer, "blocking") }
+
+// isEventsLayer はクラス「しかけレイヤー」にしたオブジェクトレイヤーか
+// (名札 eventlayer=true)。宝箱・ドアなどのしかけはここに置いたものだけが動く。
+func isEventsLayer(layer TiledLayer) bool { return layerFlag(layer, "eventlayer") }
+
+// isPlayerLayer はクラス「主人公の高さ」にしたレイヤーか(名札 playerlayer=true)。
+// 主人公はこのレイヤーの位置(重なり順)で描かれる。
+func isPlayerLayer(layer TiledLayer) bool { return layerFlag(layer, "playerlayer") }
+
+func layerFlag(layer TiledLayer, key string) bool {
 	for _, p := range layer.Properties {
-		if b, _ := propBool(p.Value); b && strings.EqualFold(p.Name, "blocking") {
+		if b, _ := propBool(p.Value); b && strings.EqualFold(p.Name, key) {
 			return true
 		}
 	}

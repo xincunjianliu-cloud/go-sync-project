@@ -47,7 +47,7 @@ func (g *Game) mapBossBGMs(tmap TiledMap) []string {
 func (g *Game) mapBossIndices(tmap TiledMap) []int {
 	var out []int
 	for _, layer := range tmap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

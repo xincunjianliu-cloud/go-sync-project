@@ -513,7 +513,7 @@ func newRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	spawnFound := false
 
 	for _, layer := range tmap.Layers {
-		if strings.HasPrefix(layer.Name, "events") {
+		if isEventsLayer(layer) {
 			for _, obj := range layer.Objects {
 
 				if targetSpawnName != "" && obj.Name == targetSpawnName {
@@ -571,7 +571,7 @@ func newRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 	}
 
 	for _, layer := range tmap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -590,7 +590,7 @@ func newRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 
 	var blocks []*FieldBlock
 	for _, layer := range tmap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -999,7 +999,7 @@ func (s *FieldScene) updateDarkness() {
 	s.isDarknessActive = false
 
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

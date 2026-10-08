@@ -27,7 +27,7 @@ var (
 		"targetmap": true, "targetpoint": true, "requireboss": true, "dir": true,
 	}
 	knownMapProps      = map[string]bool{"bgm": true, "displayname": true, "autoheal": true, "battlebg": true}
-	knownTileLayerProp = map[string]bool{"leveropen": true, "blocking": true}
+	knownTileLayerProp = map[string]bool{"leveropen": true, "blocking": true, "playerlayer": true}
 	knownObjectTypes   = map[string]bool{"": true, evTypeEvent: true, "trigger": true, "boss": true, "enemy": true, "darkness": true}
 )
 
@@ -164,10 +164,14 @@ func TestMapSettings(t *testing.T) {
 			}
 		}
 
+		players := 0
 		for _, layer := range tmap.Layers {
-			// 前の決まり(名前が kabe / collision なら通れない)のままのレイヤー。
-			if (layer.Name == "kabe" || layer.Name == "collision") && !isBlockingLayer(layer) {
-				t.Errorf("%s: レイヤー%q は名前だけでは通れなくなりません。クラスを「%s」にしてください", mapPath, layer.Name, blockingLayerClass)
+			// 前の決まり(レイヤーの名前で働きが決まる)のままのレイヤー。
+			if want := oldLayerNameClass(layer); want != "" {
+				t.Errorf("%s: レイヤー%q は名前だけでは働きません。クラスを「%s」にしてください", mapPath, layer.Name, want)
+			}
+			if isPlayerLayer(layer) {
+				players++
 			}
 			switch {
 			case layer.Type == "tilelayer":
@@ -177,18 +181,35 @@ func TestMapSettings(t *testing.T) {
 					}
 				}
 			case layer.Type != "objectgroup":
-			case strings.HasPrefix(layer.Name, "events"), isBlockingLayer(layer):
-			case layer.Name == "player":
+			case isEventsLayer(layer), isBlockingLayer(layer):
+			case isPlayerLayer(layer):
 				if len(layer.Objects) > 0 {
-					t.Errorf("%s: player レイヤーにはオブジェクトを置かないでください(%d個あります。しかけは events レイヤーへ)", mapPath, len(layer.Objects))
+					t.Errorf("%s: 「%s」のレイヤーにはオブジェクトを置かないでください(%d個あります。しかけは「%s」のレイヤーへ)", mapPath, playerLayerClass, len(layer.Objects), eventsLayerClass)
 				}
 			default:
 				if len(layer.Objects) > 0 {
-					t.Errorf("%s: オブジェクトレイヤー%q のオブジェクトは動きません。しかけは events で始まる名前のレイヤーに、通れない場所はクラスを「通れないレイヤー」にしたレイヤーに置いてください", mapPath, layer.Name)
+					t.Errorf("%s: オブジェクトレイヤー%q のオブジェクトは動きません。しかけはクラス「%s」の、通れない場所はクラス「%s」のレイヤーに置いてください", mapPath, layer.Name, eventsLayerClass, blockingLayerClass)
 				}
 			}
 		}
+		if players != 1 {
+			t.Errorf("%s: クラス「%s」のレイヤーは1マップに1枚にしてください(今: %d枚)", mapPath, playerLayerClass, players)
+		}
 	}
+}
+
+// oldLayerNameClass は、前の決まりの名前(kabe・collision・events…・player)なのに
+// クラスが付いていないレイヤーに、付けるべきクラスを返す。問題なければ空。
+func oldLayerNameClass(layer TiledLayer) string {
+	switch {
+	case (layer.Name == "kabe" || layer.Name == "collision") && !isBlockingLayer(layer):
+		return blockingLayerClass
+	case strings.HasPrefix(layer.Name, "events") && layer.Type == "objectgroup" && !isEventsLayer(layer):
+		return eventsLayerClass
+	case layer.Name == "player" && !isPlayerLayer(layer):
+		return playerLayerClass
+	}
+	return ""
 }
 
 func mapPropString(tmap TiledMap, name string) string {
@@ -423,7 +444,7 @@ func TestCollisionDoesNotBlockLeverPaths(t *testing.T) {
 
 func forEachEventObject(tmap TiledMap, fn func(TiledObject, map[string]string)) {
 	for _, layer := range tmap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

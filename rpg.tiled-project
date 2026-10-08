@@ -556,6 +556,28 @@
             "useAs": [
                 "layer"
             ]
+        },
+        {
+            "color": "#ff674ea7",
+            "drawFill": true,
+            "id": 26,
+            "members": [],
+            "name": "しかけレイヤー",
+            "type": "class",
+            "useAs": [
+                "layer"
+            ]
+        },
+        {
+            "color": "#ff3d85c6",
+            "drawFill": true,
+            "id": 27,
+            "members": [],
+            "name": "主人公の高さ",
+            "type": "class",
+            "useAs": [
+                "layer"
+            ]
         }
     ]
 }

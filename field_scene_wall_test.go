@@ -21,7 +21,7 @@ func newWallTestScene(unlocked bool, keys string) (*FieldScene, TiledObject) {
 		tileMap: TiledMap{
 			Width: 100, Height: 100, TileWidth: 16, TileHeight: 16,
 			Layers: []TiledLayer{
-				{Name: "events", Type: "objectgroup", Objects: []TiledObject{wallObj}},
+				{Name: "events", Type: "objectgroup", Properties: eventLayerProps, Objects: []TiledObject{wallObj}},
 			},
 		},
 	}
@@ -137,6 +137,7 @@ func TestComputeWallKeyGroups(t *testing.T) {
 		Layers: []TiledLayer{
 			{
 				Name: "events",
+				Properties: eventLayerProps,
 				Objects: []TiledObject{
 					{
 						Properties: []TiledProperty{
@@ -184,7 +185,7 @@ func newLeverWallTestScene(leverID string) (*FieldScene, TiledObject, TiledObjec
 		tileMap: TiledMap{
 			Width: 100, Height: 100, TileWidth: 16, TileHeight: 16,
 			Layers: []TiledLayer{
-				{Name: "events", Type: "objectgroup", Objects: []TiledObject{wallObj, leverObj}},
+				{Name: "events", Type: "objectgroup", Properties: eventLayerProps, Objects: []TiledObject{wallObj, leverObj}},
 			},
 		},
 	}
@@ -265,7 +266,7 @@ func TestPullLeverVisualOnlyWallStaysBlocked(t *testing.T) {
 		tileMap: TiledMap{
 			Width: 100, Height: 100, TileWidth: 16, TileHeight: 16,
 			Layers: []TiledLayer{
-				{Name: "events", Type: "objectgroup", Objects: []TiledObject{wallObj, leverObj}},
+				{Name: "events", Type: "objectgroup", Properties: eventLayerProps, Objects: []TiledObject{wallObj, leverObj}},
 			},
 		},
 	}

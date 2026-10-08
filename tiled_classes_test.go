@@ -17,7 +17,7 @@ func TestTiledClassesBecomeLegacyProperties(t *testing.T) {
 	  ],
 	  "layers": [
 	    {"name": "机", "type": "tilelayer", "class": "レバーで出るレイヤー", "data": []},
-	    {"name": "events", "type": "objectgroup", "objects": [
+	    {"name": "events", "type": "objectgroup", "class": "しかけレイヤー", "objects": [
 	      {"id": 1, "type": "宝箱", "properties": [{"name": "中身", "type": "string", "propertytype": "アイテム", "value": "ハイポーション"}]},
 	      {"id": 2, "type": "ドア", "properties": [
 	        {"name": "行き先マップ", "type": "file", "value": "water_b.tmj"},

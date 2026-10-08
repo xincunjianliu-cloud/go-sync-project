@@ -107,10 +107,10 @@ func (s *FieldScene) drawWorld(screen *ebiten.Image) {
 		if layer.Type != "objectgroup" {
 			continue
 		}
-		if eventsLayerIdx == -1 && strings.HasPrefix(layer.Name, "events") {
+		if eventsLayerIdx == -1 && isEventsLayer(layer) {
 			eventsLayerIdx = i
 		}
-		if layer.Name == "player" {
+		if isPlayerLayer(layer) {
 			playerLayerIdx = i
 		}
 	}
@@ -322,7 +322,7 @@ func (s *FieldScene) drawChests(screen *ebiten.Image, camX, camY float64) {
 	const chestFrameW, chestFrameH = 40, 32
 
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -360,7 +360,7 @@ const (
 
 func (s *FieldScene) drawLockedWalls(screen *ebiten.Image, camX, camY float64) {
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -408,7 +408,7 @@ const leverWallTileSize = 32
 // 32×32の絵を、引き伸ばさずオブジェクトの範囲いっぱいに敷き詰めて表示する。
 func (s *FieldScene) drawLeverWalls(screen *ebiten.Image, camX, camY float64) {
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -473,7 +473,7 @@ func (s *FieldScene) drawLevers(screen *ebiten.Image, camX, camY float64) {
 	const frameW, frameH = leverFrameW, leverFrameH
 
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -503,7 +503,7 @@ func (s *FieldScene) drawBlockSpots(screen *ebiten.Image, camX, camY float64) {
 	imgH := float64(img.Bounds().Dy())
 
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -549,7 +549,7 @@ func (s *FieldScene) drawBlockDoors(screen *ebiten.Image, camX, camY float64) {
 	}
 
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

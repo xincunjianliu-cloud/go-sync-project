@@ -426,7 +426,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 		}
 
 		for _, layer := range s.tileMap.Layers {
-			if !strings.HasPrefix(layer.Name, "events") {
+			if !isEventsLayer(layer) {
 				continue
 			}
 			for _, obj := range layer.Objects {
@@ -611,7 +611,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 		}
 
 		for _, layer := range s.tileMap.Layers {
-			if !strings.HasPrefix(layer.Name, "events") {
+			if !isEventsLayer(layer) {
 				continue
 			}
 			for _, obj := range layer.Objects {
@@ -880,7 +880,7 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 	}
 
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
@@ -1050,7 +1050,7 @@ func (s *FieldScene) checkDoorProximity() {
 	s.nearDoorEvent = false
 
 	for _, layer := range s.tileMap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

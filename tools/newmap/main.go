@@ -5,8 +5,8 @@
 //
 // 中身:
 //   - タイルセット: assets/tilesets の .tsx を全部付ける
-//   - レイヤー(下から): 床 / 壁 / events / player / 主人公より上 / 通れない四角
-//     (壁と通れない四角は、クラスを「通れないレイヤー」にしてある)
+//   - レイヤー(下から): 床 / 壁 / しかけ / 主人公の高さ / 主人公より上 / 通れない四角
+//     (床と主人公より上以外は、働きに合ったクラスを付けてある)
 //   - マップのクラスは「マップ設定」(地名などはTiledで書く)
 //   - events に着地点 start_point を1つ(真ん中)。すぐF5で試せる
 //
@@ -130,9 +130,9 @@ func newMap(w, h int, tilesets []map[string]any) map[string]any {
 			"type": "objectgroup", "visible": true, "x": 0, "y": 0,
 		}
 	}
-	// blocking はレイヤーのクラスを「通れないレイヤー」にする(壁・通れない四角)。
-	blocking := func(l map[string]any) map[string]any {
-		l["class"] = "通れないレイヤー"
+	// withClass はレイヤーのクラス(通れないレイヤー・しかけレイヤーなど)を付ける。
+	withClass := func(l map[string]any, class string) map[string]any {
+		l["class"] = class
 		return l
 	}
 	start := map[string]any{
@@ -146,11 +146,11 @@ func newMap(w, h int, tilesets []map[string]any) map[string]any {
 		"infinite":         false,
 		"layers": []any{
 			tileLayer(1, "床"),
-			blocking(tileLayer(2, "壁")),
-			objectLayer(3, "events", []any{start}),
-			objectLayer(4, "player", []any{}),
+			withClass(tileLayer(2, "壁"), "通れないレイヤー"),
+			withClass(objectLayer(3, "しかけ", []any{start}), "しかけレイヤー"),
+			withClass(objectLayer(4, "主人公の高さ", []any{}), "主人公の高さ"),
 			tileLayer(5, "主人公より上"),
-			blocking(objectLayer(6, "通れない四角", []any{})),
+			withClass(objectLayer(6, "通れない四角", []any{}), "通れないレイヤー"),
 		},
 		"nextlayerid":  7,
 		"nextobjectid": 2,

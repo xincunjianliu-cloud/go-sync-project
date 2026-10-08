@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"sort"
-	"strings"
 )
 
 // startMapPath はニューゲーム開始時に立つマップであり、マップ自動探索
@@ -102,7 +101,7 @@ func BuildObjectiveAndMapIndex() error {
 		yieldToBrowser()
 
 		for _, layer := range tmap.Layers {
-			if !strings.HasPrefix(layer.Name, "events") {
+			if !isEventsLayer(layer) {
 				continue
 			}
 			for _, obj := range layer.Objects {

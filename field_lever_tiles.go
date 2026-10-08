@@ -38,7 +38,7 @@ func buildLeverTileIndex(tmap *TiledMap) {
 	cells := make([]string, tmap.Width*tmap.Height)
 	cellWall := make([]int, len(cells))
 	for _, layer := range tmap.Layers {
-		if !strings.HasPrefix(layer.Name, "events") {
+		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {

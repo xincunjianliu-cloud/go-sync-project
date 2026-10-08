@@ -22,7 +22,7 @@ func newDarknessTestScene(leverID string) (*FieldScene, TiledObject) {
 		tileMap: TiledMap{
 			Width: 100, Height: 100, TileWidth: 16, TileHeight: 16,
 			Layers: []TiledLayer{
-				{Name: "events", Type: "objectgroup", Objects: []TiledObject{zoneObj}},
+				{Name: "events", Type: "objectgroup", Properties: eventLayerProps, Objects: []TiledObject{zoneObj}},
 			},
 		},
 	}
