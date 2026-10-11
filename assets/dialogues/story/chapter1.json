@@ -1,1 +1,320 @@
-{}
+{
+  "chapter1-1": {
+    "first": {
+      "commands": [
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "うわなつかしいな"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "だいぶ荒れてるけど本当に妖怪が出たりしてな"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "ははっ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "まずどこいく？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "まずは女子トイレじゃない？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "当時からトイレの花子さんの噂は流行ってたし"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "行こう！"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "今更だけど俺らって女子トイレ入っていいの？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "マジで今更何を言ってんだよ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "トイレの花子さんの噂を試す"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "やっぱり何も起きないね"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そりゃそうだろ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "でもトイレといえば鏡の噂もあったよね"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "鏡に祈る"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "その瞬間何かが変わった"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "それと同時に遅れて答えるように女子トイレのドアが開く"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "トイレの花子さん登場"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "あなたたちはこっち側の世界に来てしまったのよ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "鏡というのはこっちとあっちの橋渡しの役割を担っているから"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "つまり鏡に祈った瞬間こっちの世界に来てしまったというわけか"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "信じられないけどこうなったら信じるしかないか"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "それで、元の世界に戻る方法はあるのか？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "屋上に行けば全てがわかる"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "私からはそれだけ伝えておくわ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        }
+      ]
+    }
+  }
+}

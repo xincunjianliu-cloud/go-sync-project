@@ -13,14 +13,14 @@ const (
 	battleSubCmdCenterX = 860.0
 	battleSubCmdCenterY = 440.0
 
-	battleSubLabelOffsetX = 8.0
-	battleSubLabelOffsetY = 22.0
-	battleSubRowHeight    = 35.0
-	battleSubRightOffsetX = 20.0
-
-	battleSubLvBlockRightX = 66.0
+	battleSubTextLeftPad   = 4.0
+	battleSubLabelOffsetY  = 22.0
+	battleSubRowHeight     = 35.0
+	battleSubMPLeftPad     = 160.0
+	battleSubLevelLeftPad  = 117.0
 	battleSubLvGap         = 2.0
 	battleSubLvHitPadX     = 5.0
+	battleSubSkillFontSize = 18.0
 
 	skillLvLeftArrow  = "◀"
 	skillLvRightArrow = "▶"
@@ -34,6 +34,18 @@ const (
 
 func skillLvText(lv int) string {
 	return fmt.Sprintf("Lv%d", lv)
+}
+
+func battleSubPanelTextLeft(windowX float64) float64 {
+	return windowX + battleSubTextLeftPad
+}
+
+func battleSubPanelMPX(windowX float64) float64 {
+	return windowX + battleSubMPLeftPad
+}
+
+func battleSubPanelLevelBlockLeft(windowX float64) float64 {
+	return windowX + battleSubLevelLeftPad
 }
 
 // battleSkillPanelPivot is the point drawSkillSubMenuEnlarged scales the panel
@@ -81,7 +93,7 @@ func (s *BattleScene) battleSubRowRect(row int) tapRect {
 	return tapRect{
 		x: windowX,
 		y: y - battleSubRowHeight/2,
-		w: windowW - battleSubRightOffsetX,
+		w: windowW,
 		h: battleSubRowHeight,
 	}
 }
@@ -95,17 +107,17 @@ func (s *BattleScene) hitTestBattleSubRows(rowCount int) (int, bool) {
 }
 
 func (s *BattleScene) skillLevelArrowRects(row, lv int, face text.Face) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
-	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
+	windowX, windowY, _, _ := s.battleSubPanelOrigin()
 	textY = windowY + battleSubLabelOffsetY + float64(row)*battleSubRowHeight
 
 	lvW := text.Advance(skillLvText(lv), face)
 	leftArrowW := text.Advance(skillLvLeftArrow, face)
 	rightArrowW := text.Advance(skillLvRightArrow, face)
 
-	blockRightX := windowX + windowW - battleSubLvBlockRightX
-	rightX = blockRightX - rightArrowW
-	lvX = rightX - battleSubLvGap - lvW
-	leftX = lvX - battleSubLvGap - leftArrowW
+	blockLeftX := battleSubPanelLevelBlockLeft(windowX)
+	leftX = blockLeftX
+	lvX = leftX + leftArrowW + battleSubLvGap
+	rightX = lvX + lvW + battleSubLvGap
 
 	rowTopY := textY - battleSubRowHeight/2
 	leftRect = tapRect{x: leftX - battleSubLvHitPadX, y: rowTopY, w: leftArrowW + battleSubLvHitPadX*2, h: battleSubRowHeight}
@@ -118,7 +130,7 @@ func (s *BattleScene) handleSkillLevelArrowTaps(p int, skills []SkillDef) bool {
 	if len(pts) == 0 {
 		return false
 	}
-	face := s.game.FontFace(15)
+	face := s.game.FontFace(battleSubSkillFontSize)
 	for i, sk := range skills {
 		if !s.game.IsSkillUnlocked(p, i) {
 			continue

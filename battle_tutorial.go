@@ -16,6 +16,14 @@ const (
 	battleTutorialKindGauge
 )
 
+// gaugeSystemUnlocked reports whether battles use the gauge system (gauge,
+// attack bonus, rewind). It unlocks once boss 1 is defeated, the same
+// moment the gauge tutorial becomes due, so the system first appears in the
+// battle that explains it.
+func gaugeSystemUnlocked(game *Game) bool {
+	return game.BossDefeatedFlags[0]
+}
+
 // nextBattleTutorialKind decides which one-time battle tutorial (if any)
 // should play for the battle about to start. Only one plays per battle: the
 // basics tutorial takes priority since the gauge tutorial's condition
@@ -25,7 +33,7 @@ func nextBattleTutorialKind(game *Game) int {
 	switch {
 	case !game.SeenBattleTutorial:
 		return battleTutorialKindBasics
-	case game.BossDefeatedFlags[0] && !game.SeenGaugeTutorial:
+	case gaugeSystemUnlocked(game) && !game.SeenGaugeTutorial:
 		return battleTutorialKindGauge
 	default:
 		return battleTutorialKindNone

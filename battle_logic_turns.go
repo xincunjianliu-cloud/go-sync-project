@@ -10,13 +10,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
-func isLowHP(hp, maxHP int) bool {
-	if maxHP <= 0 {
-		return false
-	}
-	return float64(hp)/float64(maxHP) <= 0.25
-}
-
 // skillSpriteAnim は味方pのskillIdx番目のスキルで再生するスプライトシートの行と
 // コマ数、回復の「自分が受ける」部分が始まるコマ（なければ0）を返す。
 // 表はスキル名で引く。表にないスキルは通常攻撃のアニメにする。
@@ -459,7 +452,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.itemButtonArmed = false
 	}
 	tappedIdx, tappedOk := hitTestCommandMenu(s.game)
-	rewindTapped := isRewindButtonJustPressed(s.game)
+	rewindTapped := s.gaugeUnlocked && isRewindButtonJustPressed(s.game)
 	// The item button's widened touch area overlaps the skill/flee tap rects;
 	// a tap inside a command icon goes to that icon only.
 	itemTapped := !tappedOk && isItemButtonJustPressed()
@@ -481,7 +474,7 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	rewindConfirm := tapArmButtonConfirm(rewindTapped, &s.rewindButtonArmed, s.game.Audio)
 	itemConfirm := tapArmButtonConfirm(itemTapped, &s.itemButtonArmed, s.game.Audio)
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyF) || rewindConfirm {
+	if (s.gaugeUnlocked && inpututil.IsKeyJustPressed(ebiten.KeyF)) || rewindConfirm {
 		p := s.waitingActor
 		if p >= 0 && p < partySize && s.canUseRewind(p) {
 			s.game.Audio.PlaySEByKey("decide")

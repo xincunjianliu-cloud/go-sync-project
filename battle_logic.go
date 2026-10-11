@@ -115,6 +115,7 @@ func (s *BattleScene) applyDebugCheats() {
 		}
 
 	case inpututil.IsKeyJustPressed(ebiten.Key6):
+		s.gaugeUnlocked = true
 		s.gaugePoint = gaugePoolMax
 		s.recomputeGaugeStage()
 
@@ -188,6 +189,7 @@ func (s *BattleScene) applyDebugCheats() {
 		s.tutorialActive = true
 
 	case inpututil.IsKeyJustPressed(ebiten.KeyG):
+		s.gaugeUnlocked = true
 		s.tutorialKind = battleTutorialKindGauge
 		s.tutorialPage = 0
 		s.tutorialActive = true
@@ -570,7 +572,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			}
 
 			for i := range partySize {
-				if s.playerPose[i] != poseDead && s.playerPose[i] != poseWin {
+				if s.playerPose[i] != poseDead {
 					s.playerPose[i] = poseIdle
 					s.playerAnimTimer[i] = 0
 				}
@@ -633,16 +635,10 @@ func (s *BattleScene) Update(dt float64) Scene {
 			s.resultAnimTimer += dt
 			if s.resultAnimTimer >= 0.8 {
 				s.resultAnimTimer = 0.0
-				s.resultSubPhase = resSubWinPose
-				for i := range partySize {
-					if s.game.PlayerHP[i] > 0 {
-						s.playerPose[i] = poseWin
-						s.playerAnimTimer[i] = 0
-					}
-				}
+				s.resultSubPhase = resSubWinWait
 			}
 
-		case resSubWinPose:
+		case resSubWinWait:
 			s.resultAnimTimer += dt
 
 			if s.resultAnimTimer >= 0.6 {
@@ -654,10 +650,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 					s.drawPlayerEXPF[i] = float64(s.expStartEXP[i])
 					s.isLevelUp[i] = s.game.PlayerLv[i] > s.drawPlayerLv[i]
 					s.resultStartLevel[i] = s.drawPlayerLv[i]
-					ratio := float64(s.totalEnemyExp()) / float64(s.drawPlayerMaxEXP[i])
-					if ratio > 1.0 {
-						ratio = 1.0
-					}
 				}
 			}
 
@@ -671,9 +663,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 		case resSubBarAnimate:
 			if isResultAdvancePressed() {
 				for i := range partySize {
-					if s.game.PlayerHP[i] <= 0 {
-						continue
-					}
 					s.levelUpPauseTimer[i] = 0
 					if s.drawPlayerLv[i] < s.game.PlayerLv[i] {
 						s.drawPlayerLv[i]++
@@ -681,7 +670,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 						if s.drawPlayerLv[i] == s.game.PlayerLv[i] {
 							s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 						} else {
-							s.drawPlayerMaxEXP[i] = s.drawPlayerLv[i] * 50
+							s.drawPlayerMaxEXP[i] = PlayerExpToNextByLevel[s.drawPlayerLv[i]-1]
 						}
 						s.drawPlayerEXP[i] = 0
 						s.drawPlayerEXPF[i] = 0.0
@@ -696,9 +685,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 				allDone := true
 				for i := range partySize {
-					if s.game.PlayerHP[i] <= 0 {
-						continue
-					}
 					if s.drawPlayerLv[i] < s.game.PlayerLv[i] || s.drawPlayerEXP[i] < s.game.PlayerEXP[i] {
 						allDone = false
 						break
@@ -712,10 +698,6 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 			allFinished := true
 			for i := range partySize {
-				if s.game.PlayerHP[i] <= 0 {
-					continue
-				}
-
 				if s.levelUpPauseTimer[i] > 0 {
 					allFinished = false
 					s.levelUpPauseTimer[i] -= dt
@@ -726,7 +708,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 						if s.drawPlayerLv[i] == s.game.PlayerLv[i] {
 							s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 						} else {
-							s.drawPlayerMaxEXP[i] = s.drawPlayerLv[i] * 50
+							s.drawPlayerMaxEXP[i] = PlayerExpToNextByLevel[s.drawPlayerLv[i]-1]
 						}
 						s.drawPlayerEXP[i] = 0
 						s.drawPlayerEXPF[i] = 0.0
@@ -865,7 +847,7 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 			continue
 		}
 		if s.waitCancelHold[i] > 0 {
-			s.playerPose[i] = poseDefend
+			s.playerPose[i] = poseIdle
 			continue
 		}
 
@@ -900,8 +882,8 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 		}
 
 		if s.battlePhase == phaseBattleEnd {
-			if s.isWon && s.resultSubPhase >= resSubWinPose && s.playerPose[i] != poseWin {
-				s.playerPose[i] = poseWin
+			if s.isWon && s.resultSubPhase >= resSubWinWait && s.playerPose[i] != poseIdle {
+				s.playerPose[i] = poseIdle
 				s.playerAnimTimer[i] = 0
 			}
 			continue
@@ -910,22 +892,6 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 		if s.playerPose[i] != poseReady && s.playerPose[i] != poseReadyGlow && s.playerPose[i] != poseHealCast && s.readySlideX[i] < -0.5 {
 			if s.playerPose[i] != poseIdle {
 				s.playerPose[i] = poseIdle
-				s.playerAnimTimer[i] = 0
-			}
-			continue
-		}
-
-		if isLowHP(s.game.PlayerHP[i], s.game.PlayerMaxHP[i]) {
-			if s.playerPose[i] != poseLowHP {
-				s.playerPose[i] = poseLowHP
-				s.playerAnimTimer[i] = 0
-			}
-			continue
-		}
-
-		if s.waitingActor != i && s.waitStance[i] {
-			if s.playerPose[i] != poseDefend {
-				s.playerPose[i] = poseDefend
 				s.playerAnimTimer[i] = 0
 			}
 			continue
@@ -956,7 +922,7 @@ func (s *BattleScene) updateAllPoses(dt float64) {
 			continue
 		}
 
-		if s.playerPose[i] == poseCast || s.playerPose[i] == poseHealCast {
+		if s.playerPose[i] == poseHealCast {
 			if s.playerPose[i] == poseHealCast && i == s.healingCaster && s.healingAnimTimer[i] > 0 {
 				s.healingAnimTimer[i] -= dt
 				if s.healingAnimTimer[i] <= 0 {

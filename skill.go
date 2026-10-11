@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 type SkillTarget int
 
 const (
@@ -490,27 +488,4 @@ func withoutCoverBuffs(list []Buff) []Buff {
 		}
 	}
 	return kept
-}
-
-// statBonusText formats a skill level's StatBonus for the upgrade menu,
-// e.g. "物攻+20 魔防+10".
-func statBonusText(b PlayerStats) string {
-	parts := []struct {
-		name string
-		v    int
-	}{
-		{"HP", b.HP}, {"MP", b.MP}, {"物攻", b.PhysAtk}, {"魔攻", b.MagicAtk},
-		{"物防", b.PhysDef}, {"魔防", b.MagicDef}, {"素早さ", b.Spd}, {"運", b.Luck},
-	}
-	s := ""
-	for _, p := range parts {
-		if p.v == 0 {
-			continue
-		}
-		if s != "" {
-			s += " "
-		}
-		s += fmt.Sprintf("%s+%d", p.name, p.v)
-	}
-	return s
 }

@@ -66,7 +66,7 @@ var (
 		"targetmap": true, "targetpoint": true, "requireboss": true, "dir": true,
 	}
 	knownMapProps      = map[string]bool{"bgm": true, "displayname": true, "autoheal": true, "battlebg": true, "startmap": true}
-	knownTileLayerProp = map[string]bool{"leveropen": true, "blocking": true, "playerlayer": true}
+	knownTileLayerProp = map[string]bool{"leveropen": true, "blocking": true, "walkontop": true, "playerlayer": true}
 	knownObjectTypes   = map[string]bool{"": true, evTypeEvent: true, "trigger": true, "boss": true, "enemy": true, "darkness": true}
 
 	// objFieldLabel は読み替えたあとの名札を、Tiledに出る欄の名前に戻す(エラー文用)。
@@ -520,6 +520,8 @@ func checkMapObjects(c *mapChecker) {
 }
 
 // 通れないレイヤー(四角・タイル)が、通れるレバー壁(机の橋など)をふさいでいないこと。
+// 「上に絵を描いた所は通れる」レイヤーなら、その上(主人公より下)の
+// レバーで出るレイヤーに机が描いてあるマスはふさいでいない。
 func checkCollisionDoesNotBlockLeverPaths(c *mapChecker) {
 	mapPaths, maps := loadMapsForCheck(c)
 	for _, mapPath := range mapPaths {
@@ -530,7 +532,26 @@ func checkCollisionDoesNotBlockLeverPaths(c *mapChecker) {
 				walls = append(walls, obj)
 			}
 		})
-		for _, layer := range tmap.Layers {
+		if tmap.Width == 0 || tmap.TileWidth == 0 || tmap.TileHeight == 0 {
+			continue
+		}
+		tw, th := float64(tmap.TileWidth), float64(tmap.TileHeight)
+		// leverAbove はマスiに、li番目より上・主人公より下のレバーで出るレイヤーの絵があるか。
+		leverAbove := func(li, i int) bool {
+			if !isWalkOnTopLayer(tmap.Layers[li]) {
+				return false
+			}
+			for _, l := range tmap.Layers[li+1:] {
+				if isPlayerLayer(l) {
+					break
+				}
+				if isLeverOpenLayer(l) && !isBlockingLayer(l) && i < len(l.Data) && l.Data[i] != 0 {
+					return true
+				}
+			}
+			return false
+		}
+		for li, layer := range tmap.Layers {
 			if !isBlockingLayer(layer) {
 				continue
 			}
@@ -539,20 +560,33 @@ func checkCollisionDoesNotBlockLeverPaths(c *mapChecker) {
 					continue
 				}
 				for _, w := range walls {
-					if rectsOverlap(o.X, o.Y, o.X+o.Width, o.Y+o.Height, w.X, w.Y, w.X+w.Width, w.Y+w.Height) {
+					if !rectsOverlap(o.X, o.Y, o.X+o.Width, o.Y+o.Height, w.X, w.Y, w.X+w.Width, w.Y+w.Height) {
+						continue
+					}
+					x0, y0 := int(max(o.X, w.X)/tw), int(max(o.Y, w.Y)/th)
+					x1, y1 := int((min(o.X+o.Width, w.X+w.Width)+tw-1)/tw), int((min(o.Y+o.Height, w.Y+w.Height)+th-1)/th)
+					covered := true
+					for ty := max(y0, 0); ty < min(y1, tmap.Height) && covered; ty++ {
+						for tx := max(x0, 0); tx < min(x1, tmap.Width); tx++ {
+							if !leverAbove(li, ty*tmap.Width+tx) {
+								covered = false
+								break
+							}
+						}
+					}
+					if !covered {
 						c.add(mapPath, "通れないレイヤー%q の四角(id%d)が、レバーで通れるようになる「レバーの壁」(id%d)に重なっています。レバーを上げても通れません", layer.Name, o.ID, w.ID)
 					}
 				}
 			}
-			tw, th := float64(tmap.TileWidth), float64(tmap.TileHeight)
 			for i, gid := range layer.Data {
-				if gid == 0 || tmap.Width == 0 {
+				if gid == 0 || leverAbove(li, i) {
 					continue
 				}
 				x, y := float64(i%tmap.Width)*tw, float64(i/tmap.Width)*th
 				for _, w := range walls {
 					if x < w.X+w.Width && x+tw > w.X && y < w.Y+w.Height && y+th > w.Y {
-						c.add(mapPath, "通れないレイヤー%q のタイル(%d列目・%d行目)が、レバーで通れるようになる「レバーの壁」(id%d)に重なっています。レバーを上げても通れません", layer.Name, i%tmap.Width+1, i/tmap.Width+1, w.ID)
+						c.add(mapPath, "通れないレイヤー%q のタイル(%d列目・%d行目)が、レバーで通れるようになる「レバーの壁」(id%d)に重なっています。レバーを上げても通れません(水なら、そのレイヤーの「%s」にチェックを入れて、机を水より上のレイヤーに描く)", layer.Name, i%tmap.Width+1, i/tmap.Width+1, w.ID, walkOnTopMember)
 					}
 				}
 			}

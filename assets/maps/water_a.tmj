@@ -1,4 +1,5 @@
-{ "compressionlevel":-1,
+{ "class":"\u30de\u30c3\u30d7\u8a2d\u5b9a",
+ "compressionlevel":-1,
  "height":17,
  "infinite":false,
  "layers":[
@@ -22,7 +23,7 @@
             0, 0, 0, 0, 0, 0, 0, 0, 0],
          "height":17,
          "id":1,
-         "name":"yuka",
+         "name":"\u5e8a",
          "opacity":1,
          "type":"tilelayer",
          "visible":true,
@@ -31,6 +32,7 @@
          "y":0
         }, 
         {
+         "class":"\u901a\u308c\u306a\u3044\u30ec\u30a4\u30e4\u30fc",
          "data":[233, 175, 175, 175, 175, 175, 175, 175, 233,
             204, 59, 59, 59, 59, 59, 59, 59, 204,
             204, 59, 59, 59, 59, 59, 59, 59, 204,
@@ -50,7 +52,7 @@
             233, 175, 233, 670, 670, 670, 233, 175, 233],
          "height":17,
          "id":2,
-         "name":"kabe",
+         "name":"\u58c1",
          "opacity":1,
          "type":"tilelayer",
          "visible":true,
@@ -87,55 +89,56 @@
          "y":0
         }, 
         {
+         "class":"\u3057\u304b\u3051\u30ec\u30a4\u30e4\u30fc",
          "draworder":"topdown",
          "id":4,
-         "name":"events",
+         "name":"\u30c9\u30a2\u306e\u3057\u304b\u3051",
          "objects":[
                 {
-                 "height":32,
+                 "height":48,
                  "id":2,
-                 "name":"\u5165\u53e3",
+                 "name":"",
                  "opacity":1,
                  "properties":[
                         {
-                         "name":"targetmap",
+                         "name":"\u7740\u5730\u70b9",
                          "type":"string",
-                         "value":"assets\/msps\/main_1F_MAP.tmj"
+                         "value":"\u5165\u53e3"
                         }, 
                         {
-                         "name":"targetpoint",
-                         "type":"string",
-                         "value":"door_A"
+                         "name":"\u884c\u304d\u5148\u30de\u30c3\u30d7",
+                         "type":"file",
+                         "value":"main_1f.tmj"
                         }],
                  "rotation":0,
-                 "type":"",
+                 "type":"\u30c9\u30a2",
                  "visible":true,
                  "width":96,
                  "x":96,
-                 "y":480
+                 "y":464
                 }, 
                 {
-                 "height":64,
+                 "height":96,
                  "id":3,
                  "name":"",
                  "opacity":1,
                  "properties":[
                         {
-                         "name":"targetmap",
+                         "name":"\u7740\u5730\u70b9",
                          "type":"string",
-                         "value":"assets\/maps\/School_Map_1.tmj"
+                         "value":"\u68af\u5b502"
                         }, 
                         {
-                         "name":"targetpoint",
-                         "type":"string",
-                         "value":"\u68af\u5b501"
+                         "name":"\u884c\u304d\u5148\u30de\u30c3\u30d7",
+                         "type":"file",
+                         "value":"school_1.tmj"
                         }],
                  "rotation":0,
-                 "type":"",
+                 "type":"\u30c9\u30a2",
                  "visible":true,
-                 "width":32,
-                 "x":128,
-                 "y":256
+                 "width":64,
+                 "x":112,
+                 "y":240
                 }, 
                 {
                  "height":32,
@@ -144,12 +147,13 @@
                  "opacity":1,
                  "properties":[
                         {
-                         "name":"dir",
-                         "type":"int",
-                         "value":3
+                         "name":"\u5411\u304d",
+                         "propertytype":"\u5411\u304d",
+                         "type":"string",
+                         "value":"\u4e0a"
                         }],
                  "rotation":0,
-                 "type":"",
+                 "type":"\u7740\u5730\u70b9",
                  "visible":true,
                  "width":32,
                  "x":128,
@@ -158,16 +162,17 @@
                 {
                  "height":32,
                  "id":5,
-                 "name":"\u68af\u5b502",
+                 "name":"\u68af\u5b501",
                  "opacity":1,
                  "properties":[
                         {
-                         "name":"dir",
-                         "type":"int",
-                         "value":0
+                         "name":"\u5411\u304d",
+                         "propertytype":"\u5411\u304d",
+                         "type":"string",
+                         "value":"\u4e0b"
                         }],
                  "rotation":0,
-                 "type":"",
+                 "type":"\u7740\u5730\u70b9",
                  "visible":true,
                  "width":32,
                  "x":128,
@@ -180,6 +185,7 @@
          "y":0
         }, 
         {
+         "class":"\u4e3b\u4eba\u516c\u306e\u9ad8\u3055",
          "draworder":"topdown",
          "id":6,
          "name":"player",
@@ -245,8 +251,19 @@
          "width":9,
          "x":0,
          "y":0
+        }, 
+        {
+         "draworder":"topdown",
+         "id":8,
+         "name":"\u5f53\u305f\u308a\u5224\u5b9a",
+         "objects":[],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
         }],
- "nextlayerid":8,
+ "nextlayerid":9,
  "nextobjectid":7,
  "orientation":"orthogonal",
  "renderorder":"right-down",
@@ -254,20 +271,11 @@
  "tileheight":32,
  "tilesets":[
         {
-         "columns":29,
          "firstgid":1,
-         "image":"..\/..\/..\/..\/Downloads\/Tile_set_School_Set (12).png",
-         "imageheight":1152,
-         "imagewidth":928,
-         "margin":0,
-         "name":"Tile_set_School_Set (12)",
-         "spacing":0,
-         "tilecount":1044,
-         "tileheight":32,
-         "tilewidth":32
+         "source":"..\/tilesets\/school.tsx"
         }],
  "tilewidth":32,
  "type":"map",
- "version":"1.10",
+ "version":"1.11",
  "width":9
 }

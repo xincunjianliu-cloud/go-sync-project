@@ -832,6 +832,29 @@ func (s *FieldScene) isWall(x, y float64) bool {
 }
 
 func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, excludeBlockID string) bool {
+	if s.rectHitsTerrain(left, top, right, bottom) {
+		return true
+	}
+	for _, b := range s.blocks {
+		if b.ID == excludeBlockID {
+			continue
+		}
+		if rectsOverlap(left, top, right, bottom, b.X, b.Y, b.X+b.Width, b.Y+b.Height) {
+			return true
+		}
+	}
+	return false
+}
+
+// rectHitsTerrain は押せるブロック以外(壁タイル・見えない壁・閉じたレバー壁や
+// ブロック扉・多角形)に当たるかを返す。ミニマップの塗り分けもこれを使う。
+func (s *FieldScene) rectHitsTerrain(left, top, right, bottom float64) bool {
+	return s.rectHitsTerrainWith(left, top, right, bottom, false)
+}
+
+// rectHitsTerrainWith は rectHitsTerrain と同じ。allOpen なら、レバー壁・鍵の壁・
+// ブロック扉が全部開いたものとして判定する(いつか行ける場所を調べる用)。
+func (s *FieldScene) rectHitsTerrainWith(left, top, right, bottom float64, allOpen bool) bool {
 	checkPoints := [][2]float64{{left, top}, {right, top}, {left, bottom}, {right, bottom}}
 	for _, pt := range checkPoints {
 		tileX := int(pt[0] / float64(s.tileMap.TileWidth))
@@ -839,24 +862,19 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 		if tileX < 0 || tileY < 0 || tileX >= s.tileMap.Width || tileY >= s.tileMap.Height {
 			return true
 		}
-		index := tileY*s.tileMap.Width + tileX
-		for _, layer := range s.tileMap.Layers {
-			if index >= len(layer.Data) || layer.Data[index] == 0 {
-				continue
-			}
-			if isLeverOpenLayer(layer) && !s.leverTileShown(index) {
-				continue
-			}
-			if isBlockingLayer(layer) || s.tileMap.wallGIDs[layer.Data[index]&^gidFlagMask] {
-				return true
-			}
+		if s.tileBlocksAt(tileY*s.tileMap.Width+tileX, allOpen) {
+			return true
 		}
 	}
 
 	for _, r := range s.collisions {
-		if rectsOverlap(left, top, right, bottom, r.X, r.Y, r.X+r.Width, r.Y+r.Height) {
-			return true
+		if !rectsOverlap(left, top, right, bottom, r.X, r.Y, r.X+r.Width, r.Y+r.Height) {
+			continue
 		}
+		if r.WalkOnTop && s.coveredAboveRect(r.Layer, max(left, r.X), max(top, r.Y), min(right, r.X+r.Width), min(bottom, r.Y+r.Height), allOpen) {
+			continue
+		}
+		return true
 	}
 
 	for _, layer := range s.tileMap.Layers {
@@ -867,11 +885,11 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 			p := objProps(obj)
 			switch {
 			case isWallObj(p):
-				if s.wallIsOpen(obj) && !isLeverWallVisualOnly(p) {
+				if (allOpen || s.wallIsOpen(obj)) && !isLeverWallVisualOnly(p) {
 					continue
 				}
 			case isBlockDoorObj(p):
-				if s.blockDoorIsOpen(obj) {
+				if allOpen || s.blockDoorIsOpen(obj) {
 					continue
 				}
 			default:
@@ -885,22 +903,82 @@ func (s *FieldScene) rectHitsObstacles(left, top, right, bottom float64, exclude
 
 	for _, poly := range s.collisionPolygons {
 		for _, pt := range checkPoints {
-			if pointInPolygon(pt[0], pt[1], poly.Points) {
+			if pointInPolygon(pt[0], pt[1], poly.Points) && !(poly.WalkOnTop && s.coveredAboveRect(poly.Layer, pt[0], pt[1], pt[0], pt[1], allOpen)) {
 				return true
 			}
 		}
 	}
 
-	for _, b := range s.blocks {
-		if b.ID == excludeBlockID {
+	return false
+}
+
+// tileBlocksAt はマスindexの、通れないレイヤーのタイルか wall タイルで通れないか。
+// 「上に絵を描いた所は通れる」レイヤーのタイルは、上に絵があれば通れる。
+func (s *FieldScene) tileBlocksAt(index int, allOpen bool) bool {
+	for li, layer := range s.tileMap.Layers {
+		if index >= len(layer.Data) || layer.Data[index] == 0 {
 			continue
 		}
-		if rectsOverlap(left, top, right, bottom, b.X, b.Y, b.X+b.Width, b.Y+b.Height) {
+		if isLeverOpenLayer(layer) && !s.leverTileShown(index) {
+			continue
+		}
+		if s.tileMap.wallGIDs[layer.Data[index]&^gidFlagMask] {
+			return true
+		}
+		if isBlockingLayer(layer) && !(isWalkOnTopLayer(layer) && s.coveredAbove(li, index, allOpen)) {
 			return true
 		}
 	}
-
 	return false
+}
+
+// coveredAbove はマスindexに、layer番目より上・主人公より下のふつうのレイヤーの
+// 絵があるか(水の上に描いた床・橋)。非表示のレイヤーと、まだ出ていない
+// レバーで出るレイヤーの絵は数えない。allOpen ならレバーの絵は全部出たものとする。
+func (s *FieldScene) coveredAbove(layer, index int, allOpen bool) bool {
+	layers := s.tileMap.Layers
+	for i := layer + 1; i < len(layers); i++ {
+		l := layers[i]
+		if isPlayerLayer(l) {
+			break
+		}
+		if l.Type != "tilelayer" || isBlockingLayer(l) || index >= len(l.Data) || l.Data[index] == 0 {
+			continue
+		}
+		if isLeverOpenLayer(l) {
+			if allOpen || s.leverTileShown(index) {
+				return true
+			}
+			continue
+		}
+		if l.drawn() {
+			return true
+		}
+	}
+	return false
+}
+
+// coveredAboveRect は四角の中が全部 coveredAbove か。四隅と、タイル1マスごとの点を調べる。
+func (s *FieldScene) coveredAboveRect(layer int, left, top, right, bottom float64, allOpen bool) bool {
+	tw, th := s.tileMap.TileWidth, s.tileMap.TileHeight
+	for y := top; ; y += float64(th) {
+		y = min(y, bottom)
+		for x := left; ; x += float64(tw) {
+			x = min(x, right)
+			tx, ty := int(x)/tw, int(y)/th
+			if x < 0 || y < 0 || tx >= s.tileMap.Width || ty >= s.tileMap.Height ||
+				!s.coveredAbove(layer, ty*s.tileMap.Width+tx, allOpen) {
+				return false
+			}
+			if x >= right {
+				break
+			}
+		}
+		if y >= bottom {
+			break
+		}
+	}
+	return true
 }
 
 func pointInPolygon(x, y float64, poly []TiledPoint) bool {

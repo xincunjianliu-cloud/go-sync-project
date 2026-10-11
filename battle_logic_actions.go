@@ -70,7 +70,7 @@ func (s *BattleScene) cancelWaitAfterDeath() {
 			continue
 		}
 		s.waitCancelHold[i] = 2.0
-		s.playerPose[i] = poseDefend
+		s.playerPose[i] = poseIdle
 		s.playerAnimTimer[i] = 0
 	}
 	s.waitOrder = []int{}

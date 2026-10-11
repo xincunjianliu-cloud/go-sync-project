@@ -165,6 +165,11 @@ func (f *triangleGlyphFace) Glyph(dot fixed.Point26_6, r rune) (image.Rectangle,
 	adv, _ := f.GlyphAdvance(r)
 	iw, ih := int(math.Ceil(w))+1, int(math.Ceil(h))+1
 	mask := image.NewAlpha(image.Rect(0, 0, iw, ih))
+	inkMinX, inkMaxX := iw, 0
+	rasterRune := r
+	if r == leftTriangleRune {
+		rasterRune = rightTriangleRune
+	}
 	const ss = triSuperSample
 	for y := range ih {
 		for x := range iw {
@@ -173,15 +178,32 @@ func (f *triangleGlyphFace) Glyph(dot fixed.Point26_6, r rune) (image.Rectangle,
 				fy := float64(y) + (float64(sy)+0.5)/ss
 				for sx := range ss {
 					fx := float64(x) + (float64(sx)+0.5)/ss
-					if triangleLit(r, fx, fy, w, h) {
+					if triangleLit(rasterRune, fx, fy, w, h) {
 						hits++
 					}
 				}
 			}
 			if hits > 0 {
 				mask.SetAlpha(x, y, color.Alpha{A: uint8(hits * 255 / (ss * ss))})
+				if x < inkMinX {
+					inkMinX = x
+				}
+				if x+1 > inkMaxX {
+					inkMaxX = x + 1
+				}
 			}
 		}
+	}
+	if r == leftTriangleRune {
+		// Mirror the rasterized right arrow so both glyphs have exactly the
+		// same antialiasing and pixel dimensions, including at fractional sizes.
+		mirrored := image.NewAlpha(mask.Rect)
+		for y := range ih {
+			for x := inkMinX; x < inkMaxX; x++ {
+				mirrored.SetAlpha(inkMinX+inkMaxX-1-x, y, mask.AlphaAt(x, y))
+			}
+		}
+		mask = mirrored
 	}
 	top32 := int(math.Round(top))
 	left32 := int(math.Round(left))

@@ -17,6 +17,160 @@ const (
 	minimapH = 460.0
 )
 
+// Minimap colors: tiles the player can walk on, tiles they can't (walls,
+// water, invisible walls, closed lever walls...), and doors to other maps.
+var (
+	minimapFloorColor = color.RGBA{120, 135, 165, 255}
+	minimapWallColor  = color.RGBA{40, 46, 62, 255}
+	minimapDoorColor  = color.RGBA{235, 190, 90, 255}
+	minimapFrameColor = color.RGBA{80, 100, 140, 255}
+)
+
+// minimapCellInset shrinks each tile before the collision check, so a thin
+// wall running along a tile's edge doesn't paint the walkable tile beside it.
+const minimapCellInset = 8.0
+
+// buildMinimapImage paints field's map at one pixel per tile, using the same
+// collision check the player moves with (pushable blocks aside, since they
+// move):
+//   - floor: tiles the player can reach from where they stand, a door or a
+//     landing point. Reaching treats every lever wall, key wall and block
+//     door as open, so areas behind them still show.
+//   - wall: blocked tiles that touch that floor, plus lever walls and doors
+//     on the way that are still closed.
+//   - door: door objects, painted on top.
+//
+// Everything else (blocked tiles deep inside walls or water, decoration
+// outside the walkable area) stays transparent, so the map reads as rooms
+// and corridors outlined by walls.
+func buildMinimapImage(field *FieldScene) *ebiten.Image {
+	tm := field.tileMap
+	w, h := tm.Width, tm.Height
+	tw, th := float64(tm.TileWidth), float64(tm.TileHeight)
+	n := w * h
+
+	// blocked: can't stand there right now. openable: could stand there once
+	// every lever wall / key wall / block door is open.
+	blocked := make([]bool, n)
+	openable := make([]bool, n)
+	for i := range n {
+		left := float64(i%w)*tw + minimapCellInset
+		top := float64(i/w)*th + minimapCellInset
+		right := left + tw - 2*minimapCellInset
+		bottom := top + th - 2*minimapCellInset
+		blocked[i] = field.rectHitsTerrain(left, top, right, bottom)
+		openable[i] = minimapCellHasTile(field, i) && !field.rectHitsTerrainWith(left, top, right, bottom, true)
+	}
+
+	cellAt := func(x, y float64) int {
+		cx, cy := int(math.Floor(x/tw)), int(math.Floor(y/th))
+		if cx < 0 || cy < 0 || cx >= w || cy >= h {
+			return -1
+		}
+		return cy*w + cx
+	}
+	var doorCells []int
+	reached := make([]bool, n)
+	var queue []int
+	visit := func(i int) {
+		if i >= 0 && !reached[i] {
+			reached[i] = true
+			queue = append(queue, i)
+		}
+	}
+
+	pl, pt, pr, pb := field.collisionRectAt(field.px, field.py)
+	visit(cellAt((pl+pr)/2, (pt+pb)/2))
+	for _, layer := range tm.Layers {
+		if !isEventsLayer(layer) {
+			continue
+		}
+		for _, obj := range layer.Objects {
+			if objProps(obj)["targetmap"] != "" {
+				x0 := max(int(obj.X/tw), 0)
+				y0 := max(int(obj.Y/th), 0)
+				x1 := min(int(math.Ceil((obj.X+obj.Width)/tw)), w)
+				y1 := min(int(math.Ceil((obj.Y+obj.Height)/th)), h)
+				for y := y0; y < y1; y++ {
+					for x := x0; x < x1; x++ {
+						doorCells = append(doorCells, y*w+x)
+						visit(y*w + x)
+					}
+				}
+			} else if obj.Name != "" {
+				// Landing points (and other named objects) stand on floor.
+				visit(cellAt(obj.X+obj.Width/2, obj.Y+obj.Height/2))
+			}
+		}
+	}
+	for len(queue) > 0 {
+		i := queue[0]
+		queue = queue[1:]
+		x, y := i%w, i/w
+		for _, d := range [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			nx, ny := x+d[0], y+d[1]
+			if nx < 0 || ny < 0 || nx >= w || ny >= h {
+				continue
+			}
+			if j := ny*w + nx; openable[j] {
+				visit(j)
+			}
+		}
+	}
+
+	isFloor := func(i int) bool { return reached[i] && openable[i] && !blocked[i] }
+	touchesFloor := func(i int) bool {
+		x, y := i%w, i/w
+		for dy := -1; dy <= 1; dy++ {
+			for dx := -1; dx <= 1; dx++ {
+				nx, ny := x+dx, y+dy
+				if nx >= 0 && ny >= 0 && nx < w && ny < h && isFloor(ny*w+nx) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	pix := make([]byte, n*4)
+	set := func(i int, c color.RGBA) {
+		pix[i*4], pix[i*4+1], pix[i*4+2], pix[i*4+3] = c.R, c.G, c.B, c.A
+	}
+	for i := range n {
+		switch {
+		case isFloor(i):
+			set(i, minimapFloorColor)
+		case blocked[i] && (reached[i] || touchesFloor(i)):
+			set(i, minimapWallColor)
+		}
+	}
+	for _, i := range doorCells {
+		set(i, minimapDoorColor)
+	}
+
+	img := ebiten.NewImage(w, h)
+	img.WritePixels(pix)
+	return img
+}
+
+// minimapCellHasTile reports whether tile i shows anything in the game, or
+// is on a blocking layer (hidden blocking layers still shape where you can
+// walk). Hidden layers and lever tiles whose lever is still down don't count.
+func minimapCellHasTile(field *FieldScene, i int) bool {
+	for _, layer := range field.tileMap.Layers {
+		if layer.Type != "tilelayer" || i >= len(layer.Data) || layer.Data[i] == 0 {
+			continue
+		}
+		if isLeverOpenLayer(layer) && !field.leverTileShown(i) {
+			continue
+		}
+		if layer.drawn() || isBlockingLayer(layer) {
+			return true
+		}
+	}
+	return false
+}
+
 const (
 	menuDescOffsetX  float64 = 20
 	menuDescOffsetY  float64 = 30
@@ -30,7 +184,7 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 	}
 
 	tm := field.tileMap
-	if tm.Width == 0 || tm.Height == 0 {
+	if tm.Width == 0 || tm.Height == 0 || tm.TileWidth == 0 || tm.TileHeight == 0 {
 		return
 	}
 
@@ -50,48 +204,20 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 	offsetX := minimapX + (minimapW-drawW)/2
 	offsetY := minimapY + (minimapH-drawH)/2
 
-	for _, layer := range tm.Layers {
-		if layer.Type != "tilelayer" {
-			continue
-		}
-		isWall := isBlockingLayer(layer)
-		// ゲーム画面に出ないもの(非表示のレイヤー、まだレバーを上げていない
-		// 机の橋など)はミニマップにも出さない。通れないレイヤーは、見えない壁でも
-		// 歩ける形を表すので出す。
-		if !isWall && !layer.drawn() {
-			continue
-		}
-		leverOnly := isLeverOpenLayer(layer)
-
-		for i, id := range layer.Data {
-			if id == 0 {
-				continue
-			}
-			if leverOnly && !field.leverTileShown(i) {
-				continue
-			}
-			tx := float64(i%tm.Width) * float64(tm.TileWidth)
-			ty := float64(i/tm.Width) * float64(tm.TileHeight)
-
-			px := offsetX + tx*scale
-			py := offsetY + ty*scale
-			pw := float64(tm.TileWidth) * scale
-			ph := float64(tm.TileHeight) * scale
-
-			var c color.RGBA
-			if isWall {
-				c = color.RGBA{60, 70, 90, 255}
-			} else {
-				c = color.RGBA{80, 90, 110, 255}
-			}
-			fillRect(screen, px, py, pw, ph, c)
-		}
+	// Lever and block-door states can't change while the menu is open, so
+	// the map is built once per menu and then drawn as a single image.
+	if m.minimapImg == nil {
+		m.minimapImg = buildMinimapImage(field)
 	}
+	mapOp := &ebiten.DrawImageOptions{}
+	mapOp.GeoM.Scale(float64(tm.TileWidth)*scale, float64(tm.TileHeight)*scale)
+	mapOp.GeoM.Translate(offsetX, offsetY)
+	screen.DrawImage(m.minimapImg, mapOp)
 
-	fillRect(screen, offsetX, offsetY, drawW, 1, color.RGBA{80, 100, 140, 255})
-	fillRect(screen, offsetX, offsetY+drawH-1, drawW, 1, color.RGBA{80, 100, 140, 255})
-	fillRect(screen, offsetX, offsetY, 1, drawH, color.RGBA{80, 100, 140, 255})
-	fillRect(screen, offsetX+drawW-1, offsetY, 1, drawH, color.RGBA{80, 100, 140, 255})
+	fillRect(screen, offsetX, offsetY, drawW, 1, minimapFrameColor)
+	fillRect(screen, offsetX, offsetY+drawH-1, drawW, 1, minimapFrameColor)
+	fillRect(screen, offsetX, offsetY, 1, drawH, minimapFrameColor)
+	fillRect(screen, offsetX+drawW-1, offsetY, 1, drawH, minimapFrameColor)
 
 	plx := offsetX + field.px*scale
 	ply := offsetY + field.py*scale
@@ -523,9 +649,6 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 			mpCost = sk.Levels[lv-1].MPCost
 			if lv > curLv {
 				descText = descText + "　長押しで強化"
-				if bonus := statBonusText(sk.Levels[lv-1].StatBonus); bonus != "" {
-					descText += "（" + bonus + "）"
-				}
 			}
 		}
 

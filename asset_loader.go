@@ -196,22 +196,6 @@ func (l *assetLoader) release(path string) {
 	}
 }
 
-// has はpathが取得済み(成功)で手元にあるかを返す。
-func (l *assetLoader) has(path string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	job, ok := l.jobs[path]
-	if !ok {
-		return false
-	}
-	select {
-	case <-job.done:
-		return job.err == nil
-	default:
-		return false
-	}
-}
-
 func (l *assetLoader) totalFetchedBytes() int64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()

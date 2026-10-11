@@ -6,4 +6,4 @@ package main
 // startMapPath はニューゲーム開始時に立つマップ(着地点 start_point から始まる)
 // であり、マップ自動探索(BuildObjectiveAndMapIndex)の起点でもある。ここから
 // ドアでたどれないマップは、目的地・ドア接続・鍵グループの対象にならない。
-const startMapPath = "assets/maps/school_1.tmj"
+const startMapPath = "assets/maps/main_1f.tmj"

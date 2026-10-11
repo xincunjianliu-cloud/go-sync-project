@@ -21,8 +21,7 @@ func (s *BattleScene) Draw(screen *ebiten.Image) {
 	s.drawPartySprites(screen)
 
 	if s.battlePhase == phaseBattleEnd && s.isWon {
-		if s.resultSubPhase >= resSubWinPose {
-		} else {
+		if s.resultSubPhase < resSubWinWait {
 			s.drawUI(screen)
 		}
 
@@ -285,11 +284,18 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 
 	switch s.battlePhase {
 	case phasePlayerMenu:
-		s.drawCommandMenu(screen, s.commandIndex)
-		s.drawBattleShortcutButtons(screen)
+		// An armed shortcut button is the selection, so the command icon
+		// under the cursor dims with the rest instead of staying lit too.
+		highlight := s.commandIndex
+		if s.rewindButtonArmed || s.itemButtonArmed {
+			highlight = -1
+		}
+		s.drawCommandMenu(screen, highlight)
+		s.drawBattleShortcutButtons(screen, s.rewindButtonArmed, s.itemButtonArmed)
 		s.drawBottomDescription(screen, s.playerMenuDescription())
 	case phaseSkillMenu:
 		s.drawCommandMenu(screen, s.commandIndex)
+		s.drawBattleShortcutButtons(screen, false, false)
 		s.drawSkillSubMenu(screen)
 		s.drawBottomDescription(screen, s.currentSkillDescription())
 	case phaseTargetSelect:
@@ -304,8 +310,7 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 		s.drawBottomDescription(screen, healDesc)
 	case phaseItemMenu:
 		s.drawCommandMenu(screen, -1)
-		ix, iy := itemButtonCenter()
-		drawItemIcon(screen, s.game.ItemButtonImg, ix, iy, true)
+		s.drawBattleShortcutButtons(screen, false, true)
 		s.drawItemSubMenu(screen)
 		s.drawBottomDescription(screen, s.currentItemDescription())
 	case phaseItemTarget:
@@ -392,12 +397,12 @@ func (s *BattleScene) drawEnemyScanInfo(screen *ebiten.Image, slot int) {
 		weak = "なし"
 	}
 	msg := fmt.Sprintf("HP %d/%d\n弱点:%s", e.HP, e.MaxHP, weak)
-	face := s.game.FontFace(15)
+	face := s.game.FontFace(18)
 	for _, off := range [][2]float64{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 		op := &text.DrawOptions{}
 		op.PrimaryAlign = text.AlignCenter
 		op.SecondaryAlign = text.AlignEnd
-		op.LineSpacing = 17
+		op.LineSpacing = 20
 		op.GeoM.Translate(x+w/2+off[0]+s.shakeX, y-4+off[1]+s.shakeY)
 		op.ColorScale.ScaleWithColor(color.Black)
 		text.Draw(screen, msg, face, op)
@@ -405,7 +410,7 @@ func (s *BattleScene) drawEnemyScanInfo(screen *ebiten.Image, slot int) {
 	op := &text.DrawOptions{}
 	op.PrimaryAlign = text.AlignCenter
 	op.SecondaryAlign = text.AlignEnd
-	op.LineSpacing = 17
+	op.LineSpacing = 20
 	op.GeoM.Translate(x+w/2+s.shakeX, y-4+s.shakeY)
 	op.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, msg, face, op)

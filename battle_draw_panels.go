@@ -142,59 +142,77 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	barW := resultBarWAbs
 
 	for i := range partySize {
-		nameColor := uiColorText
-		if s.game.PlayerHP[i] <= 0 {
-			nameColor = uiColorDead
-		}
-
+		// KO'd members earn EXP and revive at 1 HP after the battle, so every
+		// row looks the same regardless of HP.
+		rowY := resultRowStartY + float64(i)*resultRowGap
 		barX := resultBarStartX
-		barY := resultBarStartY + float64(i)*resultBarRowGap
+		barY := rowY + resultBarOffsetY
 		barH := resultBarH
 
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(barX+resultNameOffsetX, barY+resultNameOffsetY)
-		nameOp.ColorScale.ScaleWithColor(nameColor)
+		nameOp.GeoM.Translate(barX, rowY)
+		nameOp.ColorScale.ScaleWithColor(uiColorText)
 		nameOp.ColorScale.ScaleAlpha(panelAlpha)
 		text.Draw(screen, PlayerNames[i], s.game.FontFace(resultNameFontSize), nameOp)
 
 		levelOp := &text.DrawOptions{}
-		levelOp.GeoM.Translate(barX+resultLevelOffsetX, barY+resultNameOffsetY)
-		levelOp.ColorScale.ScaleWithColor(nameColor)
+		levelOp.PrimaryAlign = text.AlignEnd
+		levelOp.GeoM.Translate(barX+barW, rowY)
+		levelOp.ColorScale.ScaleWithColor(uiColorText)
 		levelOp.ColorScale.ScaleAlpha(panelAlpha)
 		text.Draw(screen, fmt.Sprintf("Lv %d", s.drawPlayerLv[i]), s.game.FontFace(resultNameFontSize), levelOp)
 
-		curExpStr := strconv.Itoa(s.drawPlayerEXP[i])
-		maxExpStr := fmt.Sprintf("/%d", s.drawPlayerMaxEXP[i])
 		expRightX := barX + barW
-		expBaseY := barY + resultExpTextOffsetY + resultExpCurFontSize
+		// The EXP label and both numbers sit bottom-aligned on this line so
+		// their different font sizes still share a baseline.
+		expBaseY := barY - resultExpTextGapY
+		// A max-level character has no next level (PlayerNextEXP is 0), so
+		// show MAX with a full bar instead of 0/0 and an empty one.
+		isMaxLevel := s.drawPlayerLv[i] >= maxPlayerLevel
 
-		maxOp := &text.DrawOptions{}
-		maxOp.PrimaryAlign = text.AlignEnd
-		maxOp.SecondaryAlign = text.AlignEnd
-		maxOp.GeoM.Translate(expRightX, expBaseY)
-		maxOp.ColorScale.ScaleWithColor(uiColorText)
-		maxOp.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, maxExpStr, s.game.FontFace(resultExpMaxFontSize), maxOp)
+		if isMaxLevel {
+			maxLvOp := &text.DrawOptions{}
+			maxLvOp.PrimaryAlign = text.AlignEnd
+			maxLvOp.SecondaryAlign = text.AlignEnd
+			maxLvOp.GeoM.Translate(expRightX, expBaseY)
+			maxLvOp.ColorScale.ScaleWithColor(uiColorText)
+			maxLvOp.ColorScale.ScaleAlpha(panelAlpha)
+			text.Draw(screen, "MAX", s.game.FontFace(resultExpCurFontSize), maxLvOp)
+		} else {
+			curExpStr := strconv.Itoa(s.drawPlayerEXP[i])
+			maxExpStr := fmt.Sprintf("/%d", s.drawPlayerMaxEXP[i])
 
-		maxExpW, _ := text.Measure(maxExpStr, s.game.FontFace(resultExpMaxFontSize), 0)
+			maxOp := &text.DrawOptions{}
+			maxOp.PrimaryAlign = text.AlignEnd
+			maxOp.SecondaryAlign = text.AlignEnd
+			maxOp.GeoM.Translate(expRightX, expBaseY)
+			maxOp.ColorScale.ScaleWithColor(uiColorText)
+			maxOp.ColorScale.ScaleAlpha(panelAlpha)
+			text.Draw(screen, maxExpStr, s.game.FontFace(resultExpMaxFontSize), maxOp)
 
-		curOp := &text.DrawOptions{}
-		curOp.PrimaryAlign = text.AlignEnd
-		curOp.SecondaryAlign = text.AlignEnd
-		curOp.GeoM.Translate(expRightX-maxExpW, expBaseY)
-		curOp.ColorScale.ScaleWithColor(uiColorText)
-		curOp.ColorScale.ScaleAlpha(panelAlpha)
-		text.Draw(screen, curExpStr, s.game.FontFace(resultExpCurFontSize), curOp)
+			maxExpW, _ := text.Measure(maxExpStr, s.game.FontFace(resultExpMaxFontSize), 0)
+
+			curOp := &text.DrawOptions{}
+			curOp.PrimaryAlign = text.AlignEnd
+			curOp.SecondaryAlign = text.AlignEnd
+			curOp.GeoM.Translate(expRightX-maxExpW, expBaseY)
+			curOp.ColorScale.ScaleWithColor(uiColorText)
+			curOp.ColorScale.ScaleAlpha(panelAlpha)
+			text.Draw(screen, curExpStr, s.game.FontFace(resultExpCurFontSize), curOp)
+		}
 
 		expLabelOp2 := &text.DrawOptions{}
-		expLabelOp2.GeoM.Translate(barX+resultExpLabelOffsetX, barY+resultExpLabelOffsetY)
+		expLabelOp2.SecondaryAlign = text.AlignEnd
+		expLabelOp2.GeoM.Translate(barX+resultExpLabelOffsetX, expBaseY)
 		expLabelOp2.ColorScale.ScaleWithColor(uiColorText)
 		expLabelOp2.ColorScale.ScaleAlpha(panelAlpha)
 		text.Draw(screen, "EXP", s.game.FontFace(resultExpLabelFontSize), expLabelOp2)
 
 		if s.resultSubPhase >= resSubBarAnimate {
 			fillRect(screen, barX, barY, barW, barH, resultBarBgColor)
-			if s.game.PlayerHP[i] > 0 && s.drawPlayerMaxEXP[i] > 0 {
+			if isMaxLevel {
+				fillRect(screen, barX, barY, barW, barH, resultBarFillColor)
+			} else if s.drawPlayerMaxEXP[i] > 0 {
 				ratio := s.drawPlayerEXPF[i] / float64(s.drawPlayerMaxEXP[i])
 				if ratio > 1.0 {
 					ratio = 1.0
@@ -208,9 +226,9 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 			}
 		}
 
-		if s.isLevelUp[i] && s.game.PlayerHP[i] > 0 && s.drawPlayerLv[i] > s.resultStartLevel[i] {
+		if s.isLevelUp[i] && s.drawPlayerLv[i] > s.resultStartLevel[i] {
 			lvOp := &text.DrawOptions{}
-			lvOp.GeoM.Translate(barX+resultLevelUpOffsetX, barY+resultLevelUpOffsetY)
+			lvOp.GeoM.Translate(barX+resultLevelUpOffsetX, rowY+resultLevelUpOffsetY)
 			lvOp.ColorScale.ScaleWithColor(resultLevelUpColor)
 			lvOp.ColorScale.ScaleAlpha(panelAlpha)
 			text.Draw(screen, "LEVEL UP!", s.game.FontFace(resultLevelUpFontSize), lvOp)
@@ -218,7 +236,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 			if s.skillUnlockedByDrawLevel(i) {
 				skillOp := &text.DrawOptions{}
 				skillOp.PrimaryAlign = text.AlignEnd
-				skillOp.GeoM.Translate(barX+barW, barY+resultLevelUpOffsetY)
+				skillOp.GeoM.Translate(barX+barW, rowY+resultLevelUpOffsetY)
 				skillOp.ColorScale.ScaleWithColor(resultSkillUnlockColor)
 				skillOp.ColorScale.ScaleAlpha(panelAlpha)
 				text.Draw(screen, "スキル解放！", s.game.FontFace(resultSkillUnlockFontSize), skillOp)
@@ -236,17 +254,18 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 		scaleAlpha(resultItemsDividerColor, float64(panelAlpha)))
 
 	for i, item := range s.earnedItems {
-		rowY := resultItemsStartY + float64(i)*resultItemsRowGap
+		rowY := resultItemsStartY + float64(i/resultItemsColumns)*resultItemsRowGap
+		colX := float64(i%resultItemsColumns) * resultItemsColumnGap
 
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(resultItemsNameX, rowY)
+		nameOp.GeoM.Translate(colX+resultItemsNameX, rowY)
 		nameOp.ColorScale.ScaleWithColor(uiColorText)
 		nameOp.ColorScale.ScaleAlpha(panelAlpha)
 		text.Draw(screen, item.Name, s.game.FontFace(resultItemsFontSize), nameOp)
 
 		countOp := &text.DrawOptions{}
 		countOp.PrimaryAlign = text.AlignEnd
-		countOp.GeoM.Translate(resultItemsCountX, rowY)
+		countOp.GeoM.Translate(colX+resultItemsCountX, rowY)
 		countOp.ColorScale.ScaleWithColor(uiColorText)
 		countOp.ColorScale.ScaleAlpha(panelAlpha)
 		text.Draw(screen, fmt.Sprintf("x%d", item.Count), s.game.FontFace(resultItemsFontSize), countOp)
@@ -274,6 +293,31 @@ func (s *BattleScene) drawBottomDescription(screen *ebiten.Image, desc string) {
 func scaleAlpha(c color.RGBA, factor float64) color.RGBA {
 	c.A = uint8(float64(c.A) * factor)
 	return c
+}
+
+func textInkBottomY(str string, face text.Face) float64 {
+	bottom := 0.0
+	found := false
+	for _, glyph := range text.AppendGlyphs(nil, str, face, nil) {
+		if glyph.Image == nil {
+			continue
+		}
+		glyphBottom := glyph.Y + float64(glyph.Image.Bounds().Dy())
+		if !found || glyphBottom > bottom {
+			bottom = glyphBottom
+		}
+		found = true
+	}
+	if !found {
+		return 0
+	}
+	return bottom
+}
+
+func statusValueInkBottomOffset(current, maximum int, faceLarge, faceSmall text.Face) float64 {
+	currentBottom := textInkBottomY(strconv.Itoa(current), faceLarge)
+	maximumBottom := 2.5 + textInkBottomY(fmt.Sprintf(" / %d", maximum), faceSmall)
+	return max(currentBottom, maximumBottom) + 1
 }
 
 func drawStatusValue(screen *ebiten.Image, x, y float64, current, max int, faceLarge, faceSmall text.Face, alpha float64, textColorBase color.RGBA) {
@@ -378,8 +422,8 @@ func drawStatusBox(screen *ebiten.Image, g *Game, sx, sy float64, hp, maxHP, mp,
 		hpPalette = deadStatusBarPalette
 		mpPalette = deadStatusBarPalette
 	}
-	drawStatusGaugeRow(screen, g, sx, sy+statusHPTextY, sy+statusHPBarY, hp, maxHP, alpha, valueColor, hpPalette)
-	drawStatusGaugeRow(screen, g, sx, sy+statusMPTextY, sy+statusMPBarY, mp, maxMP, alpha, valueColor, mpPalette)
+	drawStatusGaugeRow(screen, g, sx, sy+statusHPBarY, hp, maxHP, alpha, valueColor, hpPalette)
+	drawStatusGaugeRow(screen, g, sx, sy+statusMPBarY, mp, maxMP, alpha, valueColor, mpPalette)
 }
 
 type statusBarPalette struct{ fill, empty, edge color.RGBA }
@@ -387,13 +431,16 @@ type statusBarPalette struct{ fill, empty, edge color.RGBA }
 var deadStatusBarPalette = statusBarPalette{fill: color.RGBA{90, 90, 90, 255}, empty: color.RGBA{30, 30, 30, 255}, edge: color.RGBA{55, 55, 55, 255}}
 
 // drawStatusGaugeRow はHPまたはMPの「数値＋斜めバー」1行ぶんを描く。
-func drawStatusGaugeRow(screen *ebiten.Image, g *Game, sx, textY, barY float64, cur, maxVal int, alpha float64, valueColor color.RGBA, pal statusBarPalette) {
+func drawStatusGaugeRow(screen *ebiten.Image, g *Game, sx, barY float64, cur, maxVal int, alpha float64, valueColor color.RGBA, pal statusBarPalette) {
 	ratio := 0.0
 	if maxVal > 0 {
 		ratio = min(float64(cur)/float64(maxVal), 1.0)
 	}
+	faceLarge := g.FontFace(statusValueFontSizeLarge)
+	faceSmall := g.FontFace(statusValueFontSizeSmall)
+	textY := barY - statusValueGapAboveBar - statusValueInkBottomOffset(cur, maxVal, faceLarge, faceSmall)
 	drawStatusValue(screen, sx+statusValueOffsetX, textY, cur, maxVal,
-		g.FontFace(statusValueFontSizeLarge), g.FontFace(statusValueFontSizeSmall), alpha, valueColor)
+		faceLarge, faceSmall, alpha, valueColor)
 	drawSlantedStatusBar(screen, sx, barY, statusBlockW, statusBarH, statusBarSlant, ratio,
 		scaleAlpha(pal.fill, alpha), scaleAlpha(pal.empty, alpha))
 }
@@ -401,8 +448,8 @@ func drawStatusGaugeRow(screen *ebiten.Image, g *Game, sx, textY, barY float64, 
 // partyNamePosition returns the i-th party member's name draw position
 // (baseX/baseY), in screen coordinates. This IS the name's position
 // (partyNameOffsetX/Y below are applied on top and are 0) — every other
-// status-block offset defined here (and statusHPTextY/statusHPBarY/
-// statusMPTextY/statusMPBarY/statusValueOffsetX/statusBlockW in
+// status-block offset defined here (and statusHPBarY/statusMPBarY/
+// statusValueGapAboveBar/statusValueOffsetX/statusBlockW in
 // battle_types.go) is positioned relative to this same point. menu_draw.go
 // reuses these same constants directly instead of defining its own
 // equivalents, so this must not be computed ad hoc elsewhere.
@@ -421,8 +468,8 @@ const (
 	partyNameOffsetX = 0.0
 	partyNameOffsetY = 0.0
 
-	namePlateLineOffsetX = -40.0
-	namePlateLineOffsetY = 0.0
+	namePlateLineOffsetX = -20.0
+	namePlateLineOffsetY = 10.0
 
 	namePlateMyTurnOffsetX = -70.0
 	namePlateMyTurnOffsetY = -70.0

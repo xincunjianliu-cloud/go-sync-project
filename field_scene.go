@@ -214,7 +214,7 @@ func objProps(obj TiledObject) map[string]string {
 	return m
 }
 
-// objPropInt と objPropBool は、Tiledで種類をstringのまま数字や"true"を
+// objPropInt と propBool は、Tiledで種類をstringのまま数字や"true"を
 // 書いた場合も受け付ける(名札を足したときの既定がstringのため)。
 func objPropInt(obj TiledObject, name string) (int, bool) {
 	name = strings.ToLower(name)
@@ -248,16 +248,6 @@ func propBool(v any) (bool, bool) {
 			return true, true
 		case "false":
 			return false, true
-		}
-	}
-	return false, false
-}
-
-func objPropBool(obj TiledObject, name string) (bool, bool) {
-	name = strings.ToLower(name)
-	for _, p := range obj.Properties {
-		if strings.ToLower(p.Name) == name {
-			return propBool(p.Value)
 		}
 	}
 	return false, false
@@ -335,10 +325,16 @@ type MoveStep struct {
 
 type CollisionRect struct {
 	X, Y, Width, Height float64
+	// WalkOnTop は「上に絵を描いた所は通れる」通れないレイヤーの四角か。
+	// そのとき Layer はそのレイヤーの番号(上に絵があるかを調べる起点)。
+	WalkOnTop bool
+	Layer     int
 }
 
 type CollisionPolygon struct {
-	Points []TiledPoint
+	Points    []TiledPoint
+	WalkOnTop bool // CollisionRect と同じ
+	Layer     int
 }
 
 type FieldScene struct {
@@ -347,9 +343,9 @@ type FieldScene struct {
 	// tileImgs はGID(反転フラグを除く)ごとのタイル画像。使われていないGIDはnil。
 	tileImgs []*ebiten.Image
 	// tileAnimMs はタイルアニメーションの時計(ミリ秒)。
-	tileAnimMs         float64
-	collisions         []CollisionRect
-	collisionPolygons  []CollisionPolygon
+	tileAnimMs        float64
+	collisions        []CollisionRect
+	collisionPolygons []CollisionPolygon
 	playerCfg          FieldPlayerConfig
 	px, py             float64
 	dir                int
@@ -549,24 +545,28 @@ func newRoomScene(game *Game, mapPath string, startX, startY float64, targetSpaw
 
 	var collisionRects []CollisionRect
 	var collisionPolygons []CollisionPolygon
-	for _, layer := range tmap.Layers {
-		if isBlockingLayer(layer) && layer.Type == "objectgroup" {
-			for _, obj := range layer.Objects {
-				if len(obj.Polygon) > 0 {
-					pts := make([]TiledPoint, len(obj.Polygon))
-					for i, p := range obj.Polygon {
-						pts[i] = TiledPoint{X: obj.X + p.X, Y: obj.Y + p.Y}
-					}
-					collisionPolygons = append(collisionPolygons, CollisionPolygon{Points: pts})
-					continue
+	for li, layer := range tmap.Layers {
+		if !isBlockingLayer(layer) || layer.Type != "objectgroup" {
+			continue
+		}
+		onTop := isWalkOnTopLayer(layer)
+		for _, obj := range layer.Objects {
+			if len(obj.Polygon) > 0 {
+				pts := make([]TiledPoint, len(obj.Polygon))
+				for i, p := range obj.Polygon {
+					pts[i] = TiledPoint{X: obj.X + p.X, Y: obj.Y + p.Y}
 				}
-				collisionRects = append(collisionRects, CollisionRect{
-					X:      obj.X,
-					Y:      obj.Y,
-					Width:  obj.Width,
-					Height: obj.Height,
-				})
+				collisionPolygons = append(collisionPolygons, CollisionPolygon{Points: pts, WalkOnTop: onTop, Layer: li})
+				continue
 			}
+			collisionRects = append(collisionRects, CollisionRect{
+				X:         obj.X,
+				Y:         obj.Y,
+				Width:     obj.Width,
+				Height:    obj.Height,
+				WalkOnTop: onTop,
+				Layer:     li,
+			})
 		}
 	}
 

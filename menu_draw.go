@@ -10,8 +10,8 @@ import (
 
 // メニューのステータスボックスは、位置(x/y/行間/レベルx/アイコン位置)以外
 // すべてバトル側の定数・関数をそのまま使う。数値/バーはdrawStatusBox
-// （battle_draw_panels.go、statusValueOffsetX / statusHPTextY / statusHPBarY /
-// statusMPTextY / statusMPBarY / statusBlockW など battle_types.go 参照）、
+// （battle_draw_panels.go、statusValueOffsetX / statusHPBarY / statusMPBarY /
+// statusValueGapAboveBar / statusBlockW など battle_types.go 参照）、
 // 名前のフォントサイズもpartyNameFontSize（battle_types.go）を流用する。
 // メニュー画面独自に定数化してよいのは以下の6つ（ブロックの位置x/y、行間、
 // レベルのx位置、アイコンの位置x/y）だけで、それ以外はここで新しく定数や

@@ -229,14 +229,14 @@ func (s *FieldScene) skillUpgradeTutorialBox(page int) *battleTutorialBox {
 		windowW := float64(s.game.SkillPanelImg.Bounds().Dx())
 		windowX := battleSubCmdCenterX - windowW/2
 		windowY := battleSubCmdCenterY - float64(s.game.SkillPanelImg.Bounds().Dy())/2
-		lvFace := s.game.FontFace(18)
+		lvFace := s.game.FontFace(battleSubSkillFontSize)
 		lvW := text.Advance(skillLvText(skillUpgradeTutorialMockLevel), lvFace)
 		leftArrowW := text.Advance(skillLvLeftArrow, lvFace)
 		rightArrowW := text.Advance(skillLvRightArrow, lvFace)
-		blockRightX := windowX + windowW - battleSubLvBlockRightX
-		rightX := blockRightX - rightArrowW
-		lvX := rightX - battleSubLvGap - lvW
-		leftX := lvX - battleSubLvGap - leftArrowW
+		blockLeftX := battleSubPanelLevelBlockLeft(windowX)
+		leftX := blockLeftX
+		lvX := leftX + leftArrowW + battleSubLvGap
+		blockRightX := lvX + lvW + battleSubLvGap + rightArrowW
 		textY := windowY + battleSubLabelOffsetY
 		rowH := lvFace.Metrics().HAscent + lvFace.Metrics().HDescent
 

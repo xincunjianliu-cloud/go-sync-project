@@ -231,3 +231,19 @@ func TestBGMCacheKeepsPinnedTracks(t *testing.T) {
 		t.Error("unpinned track b was kept while over the cap")
 	}
 }
+
+// has はpathが取得済み(成功)で手元にあるかを返す(テストで中を確かめる用)。
+func (l *assetLoader) has(path string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	job, ok := l.jobs[path]
+	if !ok {
+		return false
+	}
+	select {
+	case <-job.done:
+		return job.err == nil
+	default:
+		return false
+	}
+}

@@ -10,6 +10,9 @@ import (
 )
 
 func (s *BattleScene) addGaugePoint(pt int) {
+	if !s.gaugeUnlocked {
+		return
+	}
 	s.gaugePoint += pt
 	if s.gaugePoint > gaugePoolMax {
 		s.gaugePoint = gaugePoolMax
@@ -43,7 +46,7 @@ func (s *BattleScene) hasFullPartyForSynergy() bool {
 }
 
 func (s *BattleScene) canUseRewind(actor int) bool {
-	return actor >= 0 && actor < partySize && !s.rewindUsed && s.gaugePoint >= gaugePoolMax
+	return s.gaugeUnlocked && actor >= 0 && actor < partySize && !s.rewindUsed && s.gaugePoint >= gaugePoolMax
 }
 
 func (s *BattleScene) consumeAllGaugePoints() {

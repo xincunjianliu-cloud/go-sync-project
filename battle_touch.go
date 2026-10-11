@@ -22,6 +22,11 @@ const (
 	// itemButtonR is half of the 50x50 item_button.png, which is drawn at
 	// its native size.
 	itemButtonR = 25.0
+
+	// commandDimScale is the brightness of every unselected battle command
+	// button (attack/skill/wait/flee icons, item, rewind), so they all dim
+	// by the same amount.
+	commandDimScale = 0.6
 )
 
 func rewindButtonCenter(game *Game) (cx, cy float64) {
@@ -51,8 +56,12 @@ func drawIconSelectedRing(screen *ebiten.Image, cx, cy, r float64) {
 
 func drawRewindIcon(screen *ebiten.Image, cx, cy, r float64, selected bool) {
 	drawIconBackdrop(screen, cx, cy, r)
+	fg := color.Color(color.White)
 	if selected {
 		drawIconSelectedRing(screen, cx, cy, r)
+	} else {
+		v := uint8(255 * commandDimScale)
+		fg = color.RGBA{v, v, v, 255}
 	}
 
 	radius := r * 0.55
@@ -64,7 +73,7 @@ func drawRewindIcon(screen *ebiten.Image, cx, cy, r float64, selected bool) {
 
 	strokeOpts := &vector.StrokeOptions{Width: 2.5}
 	drawOpts := &vector.DrawPathOptions{AntiAlias: true}
-	drawOpts.ColorScale.ScaleWithColor(color.White)
+	drawOpts.ColorScale.ScaleWithColor(fg)
 	vector.StrokePath(screen, &path, strokeOpts, drawOpts)
 
 	sx := cx + radius*math.Cos(startAngle)
@@ -81,7 +90,7 @@ func drawRewindIcon(screen *ebiten.Image, cx, cy, r float64, selected bool) {
 	b2x := sx - baseHalf*math.Cos(perp)
 	b2y := sy - baseHalf*math.Sin(perp)
 
-	fillTriPath(screen, color.White, [][2]float64{{tx, ty}, {b1x, b1y}, {b2x, b2y}})
+	fillTriPath(screen, fg, [][2]float64{{tx, ty}, {b1x, b1y}, {b2x, b2y}})
 }
 
 // drawItemIcon dims the icon when not selected, matching drawCommandMenu.
@@ -94,7 +103,7 @@ func drawItemIcon(screen *ebiten.Image, img *ebiten.Image, cx, cy float64, selec
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(cx-w/2, cy-h/2)
 	if !selected {
-		op.ColorScale.Scale(0.6, 0.6, 0.6, 1.0)
+		op.ColorScale.Scale(commandDimScale, commandDimScale, commandDimScale, 1.0)
 	}
 	screen.DrawImage(img, op)
 }
@@ -131,25 +140,33 @@ func isItemButtonJustPressed() bool {
 	return false
 }
 
-func (s *BattleScene) drawBattleShortcutButtons(screen *ebiten.Image) {
+// drawBattleShortcutButtons draws the rewind and item buttons, lit only when
+// selected and dimmed otherwise, the same way drawCommandMenu treats the
+// four command icons.
+// The rewind button only exists once the gauge system is unlocked.
+func (s *BattleScene) drawBattleShortcutButtons(screen *ebiten.Image, rewindSelected, itemSelected bool) {
 	rx, ry := rewindButtonCenter(s.game)
-	drawRewindIcon(screen, rx, ry, battleIconR, s.rewindButtonArmed)
+	if s.gaugeUnlocked {
+		drawRewindIcon(screen, rx, ry, battleIconR, rewindSelected)
+	}
 
 	ix, iy := itemButtonCenter()
-	drawItemIcon(screen, s.game.ItemButtonImg, ix, iy, s.itemButtonArmed)
+	drawItemIcon(screen, s.game.ItemButtonImg, ix, iy, itemSelected)
 
 	if !s.game.MobileMode {
 		face := s.game.FontFace(ctrlLabelFontSize)
 
-		op := &text.DrawOptions{}
-		op.GeoM.Translate(rx, ry+battleIconR+4)
-		op.PrimaryAlign = text.AlignCenter
-		op.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "F", face, op)
+		if s.gaugeUnlocked {
+			op := &text.DrawOptions{}
+			op.GeoM.Translate(rx, ry+battleIconR+4)
+			op.PrimaryAlign = text.AlignCenter
+			op.ColorScale.ScaleWithColor(uiColorText)
+			text.Draw(screen, "F", face, op)
+		}
 
 		// The item button sits near the bottom edge, so its label goes to
 		// the left instead of below.
-		op = &text.DrawOptions{}
+		op := &text.DrawOptions{}
 		op.GeoM.Translate(ix-itemButtonR-4, iy)
 		op.PrimaryAlign = text.AlignEnd
 		op.SecondaryAlign = text.AlignCenter

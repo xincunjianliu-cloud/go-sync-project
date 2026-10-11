@@ -33,6 +33,13 @@ const (
 // (menu_draw_misc.go)がこれを見る。
 func isBlockingLayer(layer TiledLayer) bool { return layerFlag(layer, "blocking") }
 
+// isWalkOnTopLayer は通れないレイヤーで「上に絵を描いた所は通れる」にチェックしたものか
+// (名札 walkontop=true)。水のレイヤーに付けると、このレイヤーより上・主人公より下の
+// ふつうのレイヤーに床や橋を描いた所だけ通れる(coveredAbove)。
+func isWalkOnTopLayer(layer TiledLayer) bool {
+	return isBlockingLayer(layer) && layerFlag(layer, "walkontop")
+}
+
 // isEventsLayer はクラス「しかけレイヤー」にしたオブジェクトレイヤーか
 // (名札 eventlayer=true)。宝箱・ドアなどのしかけはここに置いたものだけが動く。
 func isEventsLayer(layer TiledLayer) bool { return layerFlag(layer, "eventlayer") }

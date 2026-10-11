@@ -1,49 +1,644 @@
 {
-  "example_opening": {
+  "opening1": {
     "first": {
       "commands": [
         {
-          "speaker": "",
-          "text": "むかしむかし、とある学校に……"
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
         },
         {
           "speaker": "",
-          "text": "目が覚めると、そこは見知らぬ場所だった"
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
         }
-      ],
-      "bgm": "talk_peaceful",
-      "background": "opening_bg"
+      ]
     }
   },
-  "example_scene": {
+  "opening2": {
     "first": {
       "commands": [
         {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
           "speaker": "",
-          "text": "ナレーション行はspeakerを空欄にする"
+          "text": "高校2年の夏"
         },
         {
-          "speaker": "player1",
-          "text": "speakerを書けばそのキャラのセリフになる(表情1=笑顔)",
-          "expression": 1
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
         },
         {
-          "speaker": "boss1",
-          "text": "話者を変えると自動で立ち絵が入れ替わる(表情2=怒り)",
-          "expression": 2
-        }
-      ],
-      "bgm": "talk_tense",
-      "speakerSlots": {
-        "boss1": 1,
-        "player1": 0
-      }
-    },
-    "repeat": {
-      "commands": [
+          "speaker": "",
+          "text": "今日は1学期の終業式"
+        },
         {
-          "speaker": "player1",
-          "text": "phaseをrepeatにすると2回目以降だけのセリフになる"
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "担任の長い話が終わった後の教室では、みんな遊びの予定を立てている"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そんな教室で1人ぼーっとしていたら、目の前に1人の男が来た"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "なあ夏休み何すんだお前"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "こいつの名前はなおと、小学校からの幼馴染だ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "何もしねえよ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そう返すとなおとは楽しげに話題を振ってきた。"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "なあ知ってるか？俺たちが通ってた小学校のことなんだけど"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "その学校が3年前に閉鎖した話はお前も知ってるだろ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "ああ、そりゃお前から聞いたからな"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "その学校の校舎がついに取り壊されるらしいぞ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そうなのか少し寂しくなるな"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "それでそれがどうかしたか？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "話の本題はここからだよほうたろう"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "その廃校の妙な噂が流行ってるらしいんだよ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そんなの聞いたことないけどな"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "何でも妖怪が出るらしいよ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "それもいわゆる学校にまつわる七不思議ってやつ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "トイレの花子さんとか？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そうそう"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "それで？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "だから実際にその廃校に行って確かめに行こうって話さ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そんな話本当なわけないだろう"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "そんなの実際に行ってみないとわからないだろう？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "それに妖怪関係なく、取り壊される前にもう一度行ってみたいだろ？"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "思い出の小学校に"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "正直僕にとってはもう過去の思い出だし名残惜しいとかはないんだけどな"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "行かねえよ、もう今更何かしたいとかないし、七不思議も興味ない"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "まあそういうなよ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
         }
       ]
     }

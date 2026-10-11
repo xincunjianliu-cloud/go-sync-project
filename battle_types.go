@@ -107,18 +107,19 @@ const (
 	// partyNameBaseX/Y is the party member's name draw position (i=0). Every
 	// other status-block element is positioned relative to this point via
 	// partyNamePosition(i) in battle_draw_panels.go.
-	partyNameBaseX = 40.0
+	partyNameBaseX = 25.0
 	partyNameBaseY = 432.0
 
-	statusBlockW       = 135.0
-	statusBarH         = 5.5
-	statusBarSlant     = 8.0
-	statusBlockGap     = 42.0
-	statusHPTextY      = 25.0
-	statusHPBarY       = 44.0
-	statusMPTextY      = 52.0
-	statusMPBarY       = 71.0
-	statusValueOffsetX = 10.0
+	statusBlockW   = 140.0
+	statusBarH     = 5.5
+	statusBarSlant = 8.0
+	statusBlockGap = 50.0
+	statusHPBarY   = 44.0
+	statusMPBarY   = 71.0
+	// statusValueGapAboveBar is the visible gap between the HP/MP value text
+	// (including its outline) and the top edge of the bar.
+	statusValueGapAboveBar = 1.0
+	statusValueOffsetX     = 10.0
 
 	// statIconGap/OffsetX/OffsetY position the per-stat up/down icons drawn
 	// to the right of a party member's name (see drawPartyStatIcons in
@@ -147,17 +148,10 @@ const (
 )
 
 const (
-	poseIdle        = 0
-	poseReady       = 1
-	poseSwingUp     = 2
-	poseSwingDown   = 3
-	poseSwingReturn = 4
-	poseCast        = 5
-	poseDamage      = 6
-	poseLowHP       = 7
-	poseDead        = 8
-	poseWin         = 9
-	poseDefend      = 10
+	poseIdle   = 0
+	poseReady  = 1
+	poseDamage = 6
+	poseDead   = 8
 )
 
 // spriteFrameW/H は味方1人が画面上で占める枠（足元の位置やタップ判定、
@@ -235,7 +229,7 @@ var glowLevelRange = [4][2]int{
 
 const (
 	resSubStillWait    = 0
-	resSubWinPose      = 1
+	resSubWinWait      = 1
 	resSubResultFadeIn = 2
 	resSubBarAnimate   = 3
 	resSubDoneWait     = 4
@@ -292,68 +286,80 @@ const (
 const (
 	resultPanelWidthRatio = 0.4
 
-	resultTitleX        = 15.0
-	resultTitleY        = 10.0
+	resultTitleX        = 16.0
+	resultTitleY        = 6.0
 	resultTitleFontSize = 40.0
 
-	resultExpLabelX   = 40.0
-	resultExpValueX   = 250.0
-	resultExpY        = 48.0
-	resultExpFontSize = 20.0
+	// EXP and SP share one row to leave room for the party rows.
+	resultExpLabelX   = 32.0
+	resultExpValueX   = 90.0
+	resultExpY        = 54.0
+	resultExpFontSize = 22.0
 
-	resultSpLabelX   = 40.0
-	resultSpValueX   = 250.0
-	resultSpY        = 68.0
-	resultSpFontSize = 20.0
+	resultSpLabelX   = 250.0
+	resultSpValueX   = 296.0
+	resultSpY        = 54.0
+	resultSpFontSize = 22.0
 
-	resultDividerX = 10.0
-	resultDividerY = 90.0
-	resultDividerW = 350.0
-	resultDividerH = 1.0
+	resultDividerX = 12.0
+	// Both divider lines sit resultDividerGapY below the bottom of the text
+	// line above them (its top Y plus its font size).
+	resultDividerGapY = 2.0
+	resultDividerY    = resultExpY + resultExpFontSize + resultDividerGapY
+	resultDividerW    = 360.0
+	resultDividerH    = 1.0
 
-	resultItemsHeaderX        = 30.0
-	resultItemsHeaderY        = 380.0
-	resultItemsHeaderFontSize = 20.0
+	resultItemsHeaderX = 24.0
+	// The items section starts resultItemsSectionGapY below where a fifth
+	// party row would, so the last row's LEVEL UP! line has room.
+	resultItemsSectionGapY    = 8.0
+	resultItemsHeaderY        = resultRowStartY + partySize*resultRowGap + resultItemsSectionGapY
+	resultItemsHeaderFontSize = 22.0
 
-	resultItemsDividerX = 10.0
-	resultItemsDividerY = 405.0
-	resultItemsDividerW = 350.0
+	resultItemsDividerX = 12.0
+	resultItemsDividerY = resultItemsHeaderY + resultItemsHeaderFontSize + resultDividerGapY
+	resultItemsDividerW = 360.0
 	resultItemsDividerH = 1.0
 
-	resultItemsNameX    = 40.0
-	resultItemsCountX   = 250.0
-	resultItemsStartY   = 410.0
-	resultItemsRowGap   = 20.0
-	resultItemsFontSize = 15.0
+	// Earned items are listed in two columns (left to right, then down) so
+	// several of them still fit above the hint line.
+	resultItemsNameX     = 24.0
+	resultItemsCountX    = 184.0
+	resultItemsColumnGap = 176.0
+	resultItemsColumns   = 2
+	resultItemsStartY    = resultItemsDividerY + 6.0
+	resultItemsRowGap    = 22.0
+	resultItemsFontSize  = 16.0
 
-	resultBarStartX = 45.0
-	resultBarStartY = 130.0
-	resultBarRowGap = 70.0
-	resultBarWAbs   = 280.0
-	resultBarH      = 10.0
+	// Each party row, top to bottom: name / Lv, EXP label / numbers, the
+	// EXP bar, then LEVEL UP! / スキル解放！. Offsets are from the row top.
+	resultRowStartY = 86.0
+	resultRowGap    = 78.0
 
-	resultNameOffsetX  = 0.0
-	resultLevelOffsetX = 250.0
-	resultNameOffsetY  = -30.0
+	// The bar (and the name / Lv / EXP text aligned to it) is centered in
+	// the panel.
+	resultBarStartX  = (float64(gameWidth)*resultPanelWidthRatio - resultBarWAbs) / 2
+	resultBarWAbs    = 320.0
+	resultBarH       = 8.0
+	resultBarOffsetY = 44.0
 
 	resultExpLabelOffsetX = 4.0
-	resultExpLabelOffsetY = -15.0
-
-	resultExpTextOffsetY = -15.0
+	// resultExpTextGapY is the space between the EXP line's bottom and the bar.
+	resultExpTextGapY = 2.0
 
 	resultLevelUpOffsetX = 4.0
-	resultLevelUpOffsetY = 12.0
+	resultLevelUpOffsetY = 55.0
 
-	resultNameFontSize        = 15.0
-	resultExpCurFontSize      = 15.0
-	resultExpMaxFontSize      = 13.0
-	resultExpLabelFontSize    = 15.0
-	resultLevelUpFontSize     = 15.0
+	resultNameFontSize        = 22.0
+	resultExpCurFontSize      = 18.0
+	resultExpMaxFontSize      = 16.0
+	resultExpLabelFontSize    = 18.0
+	resultLevelUpFontSize     = 18.0
 	resultSkillUnlockFontSize = 18.0
 
 	resultHintX        = 24.0
-	resultHintYFromBtm = 20.0
-	resultHintFontSize = 15.0
+	resultHintYFromBtm = 24.0
+	resultHintFontSize = 18.0
 )
 
 var resultBarFillColor = color.RGBA{255, 200, 130, 255}
@@ -541,6 +547,10 @@ type BattleScene struct {
 
 	drawPlayerEXPF [partySize]float64
 
+	// gaugeUnlocked is whether the gauge system (gauge, attack bonus,
+	// rewind) is active this battle. It unlocks together with the gauge
+	// tutorial, i.e. once boss 1 has been defeated.
+	gaugeUnlocked       bool
 	gaugeStage          int
 	gaugePoint          int
 	gaugeColorAnimTimer float64
@@ -715,6 +725,7 @@ func NewBattleScene(game *Game, originMap string, originX, originY float64, orig
 
 		gaugeStage:    0,
 		gaugePoint:    0,
+		gaugeUnlocked: gaugeSystemUnlocked(game),
 		healingCaster: -1,
 
 		tutorialKind: nextBattleTutorialKind(game),

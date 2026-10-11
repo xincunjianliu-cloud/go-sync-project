@@ -33,6 +33,9 @@ const (
 	playerLayerClass   = "主人公の高さ"   // 主人公を描く重なり順
 )
 
+// walkOnTopMember は通れないレイヤーの欄。水のレイヤーで使う。
+const walkOnTopMember = "上に絵を描いた所は通れる"
+
 type classMember struct {
 	Name string // Tiledに出る欄の名前
 	Type string // string / int / bool / file
@@ -218,9 +221,15 @@ var tiledClasses = []tiledClass{
 			set("leveropen", "true")
 		}},
 	// タイルレイヤーなら描いたタイル、オブジェクトレイヤーなら置いた四角が通れない。
+	// 「上に絵を描いた所は通れる」なら、このレイヤーより上・主人公より下の
+	// レイヤーに絵がある所は通れる(水の上の床・橋など。isWalkOnTopLayer)。
 	{Name: blockingLayerClass, UseAs: "layer", Color: "#ff666666",
+		Members: []classMember{{Name: walkOnTopMember, Type: "bool", Default: false}},
 		apply: func(v map[string]string, set func(string, string)) {
 			set("blocking", "true")
+			if v[walkOnTopMember] == "true" {
+				set("walkontop", "true")
+			}
 		}},
 	// 宝箱・ドアなどのしかけを置くオブジェクトレイヤー。
 	{Name: eventsLayerClass, UseAs: "layer", Color: "#ff45818e",

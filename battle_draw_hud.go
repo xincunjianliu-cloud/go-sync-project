@@ -270,6 +270,9 @@ func (s *BattleScene) drawPartyStatIcons(screen *ebiten.Image, i int, x, y, alph
 }
 
 func (s *BattleScene) drawGaugeTriangle(screen *ebiten.Image) {
+	if !s.gaugeUnlocked {
+		return
+	}
 	x := gaugeTriX
 	y := gaugeTriY
 	w := float64(s.game.GaugeImg.Bounds().Dx())
@@ -354,7 +357,7 @@ func (s *BattleScene) drawCommandMenu(screen *ebiten.Image, highlight int) {
 		op.GeoM.Translate(pos[0]-float64(iw)/2, pos[1]-float64(ih)/2)
 
 		if highlight != i {
-			op.ColorScale.Scale(0.6, 0.6, 0.6, 1.0)
+			op.ColorScale.Scale(commandDimScale, commandDimScale, commandDimScale, 1.0)
 		}
 
 		screen.DrawImage(icon, op)
@@ -385,7 +388,7 @@ func (s *BattleScene) drawSkillSubMenuEnlarged(screen *ebiten.Image) {
 }
 
 func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
-	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
+	windowX, windowY, _, _ := s.battleSubPanelOrigin()
 
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(windowX, windowY)
@@ -394,7 +397,7 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 	p := s.waitingActor
 	skills := s.game.CharacterSkills(p)
 
-	skillListFace := s.game.FontFace(18)
+	skillListFace := s.game.FontFace(battleSubSkillFontSize)
 	skillListArrowGap := text.Advance("▶ ", skillListFace)
 
 	for i, sk := range skills {
@@ -422,7 +425,7 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 			textCol = uiColorDisabled
 		}
 
-		baseX := windowX + battleSubLabelOffsetX
+		baseX := battleSubPanelTextLeft(windowX)
 		baseY := windowY + battleSubLabelOffsetY + float64(s.game.SkillDisplayRow(p, i))*battleSubRowHeight
 		if selected {
 			arrowOp := &text.DrawOptions{}
@@ -463,8 +466,7 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		}
 
 		mpOp := &text.DrawOptions{}
-		mpOp.GeoM.Translate(windowX+windowW-battleSubRightOffsetX, baseY)
-		mpOp.PrimaryAlign = text.AlignEnd
+		mpOp.GeoM.Translate(battleSubPanelMPX(windowX), baseY)
 		mpOp.ColorScale.ScaleWithColor(textCol)
 		text.Draw(screen, costText, skillListFace, mpOp)
 	}

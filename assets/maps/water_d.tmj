@@ -1,8 +1,10 @@
-{ "compressionlevel":-1,
+{ "class":"\u30de\u30c3\u30d7\u8a2d\u5b9a",
+ "compressionlevel":-1,
  "height":50,
  "infinite":false,
  "layers":[
         {
+         "class":"\u901a\u308c\u306a\u3044\u30ec\u30a4\u30e4\u30fc",
          "data":[1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046,
             1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046,
             1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046, 1046,
@@ -57,6 +59,12 @@
          "id":7,
          "name":"wotyer",
          "opacity":1,
+         "properties":[
+                {
+                 "name":"\u4e0a\u306b\u7d75\u3092\u63cf\u3044\u305f\u6240\u306f\u901a\u308c\u308b",
+                 "type":"bool",
+                 "value":true
+                }],
          "type":"tilelayer",
          "visible":true,
          "width":40,
@@ -186,6 +194,7 @@
          "y":0
         }, 
         {
+         "class":"\u901a\u308c\u306a\u3044\u30ec\u30a4\u30e4\u30fc",
          "data":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -240,6 +249,12 @@
          "id":12,
          "name":"\u6ce2",
          "opacity":1,
+         "properties":[
+                {
+                 "name":"\u4e0a\u306b\u7d75\u3092\u63cf\u3044\u305f\u6240\u306f\u901a\u308c\u308b",
+                 "type":"bool",
+                 "value":true
+                }],
          "type":"tilelayer",
          "visible":true,
          "width":40,
@@ -299,7 +314,7 @@
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
          "height":50,
          "id":9,
-         "name":"yuka",
+         "name":"\u5e8a",
          "opacity":1,
          "type":"tilelayer",
          "visible":true,
@@ -308,6 +323,7 @@
          "y":0
         }, 
         {
+         "class":"\u901a\u308c\u306a\u3044\u30ec\u30a4\u30e4\u30fc",
          "data":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -360,7 +376,7 @@
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
          "height":50,
          "id":13,
-         "name":"kabe",
+         "name":"\u58c1",
          "opacity":1,
          "type":"tilelayer",
          "visible":true,
@@ -430,6 +446,97 @@
          "y":0
         }, 
         {
+         "class":"\u3057\u304b\u3051\u30ec\u30a4\u30e4\u30fc",
+         "draworder":"topdown",
+         "id":5,
+         "name":"events",
+         "objects":[
+                {
+                 "height":32,
+                 "id":2,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"\u30dc\u30b9\u6226",
+                         "propertytype":"\u30dc\u30b9",
+                         "type":"string",
+                         "value":"1"
+                        }, 
+                        {
+                         "name":"\u6b69\u304f\u9053\u9806",
+                         "type":"string",
+                         "value":"up140"
+                        }],
+                 "rotation":0,
+                 "type":"\u30a4\u30d9\u30f3\u30c8",
+                 "visible":true,
+                 "width":64,
+                 "x":608,
+                 "y":608
+                }, 
+                {
+                 "height":64,
+                 "id":3,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"\u7740\u5730\u70b9",
+                         "type":"string",
+                         "value":"\u68af\u5b507"
+                        }, 
+                        {
+                         "name":"\u884c\u304d\u5148\u30de\u30c3\u30d7",
+                         "type":"file",
+                         "value":"water_a.tmj"
+                        }],
+                 "rotation":0,
+                 "type":"\u30c9\u30a2",
+                 "visible":true,
+                 "width":96,
+                 "x":864,
+                 "y":320
+                }, 
+                {
+                 "height":32,
+                 "id":5,
+                 "name":"\u68af\u5b509",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"\u5411\u304d",
+                         "propertytype":"\u5411\u304d",
+                         "type":"string",
+                         "value":"\u53f3"
+                        }],
+                 "rotation":0,
+                 "type":"\u7740\u5730\u70b9",
+                 "visible":true,
+                 "width":32,
+                 "x":384,
+                 "y":1216
+                }, 
+                {
+                 "height":32,
+                 "id":6,
+                 "name":"\u68af\u5b508",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"\u7740\u5730\u70b9",
+                 "visible":true,
+                 "width":32,
+                 "x":896,
+                 "y":352
+                }],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
+        }, 
+        {
+         "class":"\u4e3b\u4eba\u516c\u306e\u9ad8\u3055",
          "draworder":"topdown",
          "id":14,
          "name":"player",
@@ -547,11 +654,11 @@
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 671, 671, 671, 0, 671, 0, 671, 671, 671,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 671, 0, 671, 0, 671, 0, 671, 0, 671,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 671, 671, 671, 0, 671, 0, 671, 0, 671,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 671, 0, 671, 0, 671, 0, 671, 0, 671,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 671, 671, 671, 0, 671, 0, 671, 671, 671],
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
          "height":50,
          "id":16,
          "name":"\u5149",
@@ -561,145 +668,24 @@
          "width":40,
          "x":0,
          "y":0
-        }, 
-        {
-         "draworder":"topdown",
-         "id":5,
-         "name":"events",
-         "objects":[
-                {
-                 "height":32,
-                 "id":1,
-                 "name":"",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"targetmap",
-                         "type":"string",
-                         "value":"assets\/maps\/woter_MAP_C.tmj"
-                        }, 
-                        {
-                         "name":"targetpoint",
-                         "type":"string",
-                         "value":"\u68af\u5b507"
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":32,
-                 "x":384,
-                 "y":1184
-                }, 
-                {
-                 "height":32,
-                 "id":2,
-                 "name":"",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"bossld",
-                         "type":"int",
-                         "value":1
-                        }, 
-                        {
-                         "name":"route",
-                         "type":"string",
-                         "value":"up140"
-                        }, 
-                        {
-                         "name":"type",
-                         "type":"string",
-                         "value":"trigger"
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":64,
-                 "x":608,
-                 "y":608
-                }, 
-                {
-                 "height":32,
-                 "id":3,
-                 "name":"",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"targetmap",
-                         "type":"string",
-                         "value":"assets\/maps\/woter_MAP_0.tmj"
-                        }, 
-                        {
-                         "name":"targetpoint",
-                         "type":"string",
-                         "value":"\u68af\u5b502"
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":32,
-                 "x":896,
-                 "y":320
-                }, 
-                {
-                 "height":32,
-                 "id":5,
-                 "name":"\u68af\u5b506",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"dir",
-                         "type":"int",
-                         "value":2
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":32,
-                 "x":384,
-                 "y":1216
-                }],
-         "opacity":1,
-         "type":"objectgroup",
-         "visible":true,
-         "x":0,
-         "y":0
         }],
  "nextlayerid":17,
- "nextobjectid":6,
+ "nextobjectid":7,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.1",
  "tileheight":32,
  "tilesets":[
         {
-         "columns":29,
          "firstgid":1,
-         "image":"..\/..\/..\/..\/Downloads\/Tile_set_School_Set (12).png",
-         "imageheight":1152,
-         "imagewidth":928,
-         "margin":0,
-         "name":"Tile_set_School_Set (12)",
-         "spacing":0,
-         "tilecount":1044,
-         "tileheight":32,
-         "tilewidth":32
+         "source":"..\/tilesets\/school.tsx"
         }, 
         {
-         "columns":1,
          "firstgid":1045,
-         "image":"..\/..\/..\/..\/Downloads\/unnamed.png",
-         "imageheight":64,
-         "imagewidth":32,
-         "margin":0,
-         "name":"unnamed",
-         "spacing":0,
-         "tilecount":2,
-         "tileheight":32,
-         "tilewidth":32
+         "source":"..\/tilesets\/water.tsx"
         }],
  "tilewidth":32,
  "type":"map",
- "version":"1.10",
+ "version":"1.11",
  "width":40
 }

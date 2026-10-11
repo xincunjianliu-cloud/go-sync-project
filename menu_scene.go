@@ -40,8 +40,11 @@ const defaultWindowHeight = gameHeight
 const defaultRememberCursor = true
 
 type MenuScene struct {
-	game              *Game
-	backScene         Scene
+	game      *Game
+	backScene Scene
+	// minimapImg is the current map painted at one pixel per tile, built on
+	// the first draw (see buildMinimapImage).
+	minimapImg        *ebiten.Image
 	menuIndex         int
 	commands          []string
 	menuState         string
