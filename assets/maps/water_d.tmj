@@ -610,6 +610,12 @@
  "nextlayerid":17,
  "nextobjectid":7,
  "orientation":"orthogonal",
+ "properties":[
+        {
+         "name":"\u5730\u540d",
+         "type":"string",
+         "value":"adac"
+        }],
  "renderorder":"right-down",
  "tiledversion":"1.12.1",
  "tileheight":32,

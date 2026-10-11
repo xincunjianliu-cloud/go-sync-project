@@ -1471,6 +1471,11 @@
          "name":"\u30b2\u30fc\u30e0\u306e\u6700\u521d\u306e\u30de\u30c3\u30d7",
          "type":"bool",
          "value":true
+        }, 
+        {
+         "name":"\u5730\u540d",
+         "type":"string",
+         "value":"\u30e1\u30a4\u30f3"
         }],
  "renderorder":"right-down",
  "tiledversion":"1.12.1",
