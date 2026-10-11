@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/color"
+	"math"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -224,49 +225,84 @@ func (s *FieldScene) drawTileLayer(screen *ebiten.Image, layer TiledLayer, camX,
 		op.ColorScale.ScaleAlpha(a)
 	}
 	leverOnly := isLeverOpenLayer(layer)
-	for i, id := range layer.Data {
-		if id == 0 {
-			continue
-		}
-		if leverOnly && !s.leverTileShown(i) {
-			continue
-		}
-		gid := id &^ gidFlagMask
-		if frames, ok := s.tileMap.tileAnims[gid]; ok {
-			gid = animFrameGID(frames, int64(s.tileAnimMs))
-		}
-		if gid >= len(s.tileImgs) || s.tileImgs[gid] == nil {
-			continue
-		}
-		tile := s.tileImgs[gid]
-		tw, th := float64(tile.Bounds().Dx()), float64(tile.Bounds().Dy())
-		tx := float64((i % s.tileMap.Width) * s.tileMap.TileWidth)
-		ty := float64((i / s.tileMap.Width) * s.tileMap.TileHeight)
-
-		op.GeoM.Reset()
-		if id&(gidFlipH|gidFlipV|gidFlipD) != 0 {
-			// Tiledと同じ順(対角線→左右→上下)で、タイルの中心を軸に反転する。
-			op.GeoM.Translate(-tw/2, -th/2)
-			if id&gidFlipD != 0 {
-				var swap ebiten.GeoM
-				swap.SetElement(0, 0, 0)
-				swap.SetElement(0, 1, 1)
-				swap.SetElement(1, 0, 1)
-				swap.SetElement(1, 1, 0)
-				op.GeoM.Concat(swap)
-			}
-			if id&gidFlipH != 0 {
-				op.GeoM.Scale(-1, 1)
-			}
-			if id&gidFlipV != 0 {
-				op.GeoM.Scale(1, -1)
-			}
-			op.GeoM.Translate(tw/2, th/2)
-		}
-		// マップのマスより大きいタイルは、Tiledと同じくマスの左下にそろえる。
-		op.GeoM.Translate(tx+camX, ty+camY+float64(s.tileMap.TileHeight)-th)
-		screen.DrawImage(tile, op)
+	maxTileW, maxTileH := s.tileMap.TileWidth, s.tileMap.TileHeight
+	for _, ts := range s.tileMap.tilesets {
+		maxTileW = max(maxTileW, ts.def.TileWidth, ts.def.TileHeight)
+		maxTileH = max(maxTileH, ts.def.TileWidth, ts.def.TileHeight)
 	}
+	minCol, maxCol := visibleTileRange(camX, float64(gameWidth), s.tileMap.TileWidth, maxTileW, s.tileMap.Width)
+	minRow, maxRow := visibleTileRange(camY, float64(gameHeight), s.tileMap.TileHeight, maxTileH, s.tileMap.Height)
+	for row := minRow; row < maxRow; row++ {
+		for col := minCol; col < maxCol; col++ {
+			i := row*s.tileMap.Width + col
+			if i >= len(layer.Data) {
+				continue
+			}
+			id := layer.Data[i]
+			if id == 0 {
+				continue
+			}
+			if leverOnly && !s.leverTileShown(i) {
+				continue
+			}
+			gid := id &^ gidFlagMask
+			if frames, ok := s.tileMap.tileAnims[gid]; ok {
+				gid = animFrameGID(frames, int64(s.tileAnimMs))
+			}
+			if gid >= len(s.tileImgs) || s.tileImgs[gid] == nil {
+				continue
+			}
+			tile := s.tileImgs[gid]
+			tw, th := float64(tile.Bounds().Dx()), float64(tile.Bounds().Dy())
+			tx := float64(col * s.tileMap.TileWidth)
+			ty := float64(row * s.tileMap.TileHeight)
+			drawX, drawY := tx+camX, ty+camY+float64(s.tileMap.TileHeight)-th
+			boundsW, boundsH := tw, th
+			if id&gidFlipD != 0 {
+				boundsW, boundsH = th, tw
+			}
+			boundsX := drawX + (tw-boundsW)/2
+			boundsY := drawY + (th-boundsH)/2
+			if boundsX+boundsW <= 0 || boundsX >= float64(gameWidth) || boundsY+boundsH <= 0 || boundsY >= float64(gameHeight) {
+				continue
+			}
+
+			op.GeoM.Reset()
+			if id&(gidFlipH|gidFlipV|gidFlipD) != 0 {
+				// Tiledと同じ順(対角線→左右→上下)で、タイルの中心を軸に反転する。
+				op.GeoM.Translate(-tw/2, -th/2)
+				if id&gidFlipD != 0 {
+					var swap ebiten.GeoM
+					swap.SetElement(0, 0, 0)
+					swap.SetElement(0, 1, 1)
+					swap.SetElement(1, 0, 1)
+					swap.SetElement(1, 1, 0)
+					op.GeoM.Concat(swap)
+				}
+				if id&gidFlipH != 0 {
+					op.GeoM.Scale(-1, 1)
+				}
+				if id&gidFlipV != 0 {
+					op.GeoM.Scale(1, -1)
+				}
+				op.GeoM.Translate(tw/2, th/2)
+			}
+			// マップのマスより大きいタイルは、Tiledと同じくマスの左下にそろえる。
+			op.GeoM.Translate(drawX, drawY)
+			screen.DrawImage(tile, op)
+		}
+	}
+}
+
+func visibleTileRange(cameraOffset, screenSize float64, cellSize, maxTileSize, cellCount int) (int, int) {
+	if cellSize <= 0 || cellCount <= 0 {
+		return 0, 0
+	}
+	cell := float64(cellSize)
+	overhang := float64(maxTileSize - cellSize)
+	start := int(math.Floor((-cameraOffset - float64(maxTileSize)) / cell))
+	end := int(math.Ceil((screenSize-cameraOffset+overhang)/cell)) + 1
+	return min(cellCount, max(0, start)), min(cellCount, max(0, end))
 }
 
 func (s *FieldScene) drawMapEvents(screen *ebiten.Image, camX, camY float64) {

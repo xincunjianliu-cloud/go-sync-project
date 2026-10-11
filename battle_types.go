@@ -96,7 +96,7 @@ const (
 	iconSize       = 58.0 // must match timeline icon PNG width; atbIconSpacing uses it
 	timelineStartX = trackX + 10.0
 
-	logPanelY = 400.0
+	logPanelY = 390.0
 	logPanelH = 28.0
 	cmdPanelX = 600.0
 	cmdPanelY = 380.0
