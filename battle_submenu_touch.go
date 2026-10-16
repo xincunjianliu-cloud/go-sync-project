@@ -172,10 +172,12 @@ const (
 	// enemies and the box never moves mid-battle.
 	allTargetRowW            = 120.0
 	allTargetRowH            = 24.0
-	allyAllTargetRowY        = 402.0
+	// Slightly nudge the "全体" target row upward so it sits just under the
+	// party/enemy portraits instead of feeling too low.
+	allyAllTargetRowY        = 398.0
 	allyAllTargetRowCenterX  = 720.0
 	enemyAllTargetRowCenterX = 240.0
-	enemyAllTargetRowGapY    = 8.0
+	enemyAllTargetRowGapY    = 6.0
 
 	// allTargetLabelFontSize sizes the "全体" label drawn inside the box by
 	// drawAllTargetBox (shared by the ally and enemy rows).

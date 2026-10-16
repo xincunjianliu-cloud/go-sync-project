@@ -130,7 +130,7 @@ const (
 	// the separate, independently-tunable gap between consecutive icons.
 	statIconGapX    = 0.0
 	statIconOffsetX = 50.0
-	statIconOffsetY = -2.0
+	statIconOffsetY = -5.0
 
 	// statusValueFontSizeLarge/Small size the current/max numbers drawn by
 	// drawStatusValue in both the battle HUD and the menu party list, so
