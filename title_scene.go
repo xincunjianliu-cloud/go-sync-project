@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -82,12 +83,16 @@ func (s *TitleScene) Update(dt float64) Scene {
 		return s
 	}
 
+	menuCount := 3
+	if !s.hasExitOption() {
+		menuCount = 2
+	}
 	if isMenuDownPressed() {
-		s.menuIndex = (s.menuIndex + 1) % 3
+		s.menuIndex = (s.menuIndex + 1) % menuCount
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 	if isMenuUpPressed() {
-		s.menuIndex = (s.menuIndex - 1 + 3) % 3
+		s.menuIndex = (s.menuIndex - 1 + menuCount) % menuCount
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 
@@ -134,6 +139,9 @@ func (s *TitleScene) Update(dt float64) Scene {
 			}, fadeTimeBattleOut)
 			return s
 		case 2:
+			if !s.hasExitOption() {
+				return s
+			}
 			s.game.Audio.PlaySEByKey("decide")
 			s.confirmExit = true
 			s.exitConfirmIdx = 1
@@ -143,13 +151,19 @@ func (s *TitleScene) Update(dt float64) Scene {
 	return s
 }
 
+func (s *TitleScene) hasExitOption() bool {
+	return runtime.GOOS != "js"
+}
+
 func (s *TitleScene) hitTestMainMenu() (int, bool) {
 	face := s.game.FontFace(22)
 	centerX := float64(gameWidth) / 2
 	rects := []tapRect{
 		centeredTextRect(centerX, 355, "はじめから", face, 30),
 		centeredTextRect(centerX, 400, "つづきから", face, 30),
-		centeredTextRect(centerX, 445, "ゲームを終了する", face, 30),
+	}
+	if s.hasExitOption() {
+		rects = append(rects, centeredTextRect(centerX, 445, "ゲームを終了する", face, 30))
 	}
 	return hitTestTapRects(rects)
 }
@@ -188,7 +202,9 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 
 	drawTitleMenuOption("はじめから", 355, s.menuIndex == 0)
 	drawTitleMenuOption("つづきから", 400, s.hasSaveFile && s.menuIndex == 1)
-	drawTitleMenuOption("ゲームを終了する", 445, s.menuIndex == 2)
+	if s.hasExitOption() {
+		drawTitleMenuOption("ゲームを終了する", 445, s.menuIndex == 2)
+	}
 
 	if s.game.showInstallHint() {
 		hintOp := &text.DrawOptions{}
