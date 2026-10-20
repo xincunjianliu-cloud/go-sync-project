@@ -132,7 +132,7 @@ func (s *BattleScene) fleeSuccessRate() int {
 	return rate
 }
 
-const atbBaseSpeed = 10.0
+const atbBaseSpeed = 15.0
 
 const (
 	// Return-to-timeline position (0-100) after each non-skill action.
