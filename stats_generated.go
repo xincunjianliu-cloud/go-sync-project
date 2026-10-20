@@ -361,7 +361,7 @@ var PlayerExpToNextByLevel = [50]int{
 }
 
 var EnemyDatabase = []EnemyStats{
-	{Name: "スライム1", Lv: 1, Exp: 21, HP: 120, MP: 12, PhysAtk: 8, MagicAtk: 10, PhysDef: 50, MagicDef: 55, Spd: 40, SP: 1, Element: ElemPhysicalNone, ElementResist: [4]int{-20, 0, 0, 0},
+	{Name: "スライム1", Lv: 1, Exp: 21, HP: 120, MP: 12, PhysAtk: 6, MagicAtk: 5, PhysDef: 50, MagicDef: 55, Spd: 40, SP: 1, Element: ElemPhysicalNone, ElementResist: [4]int{-20, 0, 0, 0},
 		Drops: enemyDrops["スライム1"], SkillIDs: []string{"tackle"}},
 	{Name: "スライム2", Lv: 1, Exp: 21, HP: 40, MP: 12, PhysAtk: 8, MagicAtk: 7, PhysDef: 60, MagicDef: 55, Spd: 9, SP: 1, Element: ElemPhysicalNone, ElementResist: [4]int{-20, 0, 0, 0},
 		Drops: enemyDrops["スライム2"], SkillIDs: []string{"tackle"}},
