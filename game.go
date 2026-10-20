@@ -716,6 +716,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		drawLoadingIndicator(screen, g.loadingAnimTime, progress, ok)
 	}
 }
+
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return gameWidth, gameHeight
 }

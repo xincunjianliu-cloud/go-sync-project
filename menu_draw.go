@@ -194,6 +194,26 @@ func (m *MenuScene) drawAllTargetRow(screen *ebiten.Image, statusX float64) {
 }
 
 func (m *MenuScene) Draw(screen *ebiten.Image) {
+	if m.titleOptions {
+		screen.Fill(color.RGBA{0, 0, 0, 255})
+		drawBackButton(screen, m.game)
+
+		titleOp := &text.DrawOptions{}
+		titleOp.GeoM.Translate(titleMenuHeadingX, titleMenuHeadingY)
+		titleOp.ColorScale.ScaleWithColor(uiColorText)
+		text.Draw(screen, "オプション", m.game.FontFace(titleMenuHeadingFontSize), titleOp)
+
+		m.drawVolumePanel(screen)
+		if m.menuState == menuStateOptionResetConfirm {
+			drawConfirmDialog(screen, m.game, "設定を初期値に戻しますか？", m.confirmIndex, confirmImageOffsetX)
+		}
+		if m.menuState == menuStateOptionResetDone {
+			drawConfirmDialog(screen, m.game, "初期設定に戻しました", 0, confirmImageOffsetX, false)
+		}
+		m.drawMenuDescription(screen)
+		return
+	}
+
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(
 		float64(gameWidth)/float64(m.game.MenuBgImg.Bounds().Dx()),

@@ -84,8 +84,8 @@ func (s *TitleScene) Update(dt float64) Scene {
 	}
 
 	menuCount := 3
-	if !s.hasExitOption() {
-		menuCount = 2
+	if s.hasExitOption() {
+		menuCount++
 	}
 	if isMenuDownPressed() {
 		s.menuIndex = (s.menuIndex + 1) % menuCount
@@ -139,6 +139,12 @@ func (s *TitleScene) Update(dt float64) Scene {
 			}, fadeTimeBattleOut)
 			return s
 		case 2:
+			s.game.Audio.PlaySEByKey("decide")
+			options := NewMenuScene(s.game, s)
+			options.menuState = menuStateOption
+			options.titleOptions = true
+			return options
+		case 3:
 			if !s.hasExitOption() {
 				return s
 			}
@@ -158,12 +164,17 @@ func (s *TitleScene) hasExitOption() bool {
 func (s *TitleScene) hitTestMainMenu() (int, bool) {
 	face := s.game.FontFace(22)
 	centerX := float64(gameWidth) / 2
+	startY := 355.0
+	if s.hasExitOption() {
+		startY = 310
+	}
 	rects := []tapRect{
-		centeredTextRect(centerX, 355, "はじめから", face, 30),
-		centeredTextRect(centerX, 400, "つづきから", face, 30),
+		centeredTextRect(centerX, startY, "はじめから", face, 30),
+		centeredTextRect(centerX, startY+45, "つづきから", face, 30),
+		centeredTextRect(centerX, startY+90, "オプション", face, 30),
 	}
 	if s.hasExitOption() {
-		rects = append(rects, centeredTextRect(centerX, 445, "ゲームを終了する", face, 30))
+		rects = append(rects, centeredTextRect(centerX, startY+135, "ゲームを終了する", face, 30))
 	}
 	return hitTestTapRects(rects)
 }
@@ -172,6 +183,9 @@ func (s *TitleScene) hitTestMainMenu() (int, bool) {
 const (
 	titleInstallHintY        = 498.0
 	titleInstallHintFontSize = 16.0
+	titleMenuHeadingX        = 8.0
+	titleMenuHeadingY        = 8.0
+	titleMenuHeadingFontSize = 30.0
 )
 
 func (s *TitleScene) Draw(screen *ebiten.Image) {
@@ -182,6 +196,10 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 	}
 
 	titleMenuFace := s.game.FontFace(22)
+	startY := 355.0
+	if s.hasExitOption() {
+		startY = 310
+	}
 	drawTitleMenuOption := func(label string, y float64, selected bool) {
 		centerX := float64(gameWidth) / 2
 		col := uiColorText
@@ -200,10 +218,11 @@ func (s *TitleScene) Draw(screen *ebiten.Image) {
 		text.Draw(screen, label, titleMenuFace, op)
 	}
 
-	drawTitleMenuOption("はじめから", 355, s.menuIndex == 0)
-	drawTitleMenuOption("つづきから", 400, s.hasSaveFile && s.menuIndex == 1)
+	drawTitleMenuOption("はじめから", startY, s.menuIndex == 0)
+	drawTitleMenuOption("つづきから", startY+45, s.hasSaveFile && s.menuIndex == 1)
+	drawTitleMenuOption("オプション", startY+90, s.menuIndex == 2)
 	if s.hasExitOption() {
-		drawTitleMenuOption("ゲームを終了する", 445, s.menuIndex == 2)
+		drawTitleMenuOption("ゲームを終了する", startY+135, s.menuIndex == 3)
 	}
 
 	if s.game.showInstallHint() {
@@ -461,7 +480,11 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 }
 
 func (s *LoadSlotScene) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{10, 10, 30, 255})
+	screen.Fill(color.RGBA{0, 0, 0, 255})
+	titleOp := &text.DrawOptions{}
+	titleOp.GeoM.Translate(titleMenuHeadingX, titleMenuHeadingY)
+	titleOp.ColorScale.ScaleWithColor(uiColorText)
+	text.Draw(screen, "ロードメニュー", s.game.FontFace(titleMenuHeadingFontSize), titleOp)
 	drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 	drawBackButton(screen, s.game)
 

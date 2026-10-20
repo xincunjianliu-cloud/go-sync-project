@@ -12,11 +12,11 @@ func main() {
 	ebiten.SetWindowSize(gameWidth, gameHeight)
 	ebiten.SetWindowSizeLimits(windowMinWidth, windowMinHeight, -1, -1)
 	ebiten.SetTPS(60)
-	// PC版はウィンドウから離れたらゲームを止める（ATB戦闘がよそ見中に進まない
-	// ように）。Web版では止めない: 投稿サイトに埋め込まれていると、ゲーム部分を
-	// クリックするまでフォーカスが無い扱いになり、読み込みごと止まってしまう
-	// （タブを切り替えたときは、ブラウザが自動で止める）。
-	if !isWebBuild {
+	// PC版とホーム画面アプリは、画面から離れたらゲームと音声を止める
+	// (ATB戦闘が進んだり、バックグラウンドでBGMが鳴り続けたりしないように)。
+	// 通常のWeb版では、投稿サイトに埋め込まれた場合にゲーム部分をクリックする
+	// までフォーカスが無く、読み込みごと止まってしまうため止めない。
+	if !isWebBuild || runningAsInstalledApp() {
 		ebiten.SetRunnableOnUnfocused(false)
 	}
 

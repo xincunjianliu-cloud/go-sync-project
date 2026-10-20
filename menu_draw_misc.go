@@ -282,7 +282,7 @@ const (
 // バー本体は細いトラック線にし、現在値はつまみの丸で示す。
 // バー・つまみの色は選択中かどうかに関わらず常に白系(uiColorText)のまま。
 func (m *MenuScene) drawVolumeRow(screen *ebiten.Image, barY float64, label string, volume float64, selected bool) {
-	labelX := volumeGroupX
+	labelX := m.optionLayoutX(volumeGroupX)
 	barX := labelX + volumeLabelBarGap
 	midY := barY + volumeBarH/2
 
@@ -346,11 +346,11 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	adjustingSpeed := onSpeedRow
 	onResetRow := m.optionIndex == optionIdxReset && (m.menuState == menuStateOption ||
 		m.menuState == menuStateOptionResetConfirm || m.menuState == menuStateOptionResetDone)
-	labelX := volumeGroupX
+	labelX := m.optionLayoutX(volumeGroupX)
 	lineW := volumeContentW
 	lineCol := uiColorText
 
-	headerY := volumePanelY - 34
+	headerY := volumePanelY + m.optionPanelHeadingOffset() - 34
 	headerOp := &text.DrawOptions{}
 	headerOp.GeoM.Translate(labelX, headerY)
 	headerOp.ColorScale.ScaleWithColor(uiColorText)
@@ -384,18 +384,18 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 		displayLabelFace := m.game.FontFace(optionItemFontSize)
 		if onDisplayRow {
 			arrowOp := &text.DrawOptions{}
-			arrowOp.GeoM.Translate(optionCtrlLabelX, displayRowY)
+			arrowOp.GeoM.Translate(m.optionLayoutX(optionCtrlLabelX), displayRowY)
 			arrowOp.SecondaryAlign = text.AlignCenter
 			arrowOp.ColorScale.ScaleWithColor(displayLabelCol)
 			text.Draw(screen, "▶", displayLabelFace, arrowOp)
 		}
 		displayLabelOp := &text.DrawOptions{}
-		displayLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", displayLabelFace), displayRowY)
+		displayLabelOp.GeoM.Translate(m.optionLayoutX(optionCtrlLabelX)+text.Advance("▶ ", displayLabelFace), displayRowY)
 		displayLabelOp.SecondaryAlign = text.AlignCenter
 		displayLabelOp.ColorScale.ScaleWithColor(displayLabelCol)
 		text.Draw(screen, "画面モード", displayLabelFace, displayLabelOp)
 
-		displayValueX := optionValueX
+		displayValueX := m.optionLayoutX(optionValueX)
 		displayArrowCol := uiColorText
 		if adjustingDisplay {
 			displayArrowCol = uiColorSelect
@@ -434,13 +434,13 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	speedLabelFace := m.game.FontFace(optionItemFontSize)
 	if onSpeedLabelRow {
 		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(optionCtrlLabelX, speedRowY)
+		arrowOp.GeoM.Translate(m.optionLayoutX(optionCtrlLabelX), speedRowY)
 		arrowOp.SecondaryAlign = text.AlignCenter
 		arrowOp.ColorScale.ScaleWithColor(speedLabelCol)
 		text.Draw(screen, "▶", speedLabelFace, arrowOp)
 	}
 	speedLabelOp := &text.DrawOptions{}
-	speedLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", speedLabelFace), speedRowY)
+	speedLabelOp.GeoM.Translate(m.optionLayoutX(optionCtrlLabelX)+text.Advance("▶ ", speedLabelFace), speedRowY)
 	speedLabelOp.SecondaryAlign = text.AlignCenter
 	speedLabelOp.ColorScale.ScaleWithColor(speedLabelCol)
 	text.Draw(screen, "メッセージ速度", speedLabelFace, speedLabelOp)
@@ -448,7 +448,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	speedOptions := []string{"遅い", "普通", "速い"}
 	currentSpeedLabel := speedOptions[m.game.MessageSpeed]
 
-	speedValueX := optionValueX
+	speedValueX := m.optionLayoutX(optionValueX)
 
 	arrowCol := uiColorText
 	if adjustingSpeed {
@@ -489,7 +489,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 		// 全文の幅で左端を決め、そこから通常のメッセージ表示と同じように
 		// 左→右へ1文字ずつ流れる形にする（中央揃えは全文表示時の位置のみ）。
 		fullWidth := text.Advance(messageSpeedPreviewText, previewFace)
-		previewLeftX := optionBoxCenterX - fullWidth/2
+		previewLeftX := m.optionLayoutX(optionBoxCenterX) - fullWidth/2
 
 		descOp := &text.DrawOptions{}
 		descOp.GeoM.Translate(previewLeftX, descRowY)
@@ -514,18 +514,18 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	cursorLabelFace := m.game.FontFace(optionItemFontSize)
 	if onCursorRow {
 		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(optionCtrlLabelX, cursorRowY)
+		arrowOp.GeoM.Translate(m.optionLayoutX(optionCtrlLabelX), cursorRowY)
 		arrowOp.SecondaryAlign = text.AlignCenter
 		arrowOp.ColorScale.ScaleWithColor(cursorLabelCol)
 		text.Draw(screen, "▶", cursorLabelFace, arrowOp)
 	}
 	cursorLabelOp := &text.DrawOptions{}
-	cursorLabelOp.GeoM.Translate(optionCtrlLabelX+text.Advance("▶ ", cursorLabelFace), cursorRowY)
+	cursorLabelOp.GeoM.Translate(m.optionLayoutX(optionCtrlLabelX)+text.Advance("▶ ", cursorLabelFace), cursorRowY)
 	cursorLabelOp.SecondaryAlign = text.AlignCenter
 	cursorLabelOp.ColorScale.ScaleWithColor(cursorLabelCol)
 	text.Draw(screen, "カーソル記憶", cursorLabelFace, cursorLabelOp)
 
-	cursorValueX := optionValueX
+	cursorValueX := m.optionLayoutX(optionValueX)
 	cursorArrowCol := uiColorText
 	if adjustingCursor {
 		cursorArrowCol = uiColorSelect
@@ -561,7 +561,7 @@ func (m *MenuScene) drawVolumePanel(screen *ebiten.Image) {
 	}
 	resetFace := m.game.FontFace(optionItemFontSize)
 	const resetLabel = "すべてを初期設定に戻す"
-	resetCenterX := optionBoxCenterX
+	resetCenterX := m.optionLayoutX(optionBoxCenterX)
 	if onResetRow {
 		labelW := text.Advance(resetLabel, resetFace)
 		arrowOp := &text.DrawOptions{}

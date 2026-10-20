@@ -45,7 +45,27 @@ func (m *MenuScene) optionRowPositions() (masterBarY, bgmBarY, seBarY, displayRo
 	lineY4 := sysHeaderY + 24
 	cursorRowY = lineY4 + 33
 	resetY = cursorRowY + volumeResetGapY
+	if m.titleOptions {
+		offset := m.optionPanelHeadingOffset()
+		masterBarY += offset
+		bgmBarY += offset
+		seBarY += offset
+		displayRowY += offset
+		speedRowY += offset
+		descRowY += offset
+		sysHeaderY += offset
+		cursorRowY += offset
+		resetY += offset
+	}
 	return
+}
+
+func (m *MenuScene) optionPanelHeadingOffset() float64 {
+	if !m.titleOptions {
+		return 0
+	}
+	headerY := volumePanelY - 34
+	return titleMenuHeadingY + titleMenuHeadingFontSize + 8 - headerY
 }
 
 // optionBoxCenterX はメニュー枠の縦区切り線から右端までの、右側ボックスの
@@ -74,23 +94,30 @@ const controlRowHalfWidth float64 = (controlRowLabelValueOffset + optionDisplayA
 const optionCtrlLabelX = optionBoxCenterX - controlRowHalfWidth
 const optionValueX = optionCtrlLabelX + controlRowLabelValueOffset
 
+func (m *MenuScene) optionLayoutX(x float64) float64 {
+	if !m.titleOptions {
+		return x
+	}
+	return x + float64(gameWidth)/2 - optionBoxCenterX
+}
+
 func (m *MenuScene) hitTestOptionList() (int, bool) {
 	masterBarY, bgmBarY, seBarY, displayRowY, speedRowY, _, _, cursorRowY, resetY := m.optionRowPositions()
 	volumeRects := []tapRect{
-		{x: volumeGroupX - 4, y: masterBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
-		{x: volumeGroupX - 4, y: bgmBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
-		{x: volumeGroupX - 4, y: seBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
+		{x: m.optionLayoutX(volumeGroupX - 4), y: masterBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
+		{x: m.optionLayoutX(volumeGroupX - 4), y: bgmBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
+		{x: m.optionLayoutX(volumeGroupX - 4), y: seBarY + volumeBarH/2 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32},
 	}
 	ctrlYs := []float64{displayRowY, speedRowY, cursorRowY}
 	ctrlRects := make([]tapRect, len(ctrlYs))
 	for i, y := range ctrlYs {
-		ctrlRects[i] = tapRect{x: optionCtrlLabelX - 4, y: y - 16, w: controlRowHalfWidth*2 + 4, h: 32}
+		ctrlRects[i] = tapRect{x: m.optionLayoutX(optionCtrlLabelX - 4), y: y - 16, w: controlRowHalfWidth*2 + 4, h: 32}
 	}
 	if !m.game.displayModeOptionVisible() {
 		// 行を出していないときは当たり判定を空にする（並び順=行番号は保つ）。
 		ctrlRects[0] = tapRect{}
 	}
-	resetRect := tapRect{x: volumeGroupX - 4, y: resetY + 10 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32}
+	resetRect := tapRect{x: m.optionLayoutX(volumeGroupX - 4), y: resetY + 10 - 16, w: volumeLabelBarGap + volumeBarW + 4, h: 32}
 
 	rects := append(append(volumeRects, ctrlRects...), resetRect)
 	return hitTestTapRects(rects)
@@ -98,9 +125,9 @@ func (m *MenuScene) hitTestOptionList() (int, bool) {
 
 func (m *MenuScene) optionPanelRect() tapRect {
 	_, _, _, _, _, _, _, _, resetY := m.optionRowPositions()
-	top := volumePanelY - 40
+	top := volumePanelY + m.optionPanelHeadingOffset() - 40
 	return tapRect{
-		x: volumeGroupX - 10,
+		x: m.optionLayoutX(volumeGroupX - 10),
 		y: top,
 		w: volumeContentW + 10,
 		h: resetY + 40 - top,
@@ -127,7 +154,11 @@ func (m *MenuScene) updateOption() {
 	if isEscapePressed() {
 		m.game.Audio.PlaySEByKey("cancel")
 		m.finishVolumeInput()
-		m.menuState = menuStateMain
+		if m.titleOptions {
+			m.nextScene = m.backScene
+		} else {
+			m.menuState = menuStateMain
+		}
 		return
 	}
 
@@ -189,7 +220,11 @@ func (m *MenuScene) updateOption() {
 	if !tappedOk && unrelatedTapOutsideRects(m.optionPanelRect()) {
 		m.game.Audio.PlaySEByKey("cancel")
 		m.finishVolumeInput()
-		m.menuState = menuStateMain
+		if m.titleOptions {
+			m.nextScene = m.backScene
+		} else {
+			m.menuState = menuStateMain
+		}
 	}
 }
 
@@ -201,12 +236,12 @@ func (m *MenuScene) hitTestOptionArrows() (int, int, bool) {
 		visible  bool
 	}
 	arrows := []arrow{
-		{optionIdxDisplayMode, -1, optionValueX - optionDisplayArrowGap, displayRowY, m.game.displayModeOptionVisible()},
-		{optionIdxDisplayMode, +1, optionValueX + optionDisplayArrowGap, displayRowY, m.game.displayModeOptionVisible()},
-		{optionIdxMessageSpeed, -1, optionValueX - optionSpeedArrowGap, speedRowY, m.game.MessageSpeed > 0},
-		{optionIdxMessageSpeed, +1, optionValueX + optionSpeedArrowGap, speedRowY, m.game.MessageSpeed < 2},
-		{optionIdxCursorMemory, -1, optionValueX - optionCursorArrowGap, cursorRowY, true},
-		{optionIdxCursorMemory, +1, optionValueX + optionCursorArrowGap, cursorRowY, true},
+		{optionIdxDisplayMode, -1, m.optionLayoutX(optionValueX - optionDisplayArrowGap), displayRowY, m.game.displayModeOptionVisible()},
+		{optionIdxDisplayMode, +1, m.optionLayoutX(optionValueX + optionDisplayArrowGap), displayRowY, m.game.displayModeOptionVisible()},
+		{optionIdxMessageSpeed, -1, m.optionLayoutX(optionValueX - optionSpeedArrowGap), speedRowY, m.game.MessageSpeed > 0},
+		{optionIdxMessageSpeed, +1, m.optionLayoutX(optionValueX + optionSpeedArrowGap), speedRowY, m.game.MessageSpeed < 2},
+		{optionIdxCursorMemory, -1, m.optionLayoutX(optionValueX - optionCursorArrowGap), cursorRowY, true},
+		{optionIdxCursorMemory, +1, m.optionLayoutX(optionValueX + optionCursorArrowGap), cursorRowY, true},
 	}
 	for _, a := range arrows {
 		if a.visible && hitTestLeftRightArrow(a.x, a.y) {
@@ -331,7 +366,7 @@ func (m *MenuScene) volumeRowValue(idx int) float64 {
 
 func (m *MenuScene) updateVolumeBarDrag() bool {
 	masterBarY, bgmBarY, seBarY, _, _, _, _, _, _ := m.optionRowPositions()
-	barX := volumeGroupX + volumeLabelBarGap
+	barX := m.optionLayoutX(volumeGroupX + volumeLabelBarGap)
 	rows := []struct {
 		idx int
 		y   float64
