@@ -127,8 +127,8 @@ var goalRelativeImgLayout = struct {
 	TimelineHorizY float64
 	TimelineVertX  float64
 }{
-	TimelineHorizY: 0.0,
-	TimelineVertX:  -3.0,
+	TimelineHorizY: -2.0,
+	TimelineVertX:  0.0,
 }
 
 var attackIconLayout = struct {
