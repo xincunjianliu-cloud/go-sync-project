@@ -346,6 +346,8 @@ type FieldScene struct {
 	tileAnimMs         float64
 	collisions         []CollisionRect
 	collisionPolygons  []CollisionPolygon
+	minimapImg         *ebiten.Image
+	minimapBuild       chan []byte
 	playerCfg          FieldPlayerConfig
 	px, py             float64
 	dir                int
@@ -967,6 +969,7 @@ func (s *FieldScene) updateWallFade(dt float64) {
 		s.wallFadeAlpha = 0
 		s.wallFadeActive = false
 		s.game.UnlockedWalls[s.wallFadeKey] = true
+		s.invalidateMinimap()
 		s.openCenterMessagePopup("閉ざされた壁が解放された！")
 	}
 }
@@ -991,7 +994,49 @@ func (s *FieldScene) pullLever(obj TiledObject) {
 		return
 	}
 	s.game.RaisedLevers[id] = !s.game.RaisedLevers[id]
+	s.invalidateMinimap()
 	s.game.Audio.PlaySEByKey("lever")
+}
+
+func (s *FieldScene) invalidateMinimap() {
+	s.minimapImg = nil
+}
+
+func (s *FieldScene) startMinimapBuild() {
+	if s == nil || s.minimapImg != nil || s.minimapBuild != nil ||
+		s.tileMap.Width <= 0 || s.tileMap.Height <= 0 ||
+		s.tileMap.TileWidth <= 0 || s.tileMap.TileHeight <= 0 {
+		return
+	}
+	s.minimapBuild = make(chan []byte, 1)
+	go func() {
+		s.minimapBuild <- buildMinimapPixels(s)
+		close(s.minimapBuild)
+	}()
+}
+
+func (s *FieldScene) finishMinimapBuild() bool {
+	if s == nil || s.minimapImg != nil ||
+		s.tileMap.Width <= 0 || s.tileMap.Height <= 0 ||
+		s.tileMap.TileWidth <= 0 || s.tileMap.TileHeight <= 0 {
+		return true
+	}
+	if s.minimapBuild == nil {
+		return false
+	}
+	select {
+	case pixels, ok := <-s.minimapBuild:
+		if !ok {
+			s.minimapBuild = nil
+			return false
+		}
+		s.minimapImg = ebiten.NewImage(s.tileMap.Width, s.tileMap.Height)
+		s.minimapImg.WritePixels(pixels)
+		s.minimapBuild = nil
+		return true
+	default:
+		return false
+	}
 }
 
 const defaultDarknessRadius = 110.0

@@ -40,12 +40,9 @@ const defaultWindowHeight = gameHeight
 const defaultRememberCursor = true
 
 type MenuScene struct {
-	game         *Game
-	backScene    Scene
-	titleOptions bool
-	// minimapImg is the current map painted at one pixel per tile, built on
-	// the first draw (see buildMinimapImage).
-	minimapImg        *ebiten.Image
+	game              *Game
+	backScene         Scene
+	titleOptions      bool
 	menuIndex         int
 	commands          []string
 	menuState         string
@@ -55,6 +52,7 @@ type MenuScene struct {
 	statusCharIndex   int
 	statusReturnState string
 	nextScene         Scene
+	pendingLeave      Scene
 
 	optionIndex int
 
@@ -93,6 +91,9 @@ type MenuScene struct {
 }
 
 func NewMenuScene(game *Game, backScene Scene) *MenuScene {
+	if field, ok := backScene.(*FieldScene); ok {
+		field.startMinimapBuild()
+	}
 	return &MenuScene{
 		game:      game,
 		backScene: backScene,
@@ -106,6 +107,17 @@ func NewMenuScene(game *Game, backScene Scene) *MenuScene {
 func (m *MenuScene) Update(dt float64) Scene {
 	m.nextScene = nil
 	m.previewTicks++
+	if field, ok := m.backScene.(*FieldScene); ok {
+		field.finishMinimapBuild()
+	}
+	if m.pendingLeave != nil {
+		if m.canLeave() {
+			next := m.pendingLeave
+			m.pendingLeave = nil
+			return next
+		}
+		return m
+	}
 
 	if m.isAutoHealPressed() {
 		m.tryAutoHeal()
@@ -122,7 +134,7 @@ func (m *MenuScene) Update(dt float64) Scene {
 			m.game.Audio.PlaySEByKey("decide")
 			m.enterCommand(idx)
 			if m.nextScene != nil {
-				return m.nextScene
+				return m.leaveWhenReady(m.nextScene)
 			}
 			return m
 		}
@@ -131,7 +143,7 @@ func (m *MenuScene) Update(dt float64) Scene {
 	if m.showReturnTitleConfirm {
 		m.updateReturnTitleConfirm()
 		if m.nextScene != nil {
-			return m.nextScene
+			return m.leaveWhenReady(m.nextScene)
 		}
 		return m
 	}
@@ -168,8 +180,21 @@ func (m *MenuScene) Update(dt float64) Scene {
 	}
 
 	if m.nextScene != nil {
-		return m.nextScene
+		return m.leaveWhenReady(m.nextScene)
 	}
+	return m
+}
+
+func (m *MenuScene) canLeave() bool {
+	field, ok := m.backScene.(*FieldScene)
+	return !ok || field.finishMinimapBuild()
+}
+
+func (m *MenuScene) leaveWhenReady(next Scene) Scene {
+	if m.canLeave() {
+		return next
+	}
+	m.pendingLeave = next
 	return m
 }
 

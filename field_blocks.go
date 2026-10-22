@@ -258,6 +258,7 @@ func (s *FieldScene) updateBlockDoors() {
 				s.game.UnlockedBlockDoors = make(map[string]bool)
 			}
 			s.game.UnlockedBlockDoors[chestKey(s.currentMap, obj)] = true
+			s.invalidateMinimap()
 			s.triggerDoorOpenShake()
 		}
 	}

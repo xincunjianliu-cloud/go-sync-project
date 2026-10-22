@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -43,7 +44,7 @@ const minimapCellInset = 8.0
 // Everything else (blocked tiles deep inside walls or water, decoration
 // outside the walkable area) stays transparent, so the map reads as rooms
 // and corridors outlined by walls.
-func buildMinimapImage(field *FieldScene) *ebiten.Image {
+func buildMinimapPixels(field *FieldScene) []byte {
 	tm := field.tileMap
 	w, h := tm.Width, tm.Height
 	tw, th := float64(tm.TileWidth), float64(tm.TileHeight)
@@ -60,6 +61,9 @@ func buildMinimapImage(field *FieldScene) *ebiten.Image {
 		bottom := top + th - 2*minimapCellInset
 		blocked[i] = field.rectHitsTerrain(left, top, right, bottom)
 		openable[i] = minimapCellHasTile(field, i) && !field.rectHitsTerrainWith(left, top, right, bottom, true)
+		if i%256 == 255 {
+			runtime.Gosched()
+		}
 	}
 
 	cellAt := func(x, y float64) int {
@@ -143,14 +147,15 @@ func buildMinimapImage(field *FieldScene) *ebiten.Image {
 		case blocked[i] && (reached[i] || touchesFloor(i)):
 			set(i, minimapWallColor)
 		}
+		if i%256 == 255 {
+			runtime.Gosched()
+		}
 	}
 	for _, i := range doorCells {
 		set(i, minimapDoorColor)
 	}
 
-	img := ebiten.NewImage(w, h)
-	img.WritePixels(pix)
-	return img
+	return pix
 }
 
 // minimapCellHasTile reports whether tile i shows anything in the game, or
@@ -204,15 +209,12 @@ func (m *MenuScene) drawMinimap(screen *ebiten.Image) {
 	offsetX := minimapX + (minimapW-drawW)/2
 	offsetY := minimapY + (minimapH-drawH)/2
 
-	// Lever and block-door states can't change while the menu is open, so
-	// the map is built once per menu and then drawn as a single image.
-	if m.minimapImg == nil {
-		m.minimapImg = buildMinimapImage(field)
+	if field.minimapImg != nil {
+		mapOp := &ebiten.DrawImageOptions{}
+		mapOp.GeoM.Scale(float64(tm.TileWidth)*scale, float64(tm.TileHeight)*scale)
+		mapOp.GeoM.Translate(offsetX, offsetY)
+		screen.DrawImage(field.minimapImg, mapOp)
 	}
-	mapOp := &ebiten.DrawImageOptions{}
-	mapOp.GeoM.Scale(float64(tm.TileWidth)*scale, float64(tm.TileHeight)*scale)
-	mapOp.GeoM.Translate(offsetX, offsetY)
-	screen.DrawImage(m.minimapImg, mapOp)
 
 	fillRect(screen, offsetX, offsetY, drawW, 1, minimapFrameColor)
 	fillRect(screen, offsetX, offsetY+drawH-1, drawW, 1, minimapFrameColor)
