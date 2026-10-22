@@ -190,6 +190,10 @@ func (m *MenuScene) canLeave() bool {
 	return !ok || field.finishMinimapBuild()
 }
 
+func (m *MenuScene) readyToReveal() bool {
+	return m.canLeave()
+}
+
 func (m *MenuScene) leaveWhenReady(next Scene) Scene {
 	if m.canLeave() {
 		return next

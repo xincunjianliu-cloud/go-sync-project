@@ -10,13 +10,40 @@ type stubScene struct{ name string }
 
 func (s *stubScene) Update(dt float64) Scene   { return s }
 func (s *stubScene) Draw(screen *ebiten.Image) {}
+
+type gatedStubScene struct {
+	stubScene
+	ready bool
+}
+
+func (s *gatedStubScene) readyToReveal() bool { return s.ready }
+
 func runFrames(g *Game, n int) {
 	for range n {
 		g.Update()
 	}
 }
 func newLoadingTestGame(current Scene) *Game {
-	return &Game{currentScene: current, bootReady: true}
+	return &Game{currentScene: current, bootReady: true, Audio: &AudioManager{}}
+}
+
+func TestSceneTransitionWaitsForRevealGate(t *testing.T) {
+	current := &stubScene{"field"}
+	next := &gatedStubScene{stubScene: stubScene{"menu"}}
+	g := newLoadingTestGame(current)
+	g.fadeMode = FadeLoading
+	g.pendingScene = next
+
+	g.updateSceneLoading()
+	if g.currentScene != current || g.fadeMode != FadeLoading {
+		t.Fatal("scene revealed before its preparation was ready")
+	}
+
+	next.ready = true
+	g.updateSceneLoading()
+	if g.currentScene != next || g.fadeMode != FadeIn {
+		t.Fatalf("scene=%v fadeMode=%d, want prepared scene + FadeIn", g.currentScene, g.fadeMode)
+	}
 }
 
 // 画像の読み込みが終わる前にシーン遷移を要求すると、暗転後もLoading表示の

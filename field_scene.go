@@ -16,6 +16,7 @@ const (
 	fadeTimeBattleIn  = 0.4
 	fadeTimeBossIn    = 1.2
 	fadeTimeBattleOut = 0.4
+	fadeTimeMenuOpen  = 0.8
 	fadeTimeBossOut   = 1.5
 )
 

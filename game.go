@@ -525,7 +525,13 @@ func (g *Game) Update() error {
 	if g.currentScene != nil {
 		nextScene := g.currentScene.Update(dt)
 		if nextScene != nil && nextScene != g.currentScene {
-			g.ChangeSceneWithFade(nextScene, fadeTimeBattleOut)
+			duration := fadeTimeBattleOut
+			if _, fromField := g.currentScene.(*FieldScene); fromField {
+				if _, openingMenu := nextScene.(*MenuScene); openingMenu {
+					duration = fadeTimeMenuOpen
+				}
+			}
+			g.ChangeSceneWithFade(nextScene, duration)
 		}
 	}
 	return nil
@@ -538,6 +544,10 @@ func (g *Game) Update() error {
 // 進むため、暗転完了と曲の無音化がほぼ同時に起きる)。
 type bgmScene interface {
 	desiredBGM(transitionDuration float64) (path string, fadeInDuration float64, hardCut bool)
+}
+
+type sceneRevealGate interface {
+	readyToReveal() bool
 }
 
 func (g *Game) ChangeSceneWithFade(nextScene Scene, durationSeconds float64) {
@@ -651,6 +661,9 @@ func (g *Game) updateSceneLoading() {
 	} else if waited := time.Since(g.loadingWaitStart); waited >= loadingWaitTraceThreshold {
 		// ロード地点以外の待ちは、ロード地点での準備に抜けがあるということ。
 		loadTrace("警告: ロード地点以外で暗転中に%.2f秒待機 (遷移先 %T)", waited.Seconds(), g.pendingScene)
+	}
+	if gate, ok := g.pendingScene.(sceneRevealGate); ok && !gate.readyToReveal() {
+		return
 	}
 	g.loadingWaitTicks = 0
 	g.currentScene = g.pendingScene
