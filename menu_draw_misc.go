@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -62,7 +61,7 @@ func buildMinimapPixels(field *FieldScene) []byte {
 		blocked[i] = field.rectHitsTerrain(left, top, right, bottom)
 		openable[i] = minimapCellHasTile(field, i) && !field.rectHitsTerrainWith(left, top, right, bottom, true)
 		if i%256 == 255 {
-			runtime.Gosched()
+			yieldToBrowser()
 		}
 	}
 
@@ -148,7 +147,7 @@ func buildMinimapPixels(field *FieldScene) []byte {
 			set(i, minimapWallColor)
 		}
 		if i%256 == 255 {
-			runtime.Gosched()
+			yieldToBrowser()
 		}
 	}
 	for _, i := range doorCells {
