@@ -61,7 +61,7 @@ func drawMenuBgFrame(screen *ebiten.Image) {
 }
 
 const (
-	confirmPanelW           = 580.0
+	confirmPanelW           = 480.0
 	confirmPanelH           = 190.0
 	confirmPanelBorderWidth = 2.0
 	confirmFontSize         = 22.0

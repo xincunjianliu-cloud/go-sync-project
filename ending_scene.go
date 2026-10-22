@@ -192,7 +192,7 @@ func (s *EndingScene) updateAskSave() {
 func (s *EndingScene) reloadSlotData() {
 	for i := range maxSaveSlots {
 		s.slotData[i], _ = LoadGame(i + 1)
-		s.slotThumbs[i] = LoadThumb(i + 1)
+		s.game.loadThumb(i+1, func(img *ebiten.Image) { s.slotThumbs[i] = img })
 	}
 }
 

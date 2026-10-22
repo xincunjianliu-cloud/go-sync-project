@@ -142,36 +142,40 @@ func isItemButtonJustPressed() bool {
 
 // drawBattleShortcutButtons draws the rewind and item buttons, lit only when
 // selected and dimmed otherwise, the same way drawCommandMenu treats the
-// four command icons.
-// The rewind button only exists once the gauge system is unlocked.
+// four command icons. The rewind button only exists once the gauge system is
+// unlocked, and the item button only exists while a battle-usable item is held.
 func (s *BattleScene) drawBattleShortcutButtons(screen *ebiten.Image, rewindSelected, itemSelected bool) {
 	rx, ry := rewindButtonCenter(s.game)
 	if s.gaugeUnlocked {
 		drawRewindIcon(screen, rx, ry, battleIconR, rewindSelected)
 	}
 
-	ix, iy := itemButtonCenter()
-	drawItemIcon(screen, s.game.ItemButtonImg, ix, iy, itemSelected)
+	hasBattleItem := s.hasAnyBattleUsableItem()
+	if hasBattleItem {
+		ix, iy := itemButtonCenter()
+		drawItemIcon(screen, s.game.ItemButtonImg, ix, iy, itemSelected)
 
-	if !s.game.MobileMode {
-		face := s.game.FontFace(ctrlLabelFontSize)
+		if !s.game.MobileMode {
+			face := s.game.FontFace(ctrlLabelFontSize)
 
-		if s.gaugeUnlocked {
+			// The item button sits near the bottom edge, so its label goes to
+			// the left instead of below.
 			op := &text.DrawOptions{}
-			op.GeoM.Translate(rx, ry+battleIconR+4)
-			op.PrimaryAlign = text.AlignCenter
+			op.GeoM.Translate(ix-itemButtonR-4, iy)
+			op.PrimaryAlign = text.AlignEnd
+			op.SecondaryAlign = text.AlignCenter
 			op.ColorScale.ScaleWithColor(uiColorText)
-			text.Draw(screen, "F", face, op)
+			text.Draw(screen, "I", face, op)
 		}
+	}
 
-		// The item button sits near the bottom edge, so its label goes to
-		// the left instead of below.
+	if !s.game.MobileMode && s.gaugeUnlocked {
 		op := &text.DrawOptions{}
-		op.GeoM.Translate(ix-itemButtonR-4, iy)
-		op.PrimaryAlign = text.AlignEnd
+		op.GeoM.Translate(rx, ry+battleIconR+4)
+		op.PrimaryAlign = text.AlignCenter
 		op.SecondaryAlign = text.AlignCenter
 		op.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "I", face, op)
+		text.Draw(screen, "F", s.game.FontFace(ctrlLabelFontSize), op)
 	}
 }
 

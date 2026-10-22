@@ -49,6 +49,7 @@ const (
 	battleTutorialPageHP
 	battleTutorialPageTimeline
 	battleTutorialPageCommands
+	battleTutorialPageItems
 	battleTutorialPageConclusion
 )
 
@@ -134,8 +135,11 @@ func battleTutorialBody(kind, page int) string {
 			"たたかう：ふつうの攻撃\n" +
 			"スキル：MPを消費して特殊な行動\n" +
 			"たいき：4人全員が待機すると大ダメージ\n" +
-			"にげる：戦闘から逃げる\n" +
-			"アイテム：回復アイテムなどを使う"
+			"にげる：戦闘から逃げる"
+	case battleTutorialPageItems:
+		return "これはアイテム。\n" +
+			"仲間を回復させたり、敵を攻撃する\n" +
+			"道具が使えます。"
 	case battleTutorialPageTimeline:
 		return "ここはタイムラインです。\n" +
 			"操作キャラクターのアイコンが一番右に\n" +
@@ -201,6 +205,11 @@ func (s *BattleScene) battleTutorialBox(kind, page int) *battleTutorialBox {
 		}
 		const pad = 40.0
 		return &battleTutorialBox{minX - pad, minY - pad, (maxX - minX) + pad*2, (maxY - minY) + pad*2}
+
+	case battleTutorialPageItems:
+		cx, cy := itemButtonCenter()
+		const halfSize = itemButtonR + 12.0
+		return &battleTutorialBox{cx - halfSize, cy - halfSize, halfSize * 2, halfSize * 2}
 
 	case battleTutorialPageTimeline:
 		centerY := trackCenterY()
@@ -425,6 +434,8 @@ func (s *BattleScene) drawBattleTutorial(screen *ebiten.Image) {
 			op.GeoM.Translate(pos[0]-float64(iw)/2, pos[1]-float64(ih)/2)
 			scene.DrawImage(icon, op)
 		}
+	}
+	if s.tutorialKind == battleTutorialKindBasics && s.tutorialPage == battleTutorialPageItems {
 		ix, iy := itemButtonCenter()
 		drawItemIcon(scene, s.game.ItemButtonImg, ix, iy, true)
 	}

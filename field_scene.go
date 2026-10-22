@@ -343,9 +343,9 @@ type FieldScene struct {
 	// tileImgs はGID(反転フラグを除く)ごとのタイル画像。使われていないGIDはnil。
 	tileImgs []*ebiten.Image
 	// tileAnimMs はタイルアニメーションの時計(ミリ秒)。
-	tileAnimMs        float64
-	collisions        []CollisionRect
-	collisionPolygons []CollisionPolygon
+	tileAnimMs         float64
+	collisions         []CollisionRect
+	collisionPolygons  []CollisionPolygon
 	playerCfg          FieldPlayerConfig
 	px, py             float64
 	dir                int
@@ -372,18 +372,19 @@ type FieldScene struct {
 	safetyDistance     float64
 	encounterWeight    float64
 
-	encounterEffectActive bool
-	encounterEffectTimer  float64
-	encounterSnapshot     *ebiten.Image
-	pendingBattleScene    *BattleScene
-	isCutscene            bool
-	cutsceneMessage       string
-	cutsceneHasBossID     bool
-	cutsceneRoute         []MoveStep
-	routeIndex            int
-	currentStepDist       float64
-	justDefeatedBoss      int
-	msg                   MessageSystem
+	encounterEffectActive    bool
+	encounterEffectTimer     float64
+	encounterSnapshot        *ebiten.Image
+	encounterSnapshotPending bool
+	pendingBattleScene       *BattleScene
+	isCutscene               bool
+	cutsceneMessage          string
+	cutsceneHasBossID        bool
+	cutsceneRoute            []MoveStep
+	routeIndex               int
+	currentStepDist          float64
+	justDefeatedBoss         int
+	msg                      MessageSystem
 
 	pendingAutoHealMessage       bool
 	skillUpgradeTutorialActive   bool

@@ -78,6 +78,27 @@ func (g *Game) decodeImageAsync(path string, prio int, assign func(*ebiten.Image
 	}()
 }
 
+func (g *Game) decodeRuntimeImageAsync(path string, assign func(*ebiten.Image)) {
+	key := "runtime:" + path
+	if g.asyncImagePending[key] || g.asyncImageFailed[key] {
+		return
+	}
+	if g.asyncImagePending == nil {
+		g.asyncImagePending = map[string]bool{}
+		g.asyncImageDone = make(chan asyncImageResult, 16)
+	}
+	g.asyncImagePending[key] = true
+	done := g.asyncImageDone
+	go func() {
+		data, err := readRuntimeFile(path)
+		var img image.Image
+		if err == nil {
+			img, err = decodeImageData(data)
+		}
+		done <- asyncImageResult{path: key, img: img, err: err, assign: assign}
+	}()
+}
+
 // asyncPumpFrameBudget は1フレームのうちpumpAsyncImagesがGPUテクスチャ生成に
 // 使ってよい時間。
 const asyncPumpFrameBudget = 4 * time.Millisecond

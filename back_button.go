@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	backBtnR            = 12.0
+	backBtnR            = 24.0
 	backBtnMarginLeft   = 22.0
-	backBtnMarginBottom = 28.0
+	backBtnMarginBottom = 40.0
 	backBtnKeyGapY      = 4.0
-	backBtnBorderWidth  = 2.0
+	backBtnBorderWidth  = 4.0
 )
 
 func backBtnCenter() (cx, cy float64) {

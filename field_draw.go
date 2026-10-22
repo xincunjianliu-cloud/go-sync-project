@@ -16,6 +16,12 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 	}
 
 	if s.encounterEffectActive {
+		if s.encounterSnapshotPending {
+			s.drawWorld(screen)
+			s.encounterSnapshot = s.game.screenScratch()
+			s.encounterSnapshot.DrawImage(screen, nil)
+			s.encounterSnapshotPending = false
+		}
 		s.drawEncounterEffect(screen)
 		return
 	}

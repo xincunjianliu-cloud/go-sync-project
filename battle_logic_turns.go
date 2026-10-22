@@ -455,7 +455,11 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 	rewindTapped := s.gaugeUnlocked && isRewindButtonJustPressed(s.game)
 	// The item button's widened touch area overlaps the skill/flee tap rects;
 	// a tap inside a command icon goes to that icon only.
-	itemTapped := !tappedOk && isItemButtonJustPressed()
+	hasBattleItem := s.hasAnyBattleUsableItem()
+	if !hasBattleItem {
+		s.itemButtonArmed = false
+	}
+	itemTapped := !tappedOk && hasBattleItem && isItemButtonJustPressed()
 
 	if tappedOk {
 		s.rewindButtonArmed = false
@@ -484,9 +488,9 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		s.game.Audio.PlaySEByKey("error")
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyI) || itemConfirm {
+	if hasBattleItem && (inpututil.IsKeyJustPressed(ebiten.KeyI) || itemConfirm) {
 		p := s.waitingActor
-		if p >= 0 && p < partySize && s.hasAnyBattleUsableItem() {
+		if p >= 0 && p < partySize {
 			s.game.Audio.PlaySEByKey("decide")
 			s.itemIndex = 0
 			s.battlePhase = phaseItemMenu

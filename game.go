@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/png"
 	"log"
 	"math"
 	"time"
@@ -705,6 +704,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	if g.currentScene != nil {
 		g.currentScene.Draw(screen)
+		if _, ok := g.currentScene.(*FieldScene); ok {
+			g.captureMenuEntryThumb(screen)
+		}
 	}
 
 	if g.fadeAlpha > 0 {
@@ -742,8 +744,8 @@ func (g *Game) GetEnemyTimelineIconLarge(evType, name string) *ebiten.Image {
 	return g.EnemyIconLargeImgs[name]
 }
 
-// screenScratch は画面全体の写しを一時的に描く先(メニューを開くときの
-// サムネイル用、エンカウント演出用)を、消去済みで返す。毎回確保すると画面
+// screenScratch は画面全体の写しを一時的に描く先(エンカウント演出や
+// エンディングのサムネイル用)を、消去済みで返す。毎回確保すると画面
 // サイズのGPUテクスチャが使い捨てになり、スマホでメモリの山と引っかかりの
 // 原因になるので1枚を使い回す。次に呼ばれた時点で上書きされるので、
 // 使う側は使い終わるまでの間だけ持つこと。
@@ -757,11 +759,14 @@ func (g *Game) screenScratch() *ebiten.Image {
 }
 
 func (g *Game) captureMenuEntryThumb(full *ebiten.Image) {
-	thumb := ebiten.NewImage(196, 110)
+	if g.MenuEntryThumb == nil {
+		g.MenuEntryThumb = ebiten.NewImage(196, 110)
+	} else {
+		g.MenuEntryThumb.Clear()
+	}
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(196.0/float64(gameWidth), 110.0/float64(gameHeight))
-	thumb.DrawImage(full, op)
-	g.MenuEntryThumb = thumb
+	g.MenuEntryThumb.DrawImage(full, op)
 }
 
 func (g *Game) saveThumbToFile(slot int) {
@@ -769,11 +774,14 @@ func (g *Game) saveThumbToFile(slot int) {
 		return
 	}
 	path := fmt.Sprintf("save_thumb_%d.png", slot)
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, g.MenuEntryThumb); err != nil {
-		return
-	}
-	writeRuntimeFile(path, buf.Bytes())
+	bounds := g.MenuEntryThumb.Bounds()
+	pixels := make([]byte, 4*bounds.Dx()*bounds.Dy())
+	g.MenuEntryThumb.ReadPixels(pixels)
+	saveRuntimePNG(path, pixels, bounds.Dx(), bounds.Dy(), func(err error) {
+		if err != nil {
+			loadTrace("サムネイルの保存に失敗 %s: %v", path, err)
+		}
+	})
 }
 
 func FormatPlayTime(seconds float64) string {
@@ -846,17 +854,28 @@ func (g *Game) GetCharaImage(speaker string, expression int) *ebiten.Image {
 		return nil
 	}
 	sheetPath, basePath := g.charaAssetPaths(speaker)
-	if sheet := g.lookupCharaAsset(speaker+"#sheet", sheetPath); sheet != nil {
-		idx := expression
-		if idx < 0 || idx >= charaExprSheetFrames {
-			idx = 0
+	if isWebBuild {
+		g.prepareSpeaker(speaker)
+		if sheet := g.CharaImgs[speaker+"#sheet"]; sheet != nil {
+			return charaExpressionFrame(sheet, expression)
 		}
-		frameW := sheet.Bounds().Dx() / charaExprSheetFrames
-		rect := image.Rect(idx*frameW, 0, (idx+1)*frameW, sheet.Bounds().Dy())
-		return sheet.SubImage(rect).(*ebiten.Image)
+		return g.CharaImgs[speaker]
+	}
+	if sheet := g.lookupCharaAsset(speaker+"#sheet", sheetPath); sheet != nil {
+		return charaExpressionFrame(sheet, expression)
 	}
 
 	return g.lookupCharaAsset(speaker, basePath)
+}
+
+func charaExpressionFrame(sheet *ebiten.Image, expression int) *ebiten.Image {
+	idx := expression
+	if idx < 0 || idx >= charaExprSheetFrames {
+		idx = 0
+	}
+	frameW := sheet.Bounds().Dx() / charaExprSheetFrames
+	rect := image.Rect(idx*frameW, 0, (idx+1)*frameW, sheet.Bounds().Dy())
+	return sheet.SubImage(rect).(*ebiten.Image)
 }
 
 // charaAssetPaths は話者の表情差分シートと単一の立ち絵のパスを返す。
@@ -897,6 +916,11 @@ func (g *Game) GetBackgroundImage(key string) *ebiten.Image {
 		return img
 	}
 	if g.bgImgMissing[key] {
+		return nil
+	}
+
+	if isWebBuild {
+		g.prepareBackgroundImage(key)
 		return nil
 	}
 

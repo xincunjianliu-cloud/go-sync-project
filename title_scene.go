@@ -345,6 +345,15 @@ func LoadThumb(slot int) *ebiten.Image {
 	return img
 }
 
+func (g *Game) loadThumb(slot int, assign func(*ebiten.Image)) {
+	path := thumbFilePath(slot)
+	if isWebBuild {
+		g.decodeRuntimeImageAsync(path, assign)
+		return
+	}
+	assign(LoadThumb(slot))
+}
+
 type LoadSlotScene struct {
 	game              *Game
 	backScene         Scene
@@ -365,7 +374,7 @@ func NewLoadSlotScene(game *Game, backScene Scene) *LoadSlotScene {
 	}
 	for i := range maxSaveSlots {
 		s.slotData[i], _ = LoadGame(i + 1)
-		s.slotThumbs[i] = LoadThumb(i + 1)
+		game.loadThumb(i+1, func(img *ebiten.Image) { s.slotThumbs[i] = img })
 	}
 	for i := range maxSaveSlots {
 		if s.slotData[i] != nil {

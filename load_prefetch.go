@@ -103,14 +103,21 @@ func (g *Game) prefetchDialogueAssets(bd BossDialogue) {
 		seen[cmd.Speaker] = true
 		g.prepareSpeaker(cmd.Speaker)
 	}
-	if key := bd.Background; key != "" && g.bgImgs[key] == nil && !g.bgImgMissing[key] {
-		g.decodeImageAsync(backgroundImagePath(key), prioSoon, func(img *ebiten.Image) {
-			if _, ok := g.bgImgs[key]; !ok {
-				g.bgImgs[key] = img
-			}
-		}, func() { g.bgImgMissing[key] = true })
+	if key := bd.Background; key != "" {
+		g.prepareBackgroundImage(key)
 	}
 	g.Audio.Prewarm(prioSoon, bgm...)
+}
+
+func (g *Game) prepareBackgroundImage(key string) {
+	if key == "" || g.bgImgs[key] != nil || g.bgImgMissing[key] {
+		return
+	}
+	g.decodeImageAsync(backgroundImagePath(key), prioSoon, func(img *ebiten.Image) {
+		if g.bgImgs[key] == nil {
+			g.bgImgs[key] = img
+		}
+	}, func() { g.bgImgMissing[key] = true })
 }
 
 // prepareSpeaker は話者の立ち絵がまだ無ければ裏でデコードしてCharaImgsへ

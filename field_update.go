@@ -579,9 +579,6 @@ func (s *FieldScene) Update(dt float64) Scene {
 	s.updateScreenShake(dt)
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyM) || fieldTouchMenuPressed() {
-		full := s.game.screenScratch()
-		s.Draw(full)
-		s.game.captureMenuEntryThumb(full)
 		s.game.Audio.PlaySEByKey("menu_toggle")
 		return NewMenuScene(s.game, s)
 	}
@@ -758,11 +755,8 @@ func (s *FieldScene) Update(dt float64) Scene {
 // カメラが回転しながらズームインしていく演出を開始する。演出が終わると
 // Update側でbattleSceneへフェード切り替えする。
 func (s *FieldScene) startEncounterEffect(battleScene *BattleScene) {
-	snapshot := s.game.screenScratch()
-	s.drawWorld(snapshot)
-
-	s.encounterSnapshot = snapshot
 	s.encounterEffectActive = true
+	s.encounterSnapshotPending = true
 	s.encounterEffectTimer = 0
 	s.pendingBattleScene = battleScene
 }

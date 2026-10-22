@@ -30,9 +30,9 @@ const (
 	bgmVolumeRepeatIntervalTicks = 2
 )
 
-const defaultBGMVolume = 0.
-const defaultSEVolume = 0.
-const defaultMasterVolume = 1.
+const defaultBGMVolume = 0.7
+const defaultSEVolume = 0.7
+const defaultMasterVolume = 0.7
 
 const defaultMessageSpeed = 1
 const defaultWindowWidth = gameWidth
@@ -348,7 +348,7 @@ func (m *MenuScene) enterSlotScreen(save bool) {
 	m.slotDragAccum = 0
 	for i := range maxSaveSlots {
 		m.slotData[i], _ = LoadGame(i + 1)
-		m.slotThumbs[i] = LoadThumb(i + 1)
+		m.game.loadThumb(i+1, func(img *ebiten.Image) { m.slotThumbs[i] = img })
 	}
 	m.resetSlotDrag()
 	if save {
@@ -365,7 +365,7 @@ func (m *MenuScene) resetSlotDrag() {
 func (m *MenuScene) reloadSlotData() {
 	for i := range maxSaveSlots {
 		m.slotData[i], _ = LoadGame(i + 1)
-		m.slotThumbs[i] = LoadThumb(i + 1)
+		m.game.loadThumb(i+1, func(img *ebiten.Image) { m.slotThumbs[i] = img })
 	}
 }
 

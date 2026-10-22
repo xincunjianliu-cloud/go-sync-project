@@ -40,9 +40,9 @@ const (
 
 	touchMenuCenterX     = float64(gameWidth) - 60.0
 	touchMenuCenterY     = 40.0
-	touchMenuSize        = 32.0
+	touchMenuSize        = 56.0
 	touchMenuKeyGapY     = 4.0
-	touchMenuBorderWidth = 2.0
+	touchMenuBorderWidth = 3.0
 
 	touchActionTapMargin = 16.0
 	touchMenuTapMargin   = 14.0
@@ -341,9 +341,9 @@ func drawHamburgerMenuButton(screen *ebiten.Image, game *Game) {
 	vector.StrokeRect(screen, float32(x), float32(y), float32(w), float32(h), touchMenuBorderWidth, color.White, true)
 
 	barW := touchMenuSize * 0.6
-	barH := 3.0
+	barH := touchMenuSize * 0.09
 	barX := touchMenuCenterX - barW/2
-	for _, dy := range []float64{-6, 0, 6} {
+	for _, dy := range []float64{-touchMenuSize * 0.1875, 0, touchMenuSize * 0.1875} {
 		barY := touchMenuCenterY + dy - barH/2
 		fillRect(screen, barX, barY, barW, barH, color.NRGBA{255, 255, 255, 220})
 	}
