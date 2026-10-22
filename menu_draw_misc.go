@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -29,8 +30,9 @@ var (
 // minimapCellInset shrinks each tile before the collision check, so a thin
 // wall running along a tile's edge doesn't paint the walkable tile beside it.
 const minimapCellInset = 8.0
+const minimapWorkSlice = time.Millisecond
 
-// buildMinimapImage paints field's map at one pixel per tile, using the same
+// buildMinimapPixels paints field's map at one pixel per tile, using the same
 // collision check the player moves with (pushable blocks aside, since they
 // move):
 //   - floor: tiles the player can reach from where they stand, a door or a
@@ -53,6 +55,14 @@ func buildMinimapPixels(field *FieldScene) []byte {
 	// every lever wall / key wall / block door is open.
 	blocked := make([]bool, n)
 	openable := make([]bool, n)
+	lastYield := time.Now()
+	yieldIfNeeded := func() {
+		if time.Since(lastYield) < minimapWorkSlice {
+			return
+		}
+		yieldToBrowser()
+		lastYield = time.Now()
+	}
 	for i := range n {
 		left := float64(i%w)*tw + minimapCellInset
 		top := float64(i/w)*th + minimapCellInset
@@ -60,9 +70,7 @@ func buildMinimapPixels(field *FieldScene) []byte {
 		bottom := top + th - 2*minimapCellInset
 		blocked[i] = field.rectHitsTerrain(left, top, right, bottom)
 		openable[i] = minimapCellHasTile(field, i) && !field.rectHitsTerrainWith(left, top, right, bottom, true)
-		if i%256 == 255 {
-			yieldToBrowser()
-		}
+		yieldIfNeeded()
 	}
 
 	cellAt := func(x, y float64) int {
@@ -85,10 +93,12 @@ func buildMinimapPixels(field *FieldScene) []byte {
 	pl, pt, pr, pb := field.collisionRectAt(field.px, field.py)
 	visit(cellAt((pl+pr)/2, (pt+pb)/2))
 	for _, layer := range tm.Layers {
+		yieldIfNeeded()
 		if !isEventsLayer(layer) {
 			continue
 		}
 		for _, obj := range layer.Objects {
+			yieldIfNeeded()
 			if objProps(obj)["targetmap"] != "" {
 				x0 := max(int(obj.X/tw), 0)
 				y0 := max(int(obj.Y/th), 0)
@@ -107,6 +117,7 @@ func buildMinimapPixels(field *FieldScene) []byte {
 		}
 	}
 	for len(queue) > 0 {
+		yieldIfNeeded()
 		i := queue[0]
 		queue = queue[1:]
 		x, y := i%w, i/w
@@ -146,9 +157,7 @@ func buildMinimapPixels(field *FieldScene) []byte {
 		case blocked[i] && (reached[i] || touchesFloor(i)):
 			set(i, minimapWallColor)
 		}
-		if i%256 == 255 {
-			yieldToBrowser()
-		}
+		yieldIfNeeded()
 	}
 	for _, i := range doorCells {
 		set(i, minimapDoorColor)
