@@ -71,17 +71,14 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 
 	bounds := game.LogEntryImg.Bounds()
 	imgH := float64(bounds.Dy())
-
 	imgStartX := logImageStartX
 	imgStartY := logImageStartY
-
 	if len(log) == 0 {
 		return
 	}
 
 	maxTextLinesF := (imgH - logTextOffsetY) / logTextLineH
 	maxTextLines := max(int(maxTextLinesF), 1)
-
 	entries := make([]logEntryLayout, 0, len(log))
 	for _, cmd := range log {
 		lines := wrapLines(cmd.Text)
@@ -97,15 +94,11 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
-
 	intScroll := math.Floor(scrollOffset)
 	frac := scrollOffset - intScroll
-
 	endIndex := len(entries) - int(intScroll)
 	startIndex := endIndex - logVisibleCount
-
 	rowPitch := imgH + logEntryGap
-
 	imgW := float64(bounds.Dx())
 	contentH := float64(logVisibleCount)*imgH + float64(logVisibleCount-1)*logEntryGap
 	listRect := image.Rect(int(imgStartX), int(imgStartY), int(imgStartX+imgW), int(imgStartY+contentH))
@@ -120,17 +113,11 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 		imgY := imgStartY + float64(dispIdx)*rowPitch + frac*rowPitch
 		imgX := imgStartX
 		isSelected := idx == cursorIndex
-
 		imgOp := &ebiten.DrawImageOptions{}
 		imgOp.GeoM.Translate(imgX, imgY)
 		if isSelected {
 			pulse := selectedLogPulseColor(game.TotalPlayTime)
-			imgOp.ColorScale.Scale(
-				float32(pulse.R)/255,
-				float32(pulse.G)/255,
-				float32(pulse.B)/255,
-				1,
-			)
+			imgOp.ColorScale.Scale(float32(pulse.R)/255, float32(pulse.G)/255, float32(pulse.B)/255, 1)
 		}
 		dst.DrawImage(game.LogEntryImg, imgOp)
 
@@ -139,11 +126,8 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 			speakerLabel = "・・・"
 		}
 		logFace := game.FontFace(16)
-
-		nameX := imgX + logNameOffsetX
-		nameY := imgY + logNameOffsetY
 		nameOp := &text.DrawOptions{}
-		nameOp.GeoM.Translate(nameX, nameY)
+		nameOp.GeoM.Translate(imgX+logNameOffsetX, imgY+logNameOffsetY)
 		nameOp.ColorScale.ScaleWithColor(logTextColor)
 		text.Draw(dst, speakerLabel, logFace, nameOp)
 
@@ -160,16 +144,13 @@ func drawMessageLog(screen *ebiten.Image, game *Game, log []EventCommand, scroll
 	if maxScroll > 0 {
 		barX, trackY, trackHeight, thumbH, moveRange := logScrollBarGeometry(game, len(entries))
 		fillRect(screen, barX, trackY, scrollBarTrackWidth, trackHeight, scrollBarTrackColor)
-
 		ratio := 1 - scrollOffset/maxScroll
 		if ratio < 0 {
 			ratio = 0
 		} else if ratio > 1 {
 			ratio = 1
 		}
-		thumbY := trackY + ratio*moveRange
-
-		fillRect(screen, barX, thumbY, scrollBarCursorWidth, thumbH, scrollBarCursorColor)
+		fillRect(screen, barX, trackY+ratio*moveRange, scrollBarCursorWidth, thumbH, scrollBarCursorColor)
 	}
 }
 
@@ -186,20 +167,13 @@ func logScrollBarGeometry(game *Game, entryCount int) (barX, trackY, trackHeight
 	if thumbH < logScrollBarMinH {
 		thumbH = logScrollBarMinH
 	}
-	moveRange = trackHeight - thumbH
-	if moveRange < 0 {
-		moveRange = 0
-	}
+	moveRange = max(trackHeight-thumbH, 0)
 	return
 }
 
 func logScrollBarRect(game *Game, entryCount int) (x, y, w, h float64) {
 	barX, trackY, trackHeight, _, _ := logScrollBarGeometry(game, entryCount)
-	x = barX - scrollBarTouchPad
-	y = trackY
-	w = scrollBarCursorWidth + scrollBarTouchPad*2
-	h = trackHeight
-	return
+	return barX - scrollBarTouchPad, trackY, scrollBarCursorWidth + scrollBarTouchPad*2, trackHeight
 }
 
 func hitTestLogEntries(game *Game, entryCount int, scrollOffset, tapX, tapY float64) (int, bool) {
@@ -210,12 +184,10 @@ func hitTestLogEntries(game *Game, entryCount int, scrollOffset, tapX, tapY floa
 	imgW := float64(bounds.Dx())
 	imgH := float64(bounds.Dy())
 	rowPitch := imgH + logEntryGap
-
 	intScroll := math.Floor(scrollOffset)
 	frac := scrollOffset - intScroll
 	endIndex := entryCount - int(intScroll)
 	startIndex := endIndex - logVisibleCount
-
 	p := touchPoint{tapX, tapY}
 	for dispIdx := range logVisibleCount {
 		idx := startIndex + dispIdx
@@ -223,8 +195,7 @@ func hitTestLogEntries(game *Game, entryCount int, scrollOffset, tapX, tapY floa
 			continue
 		}
 		imgY := logImageStartY + float64(dispIdx)*rowPitch + frac*rowPitch
-		r := tapRect{x: logImageStartX, y: imgY, w: imgW, h: imgH}
-		if r.contains(p) {
+		if (tapRect{x: logImageStartX, y: imgY, w: imgW, h: imgH}).contains(p) {
 			return idx, true
 		}
 	}

@@ -335,7 +335,6 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 	if s.phase == endingPhaseFadeIn || s.phase == endingPhaseHold || s.phase == endingPhaseFadeOut {
 		drawSkipHint(screen, s.game, s.skipHoldElapsed, endingSkipHoldSeconds)
 	}
-
 	if s.pageIndex >= len(s.pages) {
 		return
 	}

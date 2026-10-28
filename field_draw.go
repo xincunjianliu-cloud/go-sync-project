@@ -37,14 +37,20 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 	}
 
 	if s.isMsgActive {
-		s.msg.DrawChara(screen, s.game)
+		if !s.mapSpeechBubble {
+			s.msg.DrawChara(screen, s.game)
+		}
 	}
 
 	if s.isMsgActive && s.msgIndex >= 0 && s.msgIndex < len(s.msgTexts) {
-		s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game, 20)
+		if s.mapSpeechBubble {
+			s.drawMapSpeechBubble(screen, s.msgTexts[s.msgIndex], 28)
+		} else {
+			s.msg.Draw(screen, s.msgTexts[s.msgIndex], s.game, 20)
+		}
 	}
 
-	if s.isMsgActive {
+	if s.isMsgActive && !s.mapSpeechBubble {
 		drawMessageControlPanel(screen, s.game, s.autoMode, s.msgSkipHoldElapsed, endingSkipHoldSeconds)
 	}
 

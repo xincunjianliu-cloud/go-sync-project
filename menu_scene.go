@@ -554,7 +554,7 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.PlayerLuck = d.PlayerLuck
 	m.game.PlayerSP = d.PlayerSP
 	m.game.PlayerSkillLv = d.PlayerSkillLv
-	m.game.BossDefeatedFlags = d.BossDefeatedFlags
+	m.game.setObjectiveProgress(d.BossDefeatedFlags, d.SeenEvents)
 	m.game.PlayerLv = d.PlayerLv
 	m.game.PlayerEXP = d.PlayerEXP
 	m.game.PlayerNextEXP = d.PlayerNextEXP
@@ -564,7 +564,6 @@ func (m *MenuScene) updateLoadConfirm() {
 	m.game.Keys = d.Keys
 	m.game.RaisedLevers = d.RaisedLevers
 	m.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
-	m.game.SeenEvents = d.SeenEvents
 	m.game.SeenBattleTutorial = d.SeenBattleTutorial
 	m.game.SeenGaugeTutorial = d.SeenGaugeTutorial
 	m.game.SeenSkillUpgradeTutorial = d.SeenSkillUpgradeTutorial

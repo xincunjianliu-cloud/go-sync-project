@@ -18,10 +18,6 @@ const (
 	ctrlKeyHintGapY  = 4.0
 
 	ctrlLabelFontSize = 20.0
-
-	// ctrlIconTapMargin widens the tap target for touch input only (not
-	// mouse), since the 12px icon radius alone is too small to hit
-	// reliably with a thumb.
 	ctrlIconTapMargin = 16.0
 )
 
@@ -80,18 +76,6 @@ func drawAutoIcon(screen *ebiten.Image, cx, cy, r float64, active bool) {
 	})
 }
 
-func drawSkipIcon(screen *ebiten.Image, cx, cy, r float64) {
-	drawIconBackdrop(screen, cx, cy, r)
-	s := r * 0.6
-	for _, offsetX := range []float64{-s * 0.35, s * 0.55} {
-		fillTriPath(screen, color.White, [][2]float64{
-			{cx + offsetX - s*0.45, cy - s*0.55},
-			{cx + offsetX - s*0.45, cy + s*0.55},
-			{cx + offsetX + s*0.45, cy},
-		})
-	}
-}
-
 func drawLogIcon(screen *ebiten.Image, cx, cy, r float64) {
 	drawIconBackdrop(screen, cx, cy, r)
 	lineW := r * 0.95
@@ -104,9 +88,18 @@ func drawLogIcon(screen *ebiten.Image, cx, cy, r float64) {
 	}
 }
 
-// ctrlIconHitRect returns the tap target covering both the icon circle and
-// its label text, so touching the label counts the same as touching the
-// icon. margin further pads the touch-only tap area.
+func drawSkipIcon(screen *ebiten.Image, cx, cy, r float64) {
+	drawIconBackdrop(screen, cx, cy, r)
+	s := r * 0.6
+	for _, offsetX := range []float64{-s * 0.35, s * 0.55} {
+		fillTriPath(screen, color.White, [][2]float64{
+			{cx + offsetX - s*0.45, cy - s*0.55},
+			{cx + offsetX - s*0.45, cy + s*0.55},
+			{cx + offsetX + s*0.45, cy},
+		})
+	}
+}
+
 func ctrlIconHitRect(game *Game, cx, cy float64, label string, margin float64) (x, y, w, h float64) {
 	labelW := text.Advance(label, game.FontFace(ctrlLabelFontSize))
 	x = cx - ctrlIconR - margin
@@ -131,8 +124,6 @@ func isSkipIconHeld(game *Game) bool {
 	return ctrlIconHit(game, 2, "スキップ", touches, mouse)
 }
 
-// ctrlIconHit はindex番目の操作アイコン(ラベル含む)に触れた点があるかを返す。
-// 指は狙いがぶれやすいのでタッチだけ当たり判定をctrlIconTapMarginぶん広げる。
 func ctrlIconHit(game *Game, index int, label string, touches, mouse []touchPoint) bool {
 	cx, cy := ctrlIconXAt(index), ctrlRowY()
 	tx, ty, tw, th := ctrlIconHitRect(game, cx, cy, label, ctrlIconTapMargin)
@@ -192,7 +183,6 @@ func drawKeyHintPC(screen *ebiten.Image, game *Game, cx, cy float64, label, key 
 
 func drawMessageControlPanel(screen *ebiten.Image, game *Game, autoOn bool, skipHoldElapsed, skipHoldMax float64) {
 	y := ctrlRowY()
-
 	autoX := ctrlIconXAt(0)
 	drawAutoIcon(screen, autoX, y, ctrlIconR, autoOn)
 	drawLabel(screen, game, autoX, y, "オート")

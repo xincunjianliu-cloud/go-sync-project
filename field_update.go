@@ -31,28 +31,13 @@ func (s *FieldScene) moveLogCursor(delta int) {
 	if n == 0 {
 		return
 	}
-
-	s.logCursorIndex += delta
-	if s.logCursorIndex < 0 {
-		s.logCursorIndex = 0
-	}
-	if s.logCursorIndex > n-1 {
-		s.logCursorIndex = n - 1
-	}
-
+	s.logCursorIndex = max(0, min(s.logCursorIndex+delta, n-1))
 	endIndex := n - int(s.logScrollOffset)
 	startIndex := max(endIndex-logVisibleCount, 0)
-
 	if s.logCursorIndex < startIndex {
-		s.logScrollOffset = float64(n - s.logCursorIndex - logVisibleCount)
-		if s.logScrollOffset < 0 {
-			s.logScrollOffset = 0
-		}
+		s.logScrollOffset = max(float64(n-s.logCursorIndex-logVisibleCount), 0)
 	} else if s.logCursorIndex > endIndex-1 {
-		s.logScrollOffset = float64(n - s.logCursorIndex - 1)
-		if s.logScrollOffset < 0 {
-			s.logScrollOffset = 0
-		}
+		s.logScrollOffset = max(float64(n-s.logCursorIndex-1), 0)
 	}
 }
 
@@ -110,11 +95,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 			s.game.Audio.PlaySEByKey("cursor")
 		}
 
-		maxLogScroll := float64(len(s.msgLog) - logVisibleCount)
-		if maxLogScroll < 0 {
-			maxLogScroll = 0
-		}
-
+		maxLogScroll := max(float64(len(s.msgLog)-logVisibleCount), 0)
 		barX, barY, barW, barH := logScrollBarRect(s.game, len(s.msgLog))
 		if scrollBarMoveAmt := s.logScrollBarDrag.step(barX, barY, barW, barH); scrollBarMoveAmt != 0 {
 			_, _, _, _, moveRange := logScrollBarGeometry(s.game, len(s.msgLog))
@@ -123,13 +104,10 @@ func (s *FieldScene) Update(dt float64) Scene {
 			}
 		}
 		scrollBarHeld := s.logScrollBarDrag.active
-
 		rowPitch := float64(s.game.LogEntryImg.Bounds().Dy()) + logEntryGap
-
 		if _, wheelY := ebiten.Wheel(); wheelY != 0 && !scrollBarHeld && rowPitch > 0 {
 			s.logDrag.stepContinuousScroll(wheelY*wheelScrollPxPerNotch/rowPitch, &s.logScrollOffset, 0, maxLogScroll)
 		}
-
 		if !scrollBarHeld {
 			barX, _, _, _, _ := logScrollBarGeometry(s.game, len(s.msgLog))
 			moveAmt := s.logDrag.step(0, 0, barX-scrollBarTouchPad, float64(gameHeight))
@@ -145,7 +123,6 @@ func (s *FieldScene) Update(dt float64) Scene {
 				}
 			}
 		}
-
 		imgW := float64(s.game.LogEntryImg.Bounds().Dx())
 		imgH := float64(s.game.LogEntryImg.Bounds().Dy())
 		contentH := float64(logVisibleCount)*imgH + float64(logVisibleCount-1)*logEntryGap
@@ -155,7 +132,6 @@ func (s *FieldScene) Update(dt float64) Scene {
 			s.isLogActive = false
 			s.game.Audio.PlaySEByKey("menu_toggle")
 		}
-
 		if isConfirmKeyPressed() || isEscapePressed() || isLogTogglePressed() {
 			s.isLogActive = false
 			s.game.Audio.PlaySEByKey("menu_toggle")
@@ -357,32 +333,32 @@ func (s *FieldScene) Update(dt float64) Scene {
 	if s.isMsgActive {
 		s.msg.Speed = s.game.MessageSpeedTicks()
 
-		if isSkipKeyDown() || isSkipIconHeld(s.game) {
-			s.msgSkipHoldElapsed += dt
-			if s.msgSkipHoldElapsed >= endingSkipHoldSeconds {
+		if !s.mapSpeechBubble {
+			if isSkipKeyDown() || isSkipIconHeld(s.game) {
+				s.msgSkipHoldElapsed += dt
+				if s.msgSkipHoldElapsed >= endingSkipHoldSeconds {
+					s.msgSkipHoldElapsed = 0
+					s.game.Audio.PlaySEByKey("decide")
+					return s.skipMessage()
+				}
+			} else {
 				s.msgSkipHoldElapsed = 0
-				s.game.Audio.PlaySEByKey("decide")
-				return s.skipMessage()
 			}
-		} else {
-			s.msgSkipHoldElapsed = 0
-		}
-
-		if isAutoTogglePressed() || isAutoIconJustPressed(s.game) {
-			s.autoMode = !s.autoMode
-			s.autoWaitElapsed = 0
-			s.game.Audio.PlaySEByKey("menu_toggle")
-		}
-
-		if isLogTogglePressed() || isLogIconJustPressed(s.game) {
-			s.game.Audio.PlaySEByKey("menu_toggle")
-			s.openMessageLog()
-			return s
+			if isAutoTogglePressed() || isAutoIconJustPressed(s.game) {
+				s.autoMode = !s.autoMode
+				s.autoWaitElapsed = 0
+				s.game.Audio.PlaySEByKey("menu_toggle")
+			}
+			if isLogTogglePressed() || isLogIconJustPressed(s.game) {
+				s.game.Audio.PlaySEByKey("menu_toggle")
+				s.openMessageLog()
+				return s
+			}
 		}
 
 		finished := s.msg.IsFinished(s.msgTexts[s.msgIndex])
 
-		if isMessageAdvancePressed() {
+		if (finished || !s.mapSpeechBubble) && (isMessageAdvancePressed() || (s.mapSpeechBubble && len(justPressedTouchPoints()) > 0)) {
 			s.game.Audio.PlaySEByKey("text_advance")
 			if !finished {
 				s.msg.SkipToEnd(s.msgTexts[s.msgIndex])
@@ -391,7 +367,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 			return s.advanceMessage()
 		}
 
-		if s.autoMode && finished {
+		if !s.mapSpeechBubble && s.autoMode && finished {
 			s.autoWaitElapsed += dt
 			if s.autoWaitElapsed >= autoWaitDuration(s.msgTexts[s.msgIndex]) {
 				s.autoWaitElapsed = 0
@@ -474,10 +450,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 						key := chestKey(s.currentMap, obj)
 						seen := s.game.SeenEvents[key]
 						s.applyDialogue(resolveEventDialogue(evText, p["repeattext"], seen))
-						if s.game.SeenEvents == nil {
-							s.game.SeenEvents = make(map[string]bool)
-						}
-						s.game.SeenEvents[key] = true
+						s.game.markEventSeen(key)
 					} else {
 						s.applyDialogue(BossDialogue{Commands: []EventCommand{{Speaker: "", Text: "調べるとなにかあるかもしれない"}}})
 					}
@@ -661,10 +634,7 @@ func (s *FieldScene) Update(dt float64) Scene {
 							s.pendingCutsceneMsg = fmt.Sprintf("%s%d", bossTextPrefix, bossID)
 						} else {
 							s.pendingCutsceneMsg = evText
-							if s.game.SeenEvents == nil {
-								s.game.SeenEvents = make(map[string]bool)
-							}
-							s.game.SeenEvents[triggerKey] = true
+							s.game.markEventSeen(triggerKey)
 						}
 						s.cutsceneHasBossID = hasBossID
 
@@ -896,11 +866,18 @@ func (s *FieldScene) rectHitsTerrainWith(left, top, right, bottom float64, allOp
 	}
 
 	for _, poly := range s.collisionPolygons {
-		for _, pt := range checkPoints {
-			if pointInPolygon(pt[0], pt[1], poly.Points) && !(poly.WalkOnTop && s.coveredAboveRect(poly.Layer, pt[0], pt[1], pt[0], pt[1], allOpen)) {
-				return true
+		if !rectIntersectsPolygon(left, top, right, bottom, poly.Points) {
+			continue
+		}
+		if poly.WalkOnTop {
+			polyLeft, polyTop, polyRight, polyBottom, ok := polygonBounds(poly.Points)
+			if ok && s.coveredAboveRect(poly.Layer,
+				max(left, polyLeft), max(top, polyTop),
+				min(right, polyRight), min(bottom, polyBottom), allOpen) {
+				continue
 			}
 		}
+		return true
 	}
 
 	return false
@@ -990,6 +967,42 @@ func pointInPolygon(x, y float64, poly []TiledPoint) bool {
 		}
 	}
 	return inside
+}
+
+func rectIntersectsPolygon(left, top, right, bottom float64, poly []TiledPoint) bool {
+	if len(poly) < 3 {
+		return false
+	}
+	for _, corner := range [][2]float64{{left, top}, {right, top}, {right, bottom}, {left, bottom}} {
+		if pointInPolygon(corner[0], corner[1], poly) {
+			return true
+		}
+	}
+	for i, point := range poly {
+		if point.X >= left && point.X <= right && point.Y >= top && point.Y <= bottom {
+			return true
+		}
+		next := poly[(i+1)%len(poly)]
+		if segmentIntersectsRect(point.X, point.Y, next.X, next.Y, left, top, right-left, bottom-top) {
+			return true
+		}
+	}
+	return false
+}
+
+func polygonBounds(poly []TiledPoint) (left, top, right, bottom float64, ok bool) {
+	if len(poly) == 0 {
+		return 0, 0, 0, 0, false
+	}
+	left, right = poly[0].X, poly[0].X
+	top, bottom = poly[0].Y, poly[0].Y
+	for _, point := range poly[1:] {
+		left = min(left, point.X)
+		right = max(right, point.X)
+		top = min(top, point.Y)
+		bottom = max(bottom, point.Y)
+	}
+	return left, top, right, bottom, true
 }
 
 func (s *FieldScene) resolveEmbeddedPosition() {
@@ -1207,6 +1220,8 @@ func (s *FieldScene) endMessage() {
 	s.msgTexts = nil
 	s.msgIndex = 0
 	s.msgBackground = ""
+	s.mapSpeechBubble = false
+	s.msgSkipHoldElapsed = 0
 	s.autoMode = false
 	s.autoWaitElapsed = 0
 	s.nearExamineEvent = false
@@ -1241,8 +1256,9 @@ func (s *FieldScene) appendMessageLog(cmd EventCommand) {
 }
 
 func (s *FieldScene) advanceMessage() Scene {
-	s.appendMessageLog(s.msgTexts[s.msgIndex])
-
+	if !s.mapSpeechBubble {
+		s.appendMessageLog(s.msgTexts[s.msgIndex])
+	}
 	s.msgIndex++
 	s.runBGMCommands()
 	if s.msgIndex < len(s.msgTexts) {
@@ -1254,7 +1270,6 @@ func (s *FieldScene) advanceMessage() Scene {
 
 	if s.msgIndex >= len(s.msgTexts) {
 		if s.onChoiceConfirm != nil {
-			s.autoMode = false
 			s.isChoiceActive = true
 			s.choiceIndex = 0
 		} else {
@@ -1279,7 +1294,6 @@ func (s *FieldScene) runSceneChangeCommand(cmd EventCommand) bool {
 	s.isMsgActive = false
 	s.msgTexts = nil
 	s.msgIndex = 0
-	s.autoMode = false
 
 	if isBattle {
 		// 戦闘・ボスの画像がまだ読み込み中なら、暗転したまま待ってから始める。

@@ -17,7 +17,6 @@ const (
 func skipHintCenter(game *Game) (cx, cy float64) {
 	labelFace := game.FontFace(12)
 	labelWidth := text.Advance("スキップ", labelFace)
-
 	rightX := float64(gameWidth) - skipHintMargin
 	cx = rightX - labelWidth - 8 - skipHintRadius
 	cy = float64(gameHeight) - skipHintMargin
@@ -26,9 +25,7 @@ func skipHintCenter(game *Game) (cx, cy float64) {
 
 func drawSkipHint(screen *ebiten.Image, game *Game, holdElapsed, holdMax float64) {
 	cx, cy := skipHintCenter(game)
-
 	drawRingOutline(screen, cx, cy, skipHintRadius, color.RGBA{255, 255, 255, 90})
-
 	progress := 0.0
 	if holdMax > 0 {
 		progress = holdElapsed / holdMax
@@ -36,7 +33,6 @@ func drawSkipHint(screen *ebiten.Image, game *Game, holdElapsed, holdMax float64
 	if progress > 0 {
 		drawProgressArc(screen, cx, cy, skipHintRadius, progress)
 	}
-
 	hintOp := &text.DrawOptions{}
 	hintOp.GeoM.Translate(cx, cy)
 	hintOp.PrimaryAlign = text.AlignCenter

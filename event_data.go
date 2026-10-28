@@ -17,6 +17,9 @@ type EventCommand struct {
 
 type BossDialogue struct {
 	Commands []EventCommand
+	// SpeechBubble はマップ上の直接入力テキストをフィールドの主人公の
+	// 右上に吹き出しで表示するかどうか。
+	SpeechBubble bool
 	// SpeakerSides is an optional "who stands on which side" hint
 	// (0=left, 1=right). A speaker with no entry here is placed
 	// automatically (see MessageSystem.UpdateCharaAnim).

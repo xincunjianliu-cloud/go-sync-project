@@ -612,6 +612,7 @@ func (a *AudioManager) FadeOutThenPlay(nextPath string, fadeOutDuration, fadeInD
 	if a == nil {
 		return
 	}
+	a.cancelPendingLoopSwitch()
 	// フェードアウトしている間に次の曲のデコードを進めておく。
 	a.requestPCM(nextPath)
 	if a.pendingStart != nil && a.pendingBGM == nextPath {
@@ -638,13 +639,28 @@ func (a *AudioManager) FadeOutThenPlay(nextPath string, fadeOutDuration, fadeInD
 // FadeOutBGM は現在のBGMを duration 秒かけてフェードアウトし、無音になったら
 // 停止する(次の曲は再生しない)。
 func (a *AudioManager) FadeOutBGM(duration float64) {
-	if a == nil || a.bgmPlayer == nil || !a.bgmPlayer.IsPlaying() {
+	if a == nil {
+		return
+	}
+	a.cancelPendingLoopSwitch()
+	a.pendingStart = nil
+	a.pendingPaths = nil
+	a.pendingBGM = ""
+	a.fadeOutNextPath = ""
+	if a.bgmPlayer == nil || !a.bgmPlayer.IsPlaying() {
+		a.fadeOutActive = false
+		a.fadeInActive = false
 		return
 	}
 	a.fadeInActive = false
 	a.fadeOutActive = true
 	a.fadeOutSpeed = a.bgmPlayer.Volume() / duration
 	a.fadeOutNextPath = ""
+}
+
+func (a *AudioManager) cancelPendingLoopSwitch() {
+	a.waitingLoopSwitch = false
+	a.pendingLoopPath = ""
 }
 
 func (a *AudioManager) startNext(path string, fadeInDuration float64, hardCut bool) {
@@ -687,6 +703,7 @@ func (a *AudioManager) SetVolume(v float64) {
 		return
 	}
 	a.volume = clampVolume(v)
+	a.fadeInActive = false
 	if a.bgmPlayer != nil {
 		a.bgmPlayer.SetVolume(a.effectiveBGMVolume())
 	}
@@ -697,6 +714,7 @@ func (a *AudioManager) SetSEVolume(v float64) {
 		return
 	}
 	a.seVolume = clampVolume(v)
+	a.updateSEPlayerVolumes()
 }
 
 // SetMasterVolume はゲーム全体の音量を設定する。BGM/SEそれぞれのスライダー値に
@@ -706,8 +724,17 @@ func (a *AudioManager) SetMasterVolume(v float64) {
 		return
 	}
 	a.masterVolume = clampVolume(v)
+	a.fadeInActive = false
 	if a.bgmPlayer != nil {
 		a.bgmPlayer.SetVolume(a.effectiveBGMVolume())
+	}
+	a.updateSEPlayerVolumes()
+}
+
+func (a *AudioManager) updateSEPlayerVolumes() {
+	volume := a.effectiveSEVolume()
+	for _, p := range a.sePlayers {
+		p.SetVolume(volume)
 	}
 }
 

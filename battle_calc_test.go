@@ -17,3 +17,13 @@ func TestElementalDamageMultiplier(t *testing.T) {
 		t.Fatalf("non-elemental damage should produce 1.0x damage, got %v", got)
 	}
 }
+
+func TestEnemyDamageDoesNotCrit(t *testing.T) {
+	s := &BattleScene{}
+	for range 20 {
+		s.rollDamageNoCrit(100, 100, 100, 1, 1000)
+		if s.lastRollWasCrit {
+			t.Fatal("enemy damage should not roll critical hits")
+		}
+	}
+}

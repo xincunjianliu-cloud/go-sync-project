@@ -45,6 +45,20 @@ func (g *Game) UpdateObjective() {
 	g.CurrentObjectiveID = ""
 }
 
+func (g *Game) markEventSeen(key string) {
+	if g.SeenEvents == nil {
+		g.SeenEvents = make(map[string]bool)
+	}
+	g.SeenEvents[key] = true
+	g.UpdateObjective()
+}
+
+func (g *Game) setObjectiveProgress(bossFlags [4]bool, seenEvents map[string]bool) {
+	g.BossDefeatedFlags = bossFlags
+	g.SeenEvents = seenEvents
+	g.UpdateObjective()
+}
+
 func (g *Game) CurrentObjectiveLocation() (ObjectiveLocation, bool) {
 	if g.CurrentObjectiveID == "" {
 		return ObjectiveLocation{}, false

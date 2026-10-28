@@ -70,6 +70,30 @@ type pendingPlayerHit struct {
 	nonLethal bool
 }
 
+type rewindSnapshot struct {
+	valid           bool
+	playerHP        [partySize]int
+	playerBuffs     [partySize][]Buff
+	playerDebuffs   [partySize][]Debuff
+	partyATB        [partySize]float64
+	coverCount      [partySize]int
+	counterTimer    [partySize]float64
+	counterBonus    [partySize]int
+	guardHPPercent  [partySize]int
+	guardCount      [partySize]int
+	waitStance      [partySize]bool
+	waitOrder       []int
+	waitCancelOrder []int
+	waitCancelHold  [partySize]float64
+	deadWaitStuck   [partySize]bool
+	playerPose      [partySize]int
+	playerAnimTimer [partySize]float64
+	playerFlash     [partySize]float64
+	evadeOffsetX    [partySize]float64
+	readySlideX     [partySize]float64
+	returnDelay     [partySize]float64
+}
+
 const (
 	phaseATB = iota
 	phasePlayerMenu
@@ -445,9 +469,7 @@ type BattleScene struct {
 	rewindTimer              float64
 	rewindUsed               bool
 	rewindExtraTurnAvailable [partySize]bool
-	lastEnemyAttackTarget    int
-	lastEnemyAttackPrevHP    int
-	lastEnemyAttackDamage    int
+	rewindSnapshot           rewindSnapshot
 	pendingDamage2Scheduled  bool
 
 	originMap       string

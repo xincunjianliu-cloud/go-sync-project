@@ -451,7 +451,7 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.PlayerLuck = d.PlayerLuck
 		s.game.PlayerSP = d.PlayerSP
 		s.game.PlayerSkillLv = d.PlayerSkillLv
-		s.game.BossDefeatedFlags = d.BossDefeatedFlags
+		s.game.setObjectiveProgress(d.BossDefeatedFlags, d.SeenEvents)
 		s.game.PlayerLv = d.PlayerLv
 		s.game.PlayerEXP = d.PlayerEXP
 		s.game.PlayerNextEXP = d.PlayerNextEXP
@@ -461,7 +461,6 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		s.game.Keys = d.Keys
 		s.game.RaisedLevers = d.RaisedLevers
 		s.game.SeenAutoHealMapIntro = d.SeenAutoHealMapIntro
-		s.game.SeenEvents = d.SeenEvents
 		s.game.SeenBattleTutorial = d.SeenBattleTutorial
 		s.game.SeenGaugeTutorial = d.SeenGaugeTutorial
 		s.game.SeenSkillUpgradeTutorial = d.SeenSkillUpgradeTutorial

@@ -635,6 +635,7 @@ func (s *BattleScene) Update(dt float64) Scene {
 			s.resultAnimTimer += dt
 			if s.resultAnimTimer >= 0.8 {
 				s.resultAnimTimer = 0.0
+				s.game.Audio.PlayBGMWithIntro(bgmVictoryIntro, bgmVictoryLoop)
 				s.resultSubPhase = resSubWinWait
 			}
 

@@ -170,6 +170,7 @@ func TestOpeningDialogueActivatesMessageBox(t *testing.T) {
 			Commands: []EventCommand{{Speaker: "", Text: "むかしむかし……"}},
 		},
 	}
+
 	defer delete(storyDialogues, "opening")
 
 	s := &FieldScene{game: &Game{}}
@@ -182,6 +183,23 @@ func TestOpeningDialogueActivatesMessageBox(t *testing.T) {
 	}
 	if len(s.msgTexts) != 1 || s.msgTexts[0].Text != "むかしむかし……" {
 		t.Fatalf("expected the opening's line to be loaded, got %+v", s.msgTexts)
+	}
+}
+
+func TestResolveEventDialogueSeparatesMapTextFromSpreadsheetDialogue(t *testing.T) {
+	mapText := resolveEventDialogue("マップで入力した台詞", "", false)
+	if !mapText.SpeechBubble {
+		t.Fatal("expected text entered in the map editor to use a speech bubble")
+	}
+
+	storyDialogues["_test_presentation"] = storyDialogueEntry{
+		First: BossDialogue{Commands: []EventCommand{{Text: "spreadsheet dialogue"}}},
+	}
+	defer delete(storyDialogues, "_test_presentation")
+
+	spreadsheetText := resolveEventDialogue(storyTextPrefix+"_test_presentation", "", false)
+	if spreadsheetText.SpeechBubble {
+		t.Fatal("expected spreadsheet dialogue to keep the standard message window")
 	}
 }
 

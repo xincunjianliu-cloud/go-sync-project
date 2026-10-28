@@ -13,15 +13,69 @@ func (s *BattleScene) executeRewind() {
 	s.rewindTimer = 15.0
 	s.rewindUsed = true
 
-	if s.lastEnemyAttackDamage > 0 && s.lastEnemyAttackTarget >= 0 && s.lastEnemyAttackTarget < partySize {
-		target := s.lastEnemyAttackTarget
-		s.game.PlayerHP[target] = min(s.lastEnemyAttackPrevHP, s.game.PlayerMaxHP[target])
+	if s.rewindSnapshot.valid {
+		s.restoreRewindSnapshot()
 		s.battleLog = "巻き戻し：直前攻撃をなかったことにした"
 	} else {
 		s.battleLog = "巻き戻しを発動した"
 	}
+	s.rewindSnapshot = rewindSnapshot{}
 	s.battleLogTimer = battleLogDuration
 	s.finishPlayerTurn(rewindReturnPosition)
+}
+
+func (s *BattleScene) captureRewindSnapshot() {
+	snapshot := rewindSnapshot{
+		playerHP:        s.game.PlayerHP,
+		coverCount:      s.coverCount,
+		counterTimer:    s.counterTimer,
+		counterBonus:    s.counterBonus,
+		guardHPPercent:  s.guardHPPercent,
+		guardCount:      s.guardCount,
+		waitStance:      s.waitStance,
+		waitOrder:       append([]int(nil), s.waitOrder...),
+		waitCancelOrder: append([]int(nil), s.waitCancelOrder...),
+		waitCancelHold:  s.waitCancelHold,
+		deadWaitStuck:   s.deadWaitStuck,
+		playerPose:      s.playerPose,
+		playerAnimTimer: s.playerAnimTimer,
+		playerFlash:     s.playerFlashTimer,
+		evadeOffsetX:    s.evadeOffsetX,
+		readySlideX:     s.readySlideX,
+		returnDelay:     s.returnDelayTimer,
+	}
+	copy(snapshot.partyATB[:], s.atbGauge[:partySize])
+	for i := range partySize {
+		snapshot.playerBuffs[i] = append([]Buff(nil), s.PlayerBuffs[i]...)
+		snapshot.playerDebuffs[i] = append([]Debuff(nil), s.PlayerDebuffs[i]...)
+	}
+	s.rewindSnapshot = snapshot
+}
+
+func (s *BattleScene) restoreRewindSnapshot() {
+	snapshot := s.rewindSnapshot
+	s.game.PlayerHP = snapshot.playerHP
+	s.coverCount = snapshot.coverCount
+	s.counterTimer = snapshot.counterTimer
+	s.counterBonus = snapshot.counterBonus
+	s.guardHPPercent = snapshot.guardHPPercent
+	s.guardCount = snapshot.guardCount
+	s.waitStance = snapshot.waitStance
+	s.waitOrder = append(s.waitOrder[:0], snapshot.waitOrder...)
+	s.waitCancelOrder = append(s.waitCancelOrder[:0], snapshot.waitCancelOrder...)
+	s.waitCancelHold = snapshot.waitCancelHold
+	s.deadWaitStuck = snapshot.deadWaitStuck
+	s.playerPose = snapshot.playerPose
+	s.playerAnimTimer = snapshot.playerAnimTimer
+	s.playerFlashTimer = snapshot.playerFlash
+	s.evadeOffsetX = snapshot.evadeOffsetX
+	s.readySlideX = snapshot.readySlideX
+	s.returnDelayTimer = snapshot.returnDelay
+	for i := range partySize {
+		s.atbGauge[i] = snapshot.partyATB[i]
+		s.PlayerBuffs[i] = append(s.PlayerBuffs[i][:0], snapshot.playerBuffs[i]...)
+		s.PlayerDebuffs[i] = append(s.PlayerDebuffs[i][:0], snapshot.playerDebuffs[i]...)
+	}
 }
 
 func (s *BattleScene) rollNormalDamage(target int) int {
@@ -174,6 +228,7 @@ func (s *BattleScene) rollEnemyAction() {
 }
 
 func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
+	s.captureRewindSnapshot()
 	target := s.coverRedirect(aliveList[rand.Intn(len(aliveList))])
 
 	s.pendingEnemySkillName = ""
@@ -189,7 +244,7 @@ func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
 	}
 
 	def := max(s.effectivePlayerDef(target, false), 1)
-	dmg := s.rollDamage(float64(s.effectiveEnemyAtk(s.actingEnemySlot, false)), 100.0, float64(def), 1.0, 0)
+	dmg := s.rollDamageNoCrit(float64(s.effectiveEnemyAtk(s.actingEnemySlot, false)), 100.0, float64(def), 1.0, 0)
 
 	s.pendingEnemyHits = []pendingEnemyHit{{target: target, dmg: dmg}}
 	s.pendingEnemyHitTier = hitTierWeak
@@ -197,6 +252,7 @@ func (s *BattleScene) rollEnemyNormalAttack(aliveList []int) {
 }
 
 func (s *BattleScene) rollEnemySkill(skill EnemySkill, aliveList []int) {
+	s.captureRewindSnapshot()
 	var targets []int
 	if skill.Target == TargetAll {
 		targets = aliveList
@@ -244,15 +300,13 @@ func (s *BattleScene) beginEnemyHitStop() {
 }
 
 func (s *BattleScene) applyEnemyPendingHits() {
+	s.rewindSnapshot.valid = false
 	for _, hit := range s.pendingEnemyHits {
 		target := hit.target
 		targetX := s.partyScreenX[target] + spriteFrameW/2
 		targetY := s.partyScreenY[target] - partyDamagePopOffsetY
 
 		if hit.evaded {
-			s.lastEnemyAttackTarget = target
-			s.lastEnemyAttackPrevHP = s.game.PlayerHP[target]
-			s.lastEnemyAttackDamage = 0
 			s.evadeOffsetX[target] = evadeDodgeShiftX
 			s.game.Audio.PlaySEByKey("evade")
 			s.spawnDamagePop(DamagePop{
@@ -266,12 +320,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 		}
 
 		dmg := hit.dmg
-		prevHP := s.game.PlayerHP[target]
-		s.lastEnemyAttackTarget = target
-		s.lastEnemyAttackPrevHP = prevHP
-
 		if s.tryGuard(target, dmg) {
-			s.lastEnemyAttackDamage = 0
 			s.game.Audio.PlaySEByKey("evade")
 			s.spawnDamagePop(DamagePop{
 				X:      targetX,
@@ -283,7 +332,7 @@ func (s *BattleScene) applyEnemyPendingHits() {
 			continue
 		}
 
-		s.lastEnemyAttackDamage = dmg
+		s.rewindSnapshot.valid = true
 		s.game.Audio.PlaySEByKey("damage")
 
 		s.game.PlayerHP[target] -= dmg
@@ -413,7 +462,6 @@ func (s *BattleScene) checkBattleEnd() bool {
 				}
 			}
 			s.isWon = true
-			s.game.Audio.PlayBGMWithIntro(bgmVictoryIntro, bgmVictoryLoop)
 			s.battlePhase = phaseBattleEnd
 		}
 		return true

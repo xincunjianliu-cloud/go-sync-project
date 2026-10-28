@@ -284,15 +284,16 @@ func resolveEventDialogue(text string, repeatText string, seen bool) BossDialogu
 		return BossDialogue{Commands: []EventCommand{{Speaker: "", Text: "……"}}}
 	}
 	if seen && repeatText != "" {
-		return BossDialogue{Commands: dialoguePagesFromText(repeatText)}
+		return BossDialogue{Commands: dialoguePagesFromText(repeatText), SpeechBubble: true}
 	}
-	return BossDialogue{Commands: dialoguePagesFromText(text)}
+	return BossDialogue{Commands: dialoguePagesFromText(text), SpeechBubble: true}
 }
 
 func (s *FieldScene) applyDialogue(bd BossDialogue) {
 	s.msgTexts = bd.Commands
 	s.msg.SpeakerSides = bd.SpeakerSides
 	s.msgBackground = bd.Background
+	s.mapSpeechBubble = bd.SpeechBubble
 	s.game.prefetchDialogueAssets(bd)
 }
 
@@ -360,6 +361,7 @@ type FieldScene struct {
 	msgTexts           []EventCommand
 	msgIndex           int
 	isMsgActive        bool
+	mapSpeechBubble    bool
 	msgSkipHoldElapsed float64
 	autoMode           bool
 	autoWaitElapsed    float64

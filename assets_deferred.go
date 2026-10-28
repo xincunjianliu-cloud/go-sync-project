@@ -339,8 +339,6 @@ func deferredAssetAssignments() []deferredAssetAssign {
 	}
 	add(assetTierField, "assets/images/field/map_name_banner.png", func(g *Game, img *ebiten.Image) { g.MapNameBannerImg = img })
 	add(assetTierField, "assets/images/common/window.png", func(g *Game, img *ebiten.Image) { g.WindowImg = img })
-	// メッセージ履歴とスキル強化チュートリアルは、戦闘フォルダの画像を
-	// フィールドでも使う。
 	add(assetTierField, "assets/images/battle/log_entry_box.png", func(g *Game, img *ebiten.Image) { g.LogEntryImg = img })
 	add(assetTierField, "assets/images/battle/skill_panel.png", func(g *Game, img *ebiten.Image) { g.SkillPanelImg = img })
 	add(assetTierField, "assets/images/field/調べる.png", func(g *Game, img *ebiten.Image) { g.ExamineIconImg = img })

@@ -218,6 +218,14 @@ func (s *BattleScene) rollSkillDamage(actor int, skillIdx int, lv int, isAll boo
 }
 
 func (s *BattleScene) rollDamage(atk float64, power float64, def float64, elementMultiplier float64, luck int) int {
+	return s.rollDamageWithCrit(atk, power, def, elementMultiplier, luck, true)
+}
+
+func (s *BattleScene) rollDamageNoCrit(atk float64, power float64, def float64, elementMultiplier float64, luck int) int {
+	return s.rollDamageWithCrit(atk, power, def, elementMultiplier, luck, false)
+}
+
+func (s *BattleScene) rollDamageWithCrit(atk float64, power float64, def float64, elementMultiplier float64, luck int, allowCrit bool) int {
 	if def < 1 {
 		def = 1
 	}
@@ -225,11 +233,13 @@ func (s *BattleScene) rollDamage(atk float64, power float64, def float64, elemen
 	damage *= float64(90+rand.Intn(21)) / 100.0
 	damage *= elementMultiplier
 	s.lastRollWasCrit = false
-	forceCrit := s.forceCrit
-	s.forceCrit = false
-	if forceCrit || s.rollIsCrit(luck) {
-		damage *= critDamageMultiply
-		s.lastRollWasCrit = true
+	if allowCrit {
+		forceCrit := s.forceCrit
+		s.forceCrit = false
+		if forceCrit || s.rollIsCrit(luck) {
+			damage *= critDamageMultiply
+			s.lastRollWasCrit = true
+		}
 	}
 	result := max(int(math.Round(damage)), 1)
 	return result
@@ -258,7 +268,7 @@ func (s *BattleScene) rollEnemySkillDamage(power int, element Element, target in
 	if defStat < 1 {
 		defStat = 1
 	}
-	return s.rollDamage(atkStat, float64(power), defStat, 1.0, 0)
+	return s.rollDamageNoCrit(atkStat, float64(power), defStat, 1.0, 0)
 }
 
 func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool) int {
