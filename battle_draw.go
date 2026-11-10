@@ -60,7 +60,7 @@ func (s *BattleScene) drawEnemyHeader(screen *ebiten.Image) {
 		x, y, _, _ := s.enemyDrawRect(i)
 
 		var g ebiten.GeoM
-		g.Translate(x+s.shakeX, y+s.shakeY)
+		g.Translate(x+e.AttackOffsetX+s.shakeX, y+s.shakeY)
 		if e.DeathPhase == 1 {
 			op := &ebiten.DrawImageOptions{GeoM: g}
 			op.ColorScale.ScaleAlpha(float32(e.Alpha))
@@ -180,6 +180,11 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 		op.GeoM.Translate(originX+s.shakeX, originY+s.shakeY)
 
 		if pose == poseDead {
+			if s.playerFlashTimer[i] > 0 {
+				r := s.playerFlashTimer[i] / spriteFlashDuration
+				drawWithHitFlash(screen, frameImg, op.GeoM, r*r)
+				continue
+			}
 			pulse := float32(0.5 + 0.5*math.Sin(s.playerAnimTimer[i]*2.2))
 			op.ColorScale.Scale(1.0, 1.0-pulse*0.85, 1.0-pulse*0.85, 1.0)
 			screen.DrawImage(frameImg, op)

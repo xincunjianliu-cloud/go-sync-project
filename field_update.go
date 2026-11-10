@@ -73,11 +73,11 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 	if s.encounterEffectActive {
 		s.encounterEffectTimer += dt
-		if s.encounterEffectTimer >= encounterEffectDuration && s.pendingBattleScene != nil {
+		if s.encounterEffectTimer >= encounterEffectDuration && s.pendingBattleStart != nil {
 			s.encounterEffectTimer = encounterEffectDuration
-			battleScene := s.pendingBattleScene
-			s.pendingBattleScene = nil
-			s.game.ChangeSceneWithFade(battleScene, fadeTimeBattleIn)
+			startBattle := s.pendingBattleStart
+			s.pendingBattleStart = nil
+			startBattle()
 		}
 		return s
 	}
@@ -331,18 +331,18 @@ func (s *FieldScene) Update(dt float64) Scene {
 	}
 
 	if s.isMsgActive {
+		if s.msgSkipConfirm {
+			return s.updateMessageSkipConfirm()
+		}
+
 		s.msg.Speed = s.game.MessageSpeedTicks()
 
 		if !s.mapSpeechBubble {
-			if isSkipKeyDown() || isSkipIconHeld(s.game) {
-				s.msgSkipHoldElapsed += dt
-				if s.msgSkipHoldElapsed >= endingSkipHoldSeconds {
-					s.msgSkipHoldElapsed = 0
-					s.game.Audio.PlaySEByKey("decide")
-					return s.skipMessage()
-				}
-			} else {
-				s.msgSkipHoldElapsed = 0
+			if isSkipKeyPressed() || isSkipIconJustPressed(s.game) {
+				s.msgSkipConfirm = true
+				s.msgSkipConfirmIdx = 0
+				s.game.Audio.PlaySEByKey("decide")
+				return s
 			}
 			if isAutoTogglePressed() || isAutoIconJustPressed(s.game) {
 				s.autoMode = !s.autoMode
@@ -358,7 +358,8 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 		finished := s.msg.IsFinished(s.msgTexts[s.msgIndex])
 
-		if (finished || !s.mapSpeechBubble) && (isMessageAdvancePressed() || (s.mapSpeechBubble && len(justPressedTouchPoints()) > 0)) {
+		advancePressed := isMessageAdvancePressed() || (s.mapSpeechBubble && len(justPressedTouchPoints()) > 0)
+		if advancePressed {
 			s.game.Audio.PlaySEByKey("text_advance")
 			if !finished {
 				s.msg.SkipToEnd(s.msgTexts[s.msgIndex])
@@ -708,8 +709,10 @@ func (s *FieldScene) Update(dt float64) Scene {
 						chosenEnemyNames[i] = strings.TrimSpace(allowedEnemies[rand.Intn(len(allowedEnemies))])
 					}
 					s.game.Audio.PlaySEByKey("encounter")
-					battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, "enemy", chosenEnemyNames)
-					s.startEncounterEffect(battleScene)
+					s.startEncounterEffect(func() {
+						battleScene := NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, "enemy", chosenEnemyNames)
+						s.game.ChangeSceneWithFade(battleScene, fadeTimeBattleIn)
+					})
 					return s
 				}
 			}
@@ -723,12 +726,12 @@ func (s *FieldScene) Update(dt float64) Scene {
 
 // startEncounterEffect は現在のフィールド画面を静止画として捉え、
 // カメラが回転しながらズームインしていく演出を開始する。演出が終わると
-// Update側でbattleSceneへフェード切り替えする。
-func (s *FieldScene) startEncounterEffect(battleScene *BattleScene) {
+// Update側でstartBattleを実行する。
+func (s *FieldScene) startEncounterEffect(startBattle func()) {
 	s.encounterEffectActive = true
 	s.encounterSnapshotPending = true
 	s.encounterEffectTimer = 0
-	s.pendingBattleScene = battleScene
+	s.pendingBattleStart = startBattle
 }
 
 func rectsOverlap(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2 float64) bool {
@@ -1221,7 +1224,7 @@ func (s *FieldScene) endMessage() {
 	s.msgIndex = 0
 	s.msgBackground = ""
 	s.mapSpeechBubble = false
-	s.msgSkipHoldElapsed = 0
+	s.msgSkipConfirm = false
 	s.autoMode = false
 	s.autoWaitElapsed = 0
 	s.nearExamineEvent = false
@@ -1296,10 +1299,12 @@ func (s *FieldScene) runSceneChangeCommand(cmd EventCommand) bool {
 	s.msgIndex = 0
 
 	if isBattle {
-		// 戦闘・ボスの画像がまだ読み込み中なら、暗転したまま待ってから始める。
-		s.game.ChangeSceneToBossBattle(bossType, func() Scene {
-			return NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
-		}, fadeTimeBossIn)
+		s.startEncounterEffect(func() {
+			// 戦闘・ボスの画像がまだ読み込み中なら、暗転したまま待ってから始める。
+			s.game.ChangeSceneToBossBattle(bossType, func() Scene {
+				return NewBattleScene(s.game, s.currentMap, s.px, s.py, s.dir, bossType, nil)
+			}, fadeTimeBossIn)
+		})
 		return true
 	}
 	thumb := s.game.screenScratch()
@@ -1311,6 +1316,7 @@ func (s *FieldScene) runSceneChangeCommand(cmd EventCommand) bool {
 
 func (s *FieldScene) skipMessage() Scene {
 	s.autoMode = false
+	s.msgSkipConfirm = false
 	if slices.ContainsFunc(s.msgTexts, s.runSceneChangeCommand) {
 		return s
 	}
@@ -1322,4 +1328,33 @@ func (s *FieldScene) skipMessage() Scene {
 		s.endMessage()
 	}
 	return s
+}
+
+func (s *FieldScene) updateMessageSkipConfirm() Scene {
+	if isMenuUpPressed() || isMenuDownPressed() {
+		s.msgSkipConfirmIdx = 1 - s.msgSkipConfirmIdx
+		s.game.Audio.PlaySEByKey("cursor")
+	}
+	if isEscapePressed() {
+		s.msgSkipConfirm = false
+		s.game.Audio.PlaySEByKey("cancel")
+		return s
+	}
+	tappedIdx, tappedOk := hitTestConfirmDialog(confirmImageOffsetX)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.msgSkipConfirmIdx, s.game.Audio)
+	if !tappedOk && unrelatedTapOutsideRects(confirmDialogRect()) {
+		s.msgSkipConfirm = false
+		s.game.Audio.PlaySEByKey("cancel")
+		return s
+	}
+	if !isConfirmKeyPressed() && !tapped {
+		return s
+	}
+	if s.msgSkipConfirmIdx == 1 {
+		s.msgSkipConfirm = false
+		s.game.Audio.PlaySEByKey("cancel")
+		return s
+	}
+	s.game.Audio.PlaySEByKey("decide")
+	return s.skipMessage()
 }

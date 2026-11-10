@@ -10,6 +10,13 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
+func drawBattleTargetCursor(screen *ebiten.Image, x, y float64, face text.Face) {
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(x, y)
+	op.ColorScale.ScaleWithColor(uiColorSelect)
+	text.Draw(screen, "▶", face, op)
+}
+
 func (s *BattleScene) drawTargetSelectUI(screen *ebiten.Image) {
 	isAll := s.currentAttackIsAllTarget()
 
@@ -36,10 +43,7 @@ func (s *BattleScene) drawTargetSelectUI(screen *ebiten.Image) {
 		cursorX := x - 24.0
 		cursorY := y + h/2 - 8.0
 
-		op := &text.DrawOptions{}
-		op.GeoM.Translate(cursorX, cursorY)
-		op.ColorScale.ScaleWithColor(uiColorSelect)
-		text.Draw(screen, "▶", s.game.FontFace(15), op)
+		drawBattleTargetCursor(screen, cursorX, cursorY, s.game.FontFace(15))
 	}
 }
 
@@ -63,10 +67,7 @@ func (s *BattleScene) drawHealTargetUI(screen *ebiten.Image) {
 		}
 
 		if showArrow {
-			arrowOp := &text.DrawOptions{}
-			arrowOp.GeoM.Translate(centerX-4, centerY+20)
-			arrowOp.ColorScale.ScaleWithColor(uiColorSelect)
-			text.Draw(screen, "▶", s.game.FontFace(15), arrowOp)
+			drawBattleTargetCursor(screen, centerX-4, centerY+20, s.game.FontFace(15))
 		}
 	}
 }

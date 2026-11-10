@@ -393,21 +393,21 @@ func (m *MenuScene) Draw(screen *ebiten.Image) {
 
 const (
 	skillNameX        = 480.0
-	skillRowStartY    = 95.0
-	skillRowGapY      = 55.0
+	skillRowStartY    = 90.0
+	skillRowGapY      = 65.0
 	skillNameFontSize = 25.0
 
 	skillLevelStartX       = 710.0
 	skillLevelGapX         = 90.0
 	skillLevelOffsetY      = 0.0
-	skillLevelFontSize     = 45.0
+	skillLevelFontSize     = 50.0
 	skillLevelArrowOffsetX = 30.0
 	skillGaugeOffsetY      = 20.0
 	skillGaugeWidth        = 40.0
 	skillGaugeHeight       = 10.0
 	skillRequiredSPOffsetX = 23.0
-	skillRequiredSPOffsetY = 18.0
-	skillBottomFontSize    = 15.0
+	skillRequiredSPOffsetY = 16.0
+	skillBottomFontSize    = 18.0
 	skillSPHeaderFontSize  = 20.0
 
 	skillSPHeaderX = 920.0

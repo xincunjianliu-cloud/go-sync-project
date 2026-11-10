@@ -16,8 +16,6 @@ const (
 	creditFadeOutTime     = 1.0
 	creditLineGap         = 32.0
 	creditFontSize        = 20.0
-
-	endingSkipHoldSeconds = 1.0
 )
 
 type CreditPage struct {
@@ -58,8 +56,9 @@ type EndingScene struct {
 	phase int
 	alpha float64
 
-	holdElapsed     float64
-	skipHoldElapsed float64
+	holdElapsed    float64
+	skipConfirm    bool
+	skipConfirmIdx int
 
 	askSaveIndex int
 
@@ -105,16 +104,15 @@ func (s *EndingScene) Update(dt float64) Scene {
 	}
 
 	if s.phase == endingPhaseFadeIn || s.phase == endingPhaseHold || s.phase == endingPhaseFadeOut {
-		if isSkipKeyDown() {
-			s.skipHoldElapsed += dt
-			if s.skipHoldElapsed >= endingSkipHoldSeconds {
-				s.game.Audio.PlaySEByKey("decide")
-				s.pageIndex = len(s.pages)
-				s.enterAskSave()
-				return s
-			}
-		} else {
-			s.skipHoldElapsed = 0
+		if s.skipConfirm {
+			s.updateSkipConfirm()
+			return s
+		}
+		if isSkipKeyPressed() || isSkipHintJustPressed(s.game) {
+			s.skipConfirm = true
+			s.skipConfirmIdx = 0
+			s.game.Audio.PlaySEByKey("decide")
+			return s
 		}
 	}
 
@@ -156,6 +154,37 @@ func (s *EndingScene) Update(dt float64) Scene {
 		s.updateSaveDone()
 	}
 	return s
+}
+
+func (s *EndingScene) updateSkipConfirm() {
+	if isMenuUpPressed() || isMenuDownPressed() {
+		s.skipConfirmIdx = 1 - s.skipConfirmIdx
+		s.game.Audio.PlaySEByKey("cursor")
+	}
+	if isEscapePressed() {
+		s.skipConfirm = false
+		s.game.Audio.PlaySEByKey("cancel")
+		return
+	}
+	tappedIdx, tappedOk := hitTestConfirmDialog(confirmImageOffsetX)
+	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skipConfirmIdx, s.game.Audio)
+	if !tappedOk && unrelatedTapOutsideRects(confirmDialogRect()) {
+		s.skipConfirm = false
+		s.game.Audio.PlaySEByKey("cancel")
+		return
+	}
+	if !isConfirmKeyPressed() && !tapped {
+		return
+	}
+	if s.skipConfirmIdx == 1 {
+		s.skipConfirm = false
+		s.game.Audio.PlaySEByKey("cancel")
+		return
+	}
+	s.game.Audio.PlaySEByKey("decide")
+	s.skipConfirm = false
+	s.pageIndex = len(s.pages)
+	s.enterAskSave()
 }
 
 func (s *EndingScene) enterAskSave() {
@@ -333,7 +362,7 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 	}
 
 	if s.phase == endingPhaseFadeIn || s.phase == endingPhaseHold || s.phase == endingPhaseFadeOut {
-		drawSkipHint(screen, s.game, s.skipHoldElapsed, endingSkipHoldSeconds)
+		drawSkipHint(screen, s.game)
 	}
 	if s.pageIndex >= len(s.pages) {
 		return
@@ -349,5 +378,10 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		op.PrimaryAlign = text.AlignCenter
 		op.ColorScale.ScaleWithColor(col)
 		text.Draw(screen, line, s.game.FontFace(creditFontSize), op)
+	}
+	if s.skipConfirm {
+		drawConfirmDialog(screen, s.game,
+			"エンディングをスキップしますか？\n※スタッフロールは表示されなくなります。",
+			s.skipConfirmIdx, confirmImageOffsetX)
 	}
 }

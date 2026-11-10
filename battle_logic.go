@@ -242,6 +242,13 @@ func (s *BattleScene) Update(dt float64) Scene {
 
 	s.gaugeColorAnimTimer += dt
 	s.updateEnemyDeath(dt)
+	for i := range s.enemies {
+		targetOffset := 0.0
+		if s.enemyIsActing && i == s.actingEnemySlot {
+			targetOffset = 100.0
+		}
+		s.enemies[i].AttackOffsetX += (targetOffset - s.enemies[i].AttackOffsetX) * (1.0 - math.Pow(0.001, dt))
+	}
 
 	if s.introActive {
 		s.introPhaseTimer += dt

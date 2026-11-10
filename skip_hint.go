@@ -23,16 +23,8 @@ func skipHintCenter(game *Game) (cx, cy float64) {
 	return
 }
 
-func drawSkipHint(screen *ebiten.Image, game *Game, holdElapsed, holdMax float64) {
+func drawSkipHint(screen *ebiten.Image, game *Game) {
 	cx, cy := skipHintCenter(game)
-	drawRingOutline(screen, cx, cy, skipHintRadius, color.RGBA{255, 255, 255, 90})
-	progress := 0.0
-	if holdMax > 0 {
-		progress = holdElapsed / holdMax
-	}
-	if progress > 0 {
-		drawProgressArc(screen, cx, cy, skipHintRadius, progress)
-	}
 	hintOp := &text.DrawOptions{}
 	hintOp.GeoM.Translate(cx, cy)
 	hintOp.PrimaryAlign = text.AlignCenter
@@ -66,25 +58,22 @@ func drawRingOutline(screen *ebiten.Image, cx, cy, radius float64, col color.Col
 	vector.StrokePath(screen, &ring, strokeOpts, drawOpts)
 }
 
-func drawProgressArc(screen *ebiten.Image, cx, cy, radius, progress float64) {
-	if progress > 1 {
-		progress = 1
-	}
-	var arc vector.Path
-	const segs = 40
-	steps := max(int(float64(segs)*progress), 1)
-	for i := 0; i <= steps; i++ {
-		ang := -math.Pi/2 + progress*2*math.Pi*float64(i)/float64(steps)
-		x := cx + radius*math.Cos(ang)
-		y := cy + radius*math.Sin(ang)
-		if i == 0 {
-			arc.MoveTo(float32(x), float32(y))
-		} else {
-			arc.LineTo(float32(x), float32(y))
+func isSkipHintJustPressed(game *Game) bool {
+	cx, cy := skipHintCenter(game)
+	x := cx - skipHintRadius - 8
+	y := cy - skipHintRadius
+	w := float64(gameWidth) - x
+	h := skipHintRadius * 2
+	touches, mouse := justPressedTouchAndMousePoints()
+	for _, p := range touches {
+		if p.inRect(x, y, w, h) {
+			return true
 		}
 	}
-	strokeOpts := &vector.StrokeOptions{Width: 3}
-	drawOpts := &vector.DrawPathOptions{AntiAlias: true}
-	drawOpts.ColorScale.ScaleWithColor(uiColorSelect)
-	vector.StrokePath(screen, &arc, strokeOpts, drawOpts)
+	for _, p := range mouse {
+		if p.inRect(x, y, w, h) {
+			return true
+		}
+	}
+	return false
 }

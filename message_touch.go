@@ -119,8 +119,8 @@ func isLogIconJustPressed(game *Game) bool {
 	return ctrlIconHit(game, 1, "ログ", touches, mouse)
 }
 
-func isSkipIconHeld(game *Game) bool {
-	touches, mouse := activeTouchAndMousePoints()
+func isSkipIconJustPressed(game *Game) bool {
+	touches, mouse := justPressedTouchAndMousePoints()
 	return ctrlIconHit(game, 2, "スキップ", touches, mouse)
 }
 
@@ -181,7 +181,7 @@ func drawKeyHintPC(screen *ebiten.Image, game *Game, cx, cy float64, label, key 
 	text.Draw(screen, key, game.FontFace(ctrlLabelFontSize), op)
 }
 
-func drawMessageControlPanel(screen *ebiten.Image, game *Game, autoOn bool, skipHoldElapsed, skipHoldMax float64) {
+func drawMessageControlPanel(screen *ebiten.Image, game *Game, autoOn bool) {
 	y := ctrlRowY()
 	autoX := ctrlIconXAt(0)
 	drawAutoIcon(screen, autoX, y, ctrlIconR, autoOn)
@@ -194,12 +194,6 @@ func drawMessageControlPanel(screen *ebiten.Image, game *Game, autoOn bool, skip
 	skipX := ctrlIconXAt(2)
 	drawSkipIcon(screen, skipX, y, ctrlIconR)
 	drawLabel(screen, game, skipX, y, "スキップ")
-
-	ringR := ctrlIconR + 2
-	if skipHoldMax > 0 && skipHoldElapsed > 0 {
-		drawRingOutline(screen, skipX, y, ringR, color.RGBA{255, 255, 255, 90})
-		drawProgressArc(screen, skipX, y, ringR, skipHoldElapsed/skipHoldMax)
-	}
 
 	if !game.MobileMode {
 		drawKeyHintPC(screen, game, autoX, y, "オート", "A")

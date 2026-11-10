@@ -440,16 +440,40 @@ func (m *MenuScene) updateHealTarget() {
 			return
 		}
 
+		healAmount := m.game.menuHealAmount(caster, data.PowerSingle)
+		if m.healTargetIndex == partySize {
+			healAmount = m.game.menuHealAmount(caster, data.PowerAll)
+		}
+		if !m.game.menuHealCanApply(m.healTargetIndex, healAmount) {
+			m.game.Audio.PlaySEByKey("error")
+			return
+		}
+
 		m.game.Audio.PlaySEByKey("heal")
 
 		m.game.PlayerMP[caster] -= cost
 		if m.healTargetIndex == partySize {
-			healAmount := m.game.menuHealAmount(caster, data.PowerAll)
 			for i := range partySize {
 				m.game.healPartyMember(i, healAmount)
 			}
 		} else {
-			m.game.healPartyMember(m.healTargetIndex, m.game.menuHealAmount(caster, data.PowerSingle))
+			m.game.healPartyMember(m.healTargetIndex, healAmount)
 		}
 	}
+}
+
+func (g *Game) menuHealCanApply(target, amount int) bool {
+	if amount <= 0 {
+		return false
+	}
+	if target == partySize {
+		for i := range partySize {
+			if g.PlayerHP[i] > 0 && g.PlayerHP[i] < g.PlayerMaxHP[i] {
+				return true
+			}
+		}
+		return false
+	}
+	return target >= 0 && target < partySize &&
+		g.PlayerHP[target] > 0 && g.PlayerHP[target] < g.PlayerMaxHP[target]
 }

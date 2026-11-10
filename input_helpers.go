@@ -86,10 +86,10 @@ func isEscapePressed() bool {
 		isTouchBackPressed()
 }
 
-func isSkipKeyDown() bool {
-	return ebiten.IsKeyPressed(ebiten.KeyControl) ||
-		ebiten.IsKeyPressed(ebiten.KeyControlLeft) ||
-		ebiten.IsKeyPressed(ebiten.KeyControlRight)
+func isSkipKeyPressed() bool {
+	return inpututil.IsKeyJustPressed(ebiten.KeyControl) ||
+		inpututil.IsKeyJustPressed(ebiten.KeyControlLeft) ||
+		inpututil.IsKeyJustPressed(ebiten.KeyControlRight)
 }
 
 func isAutoTogglePressed() bool {

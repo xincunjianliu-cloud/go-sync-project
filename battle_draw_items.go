@@ -81,10 +81,7 @@ func (s *BattleScene) drawItemTargetUI(screen *ebiten.Image) {
 			continue
 		}
 
-		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(centerX-16, centerY+20)
-		arrowOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, "▶", s.game.FontFace(15), arrowOp)
+		drawBattleTargetCursor(screen, centerX-16, centerY+20, s.game.FontFace(15))
 	}
 }
 

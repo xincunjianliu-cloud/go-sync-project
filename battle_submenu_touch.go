@@ -247,10 +247,9 @@ func (s *BattleScene) drawAllTargetBox(screen *ebiten.Image, r tapRect, selected
 		fillRect(screen, r.x+r.w-bw, r.y, bw, r.h, col)
 
 		labelW := text.Advance(label, face)
-		arrowOp := &text.DrawOptions{}
-		arrowOp.GeoM.Translate(centerX-labelW/2-text.Advance("▶ ", face), centerY-textInkCenterY("▶", face))
-		arrowOp.ColorScale.ScaleWithColor(col)
-		text.Draw(screen, "▶", face, arrowOp)
+		arrowX := centerX - labelW/2 - text.Advance("▶ ", face)
+		arrowY := centerY - textInkCenterY("▶", face)
+		drawBattleTargetCursor(screen, arrowX, arrowY, face)
 	}
 
 	op := &text.DrawOptions{}

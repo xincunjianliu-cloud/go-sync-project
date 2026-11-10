@@ -138,7 +138,10 @@ func (s *BattleScene) applyItemToTargetInBattle(def ItemDef, target int) bool {
 		s.PlayerDebuffs[target] = nil
 	}
 	if !applied {
-		return false
+		// In battle, an HP restorative can still be spent as an action even
+		// when the target is already at full HP. Field use remains effect-only.
+		return !def.Revive && s.game.PlayerHP[target] > 0 &&
+			(def.HealHP > 0 || def.HealHPPercent > 0)
 	}
 
 	if hpHealed > 0 {

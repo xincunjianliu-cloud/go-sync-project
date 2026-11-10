@@ -52,9 +52,9 @@ const (
 	hitStopStrong = 0.15
 )
 
-const hitFlashDuration = 0.25
+const hitFlashDuration = 0.30
 
-const spriteFlashDuration = 0.12
+const spriteFlashDuration = 0.16
 
 type pendingEnemyHit struct {
 	target int
@@ -428,6 +428,7 @@ type EnemyUnit struct {
 	DeathTimer    float64
 	DeathPhase    int
 	HitFlashTimer float64
+	AttackOffsetX float64
 }
 
 type BattleScene struct {

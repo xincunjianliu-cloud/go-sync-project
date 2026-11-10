@@ -20,7 +20,7 @@ const (
 	fadeTimeBossOut   = 1.5
 )
 
-// 雑魚敵エンカウント時、戦闘シーンへ切り替わる直前にフィールド画面を
+// エンカウント時、戦闘シーンへ切り替わる直前にフィールド画面を
 // 静止画として捉え、カメラが回転しながら敵へ迫っていくような演出を行う。
 const (
 	encounterEffectDuration = 0.5
@@ -345,43 +345,44 @@ type FieldScene struct {
 	// tileImgs はGID(反転フラグを除く)ごとのタイル画像。使われていないGIDはnil。
 	tileImgs []*ebiten.Image
 	// tileAnimMs はタイルアニメーションの時計(ミリ秒)。
-	tileAnimMs         float64
-	collisions         []CollisionRect
-	collisionPolygons  []CollisionPolygon
-	minimapImg         *ebiten.Image
-	minimapBuild       chan []byte
-	playerCfg          FieldPlayerConfig
-	px, py             float64
-	dir                int
-	animCount          int
-	enemies            []*EnemyField
-	currentMap         string
-	mapBGM             string
-	msgBackground      string
-	msgTexts           []EventCommand
-	msgIndex           int
-	isMsgActive        bool
-	mapSpeechBubble    bool
-	msgSkipHoldElapsed float64
-	autoMode           bool
-	autoWaitElapsed    float64
-	msgLog             []EventCommand
-	isLogActive        bool
-	logScrollOffset    float64
-	logCursorIndex     int
-	logDrag            dragScrollState
-	logScrollBarDrag   dragScrollState
-	isMenuActive       bool
-	menuIndex          int
-	walkCooldown       float64
-	safetyDistance     float64
-	encounterWeight    float64
+	tileAnimMs        float64
+	collisions        []CollisionRect
+	collisionPolygons []CollisionPolygon
+	minimapImg        *ebiten.Image
+	minimapBuild      chan []byte
+	playerCfg         FieldPlayerConfig
+	px, py            float64
+	dir               int
+	animCount         int
+	enemies           []*EnemyField
+	currentMap        string
+	mapBGM            string
+	msgBackground     string
+	msgTexts          []EventCommand
+	msgIndex          int
+	isMsgActive       bool
+	mapSpeechBubble   bool
+	msgSkipConfirm    bool
+	msgSkipConfirmIdx int
+	autoMode          bool
+	autoWaitElapsed   float64
+	msgLog            []EventCommand
+	isLogActive       bool
+	logScrollOffset   float64
+	logCursorIndex    int
+	logDrag           dragScrollState
+	logScrollBarDrag  dragScrollState
+	isMenuActive      bool
+	menuIndex         int
+	walkCooldown      float64
+	safetyDistance    float64
+	encounterWeight   float64
 
 	encounterEffectActive    bool
 	encounterEffectTimer     float64
 	encounterSnapshot        *ebiten.Image
 	encounterSnapshotPending bool
-	pendingBattleScene       *BattleScene
+	pendingBattleStart       func()
 	isCutscene               bool
 	cutsceneMessage          string
 	cutsceneHasBossID        bool

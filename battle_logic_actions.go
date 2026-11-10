@@ -217,6 +217,7 @@ func (s *BattleScene) rollEnemyAction() {
 		return
 	}
 
+	s.enemies[s.actingEnemySlot].HitFlashTimer = spriteFlashDuration
 	skills := s.enemies[s.actingEnemySlot].Skills
 	if len(skills) > 0 && rand.Intn(100) < EnemySkillChance {
 		skill := skills[rand.Intn(len(skills))]
@@ -345,10 +346,10 @@ func (s *BattleScene) applyEnemyPendingHits() {
 			Timer: 0.0,
 		})
 
+		s.playerFlashTimer[target] = spriteFlashDuration
 		if s.game.PlayerHP[target] > 0 {
 			s.playerPose[target] = poseDamage
 			s.playerAnimTimer[target] = 0.0
-			s.playerFlashTimer[target] = spriteFlashDuration
 		} else {
 			s.game.PlayerHP[target] = 0
 			s.coverCount[target] = 0

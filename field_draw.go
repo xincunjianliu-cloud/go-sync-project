@@ -51,7 +51,13 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 	}
 
 	if s.isMsgActive && !s.mapSpeechBubble {
-		drawMessageControlPanel(screen, s.game, s.autoMode, s.msgSkipHoldElapsed, endingSkipHoldSeconds)
+		drawMessageControlPanel(screen, s.game, s.autoMode)
+	}
+
+	if s.msgSkipConfirm {
+		drawConfirmDialog(screen, s.game,
+			"テキストをスキップしますか？\n※未読の会話もスキップされます。",
+			s.msgSkipConfirmIdx, confirmImageOffsetX)
 	}
 
 	s.drawMapNameBanner(screen)
@@ -81,9 +87,6 @@ func (s *FieldScene) Draw(screen *ebiten.Image) {
 
 	if s.isItemGetActive {
 		s.drawItemGetPopup(screen)
-		if !s.itemGetAutoCloseOnly {
-			drawBackButton(screen, s.game)
-		}
 	}
 
 	if s.isLogActive {
@@ -152,7 +155,7 @@ func (s *FieldScene) drawWorld(screen *ebiten.Image) {
 	s.drawDarkness(screen, camX, camY)
 }
 
-// drawEncounterEffect は雑魚敵エンカウント発生時、startEncounterEffectで
+// drawEncounterEffect はエンカウント発生時、startEncounterEffectで
 // 捕えたフィールドの静止画をカメラが回転しながらズームインしていくように
 // 描画する。プレイヤーは画面中央に固定されているため、画面中心を軸に
 // 回転・拡大するだけで「カメラが回り込みながら迫る」演出になる。
@@ -721,6 +724,12 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 		boxW, boxH  = 420.0, 130.0
 		borderWidth = 3.0
 	)
+	labelFontSize := 20.0
+	subLabelFontSize := 15.0
+	if !s.itemGetPlainMessage {
+		labelFontSize = 26.0
+		subLabelFontSize = 18.0
+	}
 
 	bx := float64(gameWidth)/2 - boxW/2
 	by := float64(gameHeight)/2 - boxH/2
@@ -729,11 +738,12 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 	if !s.itemGetPlainMessage {
 		label += "を手に入れた！"
 	}
-	textW, textH := text.Measure(label, s.game.FontFace(20), 0)
+	labelFace := s.game.FontFace(labelFontSize)
+	textW, textH := text.Measure(label, labelFace, 0)
 
 	var subW, subH float64
 	if s.itemGetSubLabel != "" {
-		subW, subH = text.Measure(s.itemGetSubLabel, s.game.FontFace(15), 0)
+		subW, subH = text.Measure(s.itemGetSubLabel, s.game.FontFace(subLabelFontSize), 0)
 	}
 
 	fillRect(screen, bx, by, boxW, boxH, uiColorText)
@@ -748,13 +758,13 @@ func (s *FieldScene) drawItemGetPopup(screen *ebiten.Image) {
 	labelOp := &text.DrawOptions{}
 	labelOp.GeoM.Translate(bx+boxW/2-textW/2, topY)
 	labelOp.ColorScale.ScaleWithColor(uiColorText)
-	text.Draw(screen, label, s.game.FontFace(20), labelOp)
+	text.Draw(screen, label, labelFace, labelOp)
 
 	if s.itemGetSubLabel != "" {
 		subOp := &text.DrawOptions{}
 		subOp.GeoM.Translate(bx+boxW/2-subW/2, topY+textH+6)
 		subOp.ColorScale.ScaleWithColor(uiColorText)
-		text.Draw(screen, s.itemGetSubLabel, s.game.FontFace(15), subOp)
+		text.Draw(screen, s.itemGetSubLabel, s.game.FontFace(subLabelFontSize), subOp)
 	}
 }
 
