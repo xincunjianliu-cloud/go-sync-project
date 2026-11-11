@@ -3,7 +3,7 @@ package main
 func (m *MenuScene) hitTestItemListRows(rowCount int) (int, bool) {
 	rects := make([]tapRect, rowCount)
 	for i := range rowCount {
-		y := skillRowStartY + float64(i)*itemRowGapY
+		y := itemRowStartY + float64(i)*itemRowGapY
 		rects[i] = tapRect{
 			x: skillNameX - 4,
 			y: y - itemRowGapY/2,
@@ -14,13 +14,35 @@ func (m *MenuScene) hitTestItemListRows(rowCount int) (int, bool) {
 	return hitTestTapRects(rects)
 }
 
-func (m *MenuScene) usableFieldItems() []InventorySlot {
-	return filterInventory(m.game.Inventory, func(def ItemDef) bool { return def.UsableInField })
+func (m *MenuScene) menuItems() []InventorySlot {
+	return filterInventory(m.game.Inventory, func(def ItemDef) bool {
+		return def.UsableInField || def.UsableInBattle
+	})
 }
 
-func (m *MenuScene) clampItemListIndex(n int) {
-	if m.itemListIndex >= n {
-		m.itemListIndex = n - 1
+func itemUsableInField(slot InventorySlot) bool {
+	def, ok := GetItemDef(slot.ItemID)
+	return ok && def.UsableInField
+}
+
+func nextItemListIndex(itemCount, from, dir int) (int, bool) {
+	if itemCount <= 0 || dir == 0 {
+		return 0, false
+	}
+	idx := (from + dir) % itemCount
+	if idx < 0 {
+		idx += itemCount
+	}
+	return idx, true
+}
+
+func (m *MenuScene) clampItemListIndex(itemCount int) {
+	if itemCount <= 0 {
+		m.itemListIndex = 0
+		return
+	}
+	if m.itemListIndex >= itemCount {
+		m.itemListIndex = itemCount - 1
 	}
 	if m.itemListIndex < 0 {
 		m.itemListIndex = 0
@@ -34,7 +56,7 @@ func (m *MenuScene) updateItemList() {
 		return
 	}
 
-	items := m.usableFieldItems()
+	items := m.menuItems()
 	if len(items) == 0 {
 		if isConfirmKeyPressed() {
 			m.game.Audio.PlaySEByKey("error")
@@ -48,12 +70,16 @@ func (m *MenuScene) updateItemList() {
 	m.clampItemListIndex(len(items))
 
 	if isMenuDownRepeat() {
-		m.itemListIndex = (m.itemListIndex + 1) % len(items)
-		m.game.Audio.PlaySEByKey("cursor")
+		if idx, ok := nextItemListIndex(len(items), m.itemListIndex, 1); ok && idx != m.itemListIndex {
+			m.itemListIndex = idx
+			m.game.Audio.PlaySEByKey("cursor")
+		}
 	}
 	if isMenuUpRepeat() {
-		m.itemListIndex = (m.itemListIndex - 1 + len(items)) % len(items)
-		m.game.Audio.PlaySEByKey("cursor")
+		if idx, ok := nextItemListIndex(len(items), m.itemListIndex, -1); ok && idx != m.itemListIndex {
+			m.itemListIndex = idx
+			m.game.Audio.PlaySEByKey("cursor")
+		}
 	}
 	tapped := false
 	if idx, ok := m.hitTestItemListRows(len(items)); ok {
@@ -71,6 +97,13 @@ func (m *MenuScene) updateItemList() {
 		return
 	}
 
+	if !itemUsableInField(items[m.itemListIndex]) {
+		if tapped && !isConfirmKeyPressed() {
+			return
+		}
+		m.game.Audio.PlaySEByKey("error")
+		return
+	}
 	m.game.Audio.PlaySEByKey("decide")
 	m.beginItemTarget(items[m.itemListIndex].ItemID)
 }
@@ -110,9 +143,12 @@ func (m *MenuScene) updateItemTarget() {
 	allowSingle, allowAll := itemTargetModes(def)
 	def.CureDebuff = false
 
-	items := m.usableFieldItems()
+	items := m.menuItems()
 	if idx, ok := m.hitTestItemListRows(len(items)); ok {
 		if items[idx].ItemID != m.pendingItemID {
+			if !itemUsableInField(items[idx]) {
+				return
+			}
 			m.game.Audio.PlaySEByKey("decide")
 			m.itemListIndex = idx
 			m.beginItemTarget(items[idx].ItemID)
@@ -175,7 +211,7 @@ func (m *MenuScene) updateItemTarget() {
 
 	if m.game.ItemCount(m.pendingItemID) <= 0 {
 		m.pendingItemID = ""
-		m.clampItemListIndex(len(m.usableFieldItems()))
+		m.clampItemListIndex(len(m.menuItems()))
 		m.menuState = menuStateItemList
 	}
 }

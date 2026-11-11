@@ -61,8 +61,8 @@ func (m *MenuScene) drawAutoHealButton(screen *ebiten.Image, statusX float64) {
 }
 
 // menuHealAmount はメニューで回復スキルを使ったときの回復量。
-func (g *Game) menuHealAmount(caster, power int) int {
-	amount := max(int(float64(g.PlayerMagicAtk[caster])*float64(power)/100.0*10), 1)
+func (g *Game) menuHealAmount(caster int, multiplier float64) int {
+	amount := max(int(float64(g.PlayerMagicAtk[caster])*multiplier), 1)
 	return amount
 }
 
@@ -123,13 +123,13 @@ func (g *Game) bestAutoHealCast() (autoHealCast, bool) {
 				if !data.IsHeal || data.MPCost > g.PlayerMP[caster] {
 					continue
 				}
-				if (data.Target == TargetSingle || data.Target == TargetBoth) && data.PowerSingle > 0 {
-					amount := g.menuHealAmount(caster, data.PowerSingle)
+				if (data.Target == TargetSingle || data.Target == TargetBoth) && data.HealMultiplierSingle > 0 {
+					amount := g.menuHealAmount(caster, data.HealMultiplierSingle)
 					consider(autoHealCast{caster: caster, cost: data.MPCost, amount: amount,
 						target: neediest, gain: min(amount, missing(neediest))})
 				}
-				if (data.Target == TargetAll || data.Target == TargetBoth) && data.PowerAll > 0 {
-					amount := g.menuHealAmount(caster, data.PowerAll)
+				if (data.Target == TargetAll || data.Target == TargetBoth) && data.HealMultiplierAll > 0 {
+					amount := g.menuHealAmount(caster, data.HealMultiplierAll)
 					gain := 0
 					for i := range partySize {
 						gain += min(amount, missing(i))

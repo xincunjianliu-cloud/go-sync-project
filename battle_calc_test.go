@@ -27,3 +27,20 @@ func TestEnemyDamageDoesNotCrit(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillHealUsesMagicAttackMultiplier(t *testing.T) {
+	g := &Game{}
+	g.PlayerMagicAtk[0] = 100
+	g.PlayerMagicAtk[1] = 100
+	s := &BattleScene{game: g}
+
+	if got := s.rollSkillHeal(0, 4, 1, false); got != 50 {
+		t.Errorf("ヒールウィンド single heal = %d, want 50", got)
+	}
+	if got := s.rollSkillHeal(0, 4, 1, true); got != 30 {
+		t.Errorf("ヒールウィンド all heal = %d, want 30", got)
+	}
+	if got := s.rollSkillHeal(1, 0, 1, false); got != 70 {
+		t.Errorf("スーパーヒーリング single heal = %d, want 70", got)
+	}
+}

@@ -280,12 +280,12 @@ func (s *BattleScene) rollSkillHeal(actor int, skillIdx int, lv int, isAll bool)
 		return 0
 	}
 	data := skills[skillIdx].Levels[lv-1]
-	power := data.PowerSingle
+	multiplier := data.HealMultiplierSingle
 	if isAll {
-		power = data.PowerAll
+		multiplier = data.HealMultiplierAll
 	}
 	magicAtk := float64(s.effectiveMagicAtk(actor))
-	heal := max(int(magicAtk*float64(power)/100.0*10), 1)
+	heal := max(int(magicAtk*multiplier), 1)
 	return heal
 }
 

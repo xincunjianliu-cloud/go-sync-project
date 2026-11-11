@@ -8,13 +8,14 @@ import (
 )
 
 const (
-	itemRowGapY       = 40.0
-	itemCountFontSize = 28.0
+	itemRowStartY     = 42.0
+	itemRowGapY       = 37.5
+	itemCountFontSize = 25.0
 	itemCountX        = 922.0
 )
 
 func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
-	items := m.usableFieldItems()
+	items := m.menuItems()
 	if len(items) == 0 {
 		return
 	}
@@ -24,7 +25,7 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 		if !ok {
 			continue
 		}
-		rowCenterY := skillRowStartY + float64(i)*itemRowGapY
+		rowCenterY := itemRowStartY + float64(i)*itemRowGapY
 
 		selected := false
 		switch m.menuState {
@@ -35,7 +36,9 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 		}
 
 		nameCol := uiColorText
-		if selected {
+		if !def.UsableInField {
+			nameCol = uiColorDisabled
+		} else if selected {
 			nameCol = uiColorSelect
 		}
 

@@ -410,7 +410,7 @@ func (s *BattleScene) checkBattleEnd() bool {
 				s.drawPlayerMaxEXP[i] = s.game.PlayerNextEXP[i]
 			}
 
-			totalExp := s.totalEnemyExp()
+			totalExp := s.totalBattleExp()
 			for i := range partySize {
 				if s.game.PlayerLv[i] < maxPlayerLevel {
 					s.game.PlayerEXP[i] += totalExp

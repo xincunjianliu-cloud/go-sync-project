@@ -13,6 +13,14 @@ func newAutoHealTestGame() *Game {
 	return g
 }
 
+func TestMenuHealAmountUsesMagicAttackMultiplier(t *testing.T) {
+	g := &Game{}
+	g.PlayerMagicAtk[0] = 100
+	if got := g.menuHealAmount(0, 0.5); got != 50 {
+		t.Fatalf("menuHealAmount = %d, want 50", got)
+	}
+}
+
 func TestAutoHealPartyHealsLivingMembersToFull(t *testing.T) {
 	g := newAutoHealTestGame()
 	g.PlayerHP = [4]int{50, 100, 0, 90}

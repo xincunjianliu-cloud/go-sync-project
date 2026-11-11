@@ -99,11 +99,31 @@ func (s *BattleScene) battleSubRowRect(row int) tapRect {
 }
 
 func (s *BattleScene) hitTestBattleSubRows(rowCount int) (int, bool) {
+	return s.hitTestBattleSubRowsFrom(0, rowCount)
+}
+
+func (s *BattleScene) hitTestBattleSubRowsFrom(firstRow, rowCount int) (int, bool) {
 	rects := make([]tapRect, rowCount)
 	for i := range rowCount {
-		rects[i] = s.battleSubRowRect(i)
+		rects[i] = s.battleSubRowRect(firstRow + i)
 	}
-	return hitTestTapRects(rects)
+	if row, ok := hitTestTapRects(rects); ok {
+		return firstRow + row, true
+	}
+	return 0, false
+}
+
+func (s *BattleScene) battleItemVisibleRange(itemCount int) (start, end int) {
+	_, panelTop, _, panelHeight := s.battleSubPanelOrigin()
+	panelBottom := min(panelTop+panelHeight, float64(gameHeight))
+	visibleRows := visibleBattleItemRowCount(itemCount, panelTop, panelBottom)
+	start = max(0, min(s.itemIndex-visibleRows+1, itemCount-visibleRows))
+	return start, start + visibleRows
+}
+
+func visibleBattleItemRowCount(itemCount int, panelTop, panelBottom float64) int {
+	visibleRows := max(1, int((panelBottom-panelTop-battleSubLabelOffsetY-battleSubRowHeight/2)/battleSubRowHeight)+1)
+	return min(visibleRows, itemCount)
 }
 
 func (s *BattleScene) skillLevelArrowRects(row, lv int, face text.Face) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
@@ -170,8 +190,8 @@ const (
 	// enemyAllTargetRowGapY below the lowest enemy of the battle's initial
 	// formation (dead enemies included), so the gap looks the same for 2-4
 	// enemies and the box never moves mid-battle.
-	allTargetRowW            = 120.0
-	allTargetRowH            = 24.0
+	allTargetRowW = 120.0
+	allTargetRowH = 24.0
 	// Slightly nudge the "全体" target row upward so it sits just under the
 	// party/enemy portraits instead of feeling too low.
 	allyAllTargetRowY        = 398.0

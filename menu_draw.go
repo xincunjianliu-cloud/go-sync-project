@@ -395,7 +395,7 @@ const (
 	skillNameX        = 480.0
 	skillRowStartY    = 90.0
 	skillRowGapY      = 65.0
-	skillNameFontSize = 25.0
+	skillNameFontSize = cmdListFontSize
 
 	skillLevelStartX       = 710.0
 	skillLevelGapX         = 90.0

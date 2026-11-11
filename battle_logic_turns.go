@@ -110,7 +110,7 @@ func (s *BattleScene) updateRewind(dt float64) {
 }
 
 func (s *BattleScene) fleeSuccessRate() int {
-	if strings.HasPrefix(s.enemyType, "boss_") {
+	if s.isBossBattle() {
 		return 0
 	}
 	alive := s.aliveEnemyIndices()
@@ -130,6 +130,10 @@ func (s *BattleScene) fleeSuccessRate() int {
 		return 100
 	}
 	return rate
+}
+
+func (s *BattleScene) isBossBattle() bool {
+	return strings.HasPrefix(s.enemyType, "boss_")
 }
 
 const atbBaseSpeed = 15.0
@@ -275,6 +279,10 @@ func (s *BattleScene) actorReturnBonus(actor int) float64 {
 func (s *BattleScene) resetPlayerGaugeTo(actor int, pos float64) {
 	if actor < 0 || actor >= partySize {
 		return
+	}
+	if s.nextActionCTReductions[actor] > 0 {
+		pos *= 0.5
+		s.nextActionCTReductions[actor]--
 	}
 	s.placeOnTimeline(actor, pos+s.actorReturnBonus(actor))
 }

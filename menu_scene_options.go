@@ -505,7 +505,7 @@ func (m *MenuScene) previewRevealCount() int {
 }
 
 var skillShortDescriptions = map[string]string{
-	"回復": "対象を回復します",
+	"ヒールウィンド": "対象のHPを回復します",
 }
 
 func skillShortDescription(skillName string) string {

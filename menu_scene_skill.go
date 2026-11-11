@@ -440,9 +440,9 @@ func (m *MenuScene) updateHealTarget() {
 			return
 		}
 
-		healAmount := m.game.menuHealAmount(caster, data.PowerSingle)
+		healAmount := m.game.menuHealAmount(caster, data.HealMultiplierSingle)
 		if m.healTargetIndex == partySize {
-			healAmount = m.game.menuHealAmount(caster, data.PowerAll)
+			healAmount = m.game.menuHealAmount(caster, data.HealMultiplierAll)
 		}
 		if !m.game.menuHealCanApply(m.healTargetIndex, healAmount) {
 			m.game.Audio.PlaySEByKey("error")

@@ -674,7 +674,7 @@ func (m *MenuScene) drawMenuDescription(screen *ebiten.Image) {
 		}
 
 	case menuStateItemList:
-		items := m.usableFieldItems()
+		items := m.menuItems()
 		if len(items) == 0 {
 			desc = "メニューから使えるアイテムを持っていません"
 			break

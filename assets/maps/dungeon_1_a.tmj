@@ -1,4 +1,5 @@
-{ "compressionlevel":-1,
+{ "class":"\u30de\u30c3\u30d7\u8a2d\u5b9a",
+ "compressionlevel":-1,
  "height":100,
  "infinite":false,
  "layers":[
@@ -1416,6 +1417,12 @@
  "nextlayerid":16,
  "nextobjectid":24,
  "orientation":"orthogonal",
+ "properties":[
+        {
+         "name":"\u5730\u540d",
+         "type":"string",
+         "value":"\u5eca\u4e0b"
+        }],
  "renderorder":"right-down",
  "tiledversion":"1.12.1",
  "tileheight":32,

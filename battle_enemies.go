@@ -48,6 +48,14 @@ func (s *BattleScene) totalEnemyExp() int {
 	return total
 }
 
+func (s *BattleScene) totalBattleExp() int {
+	total := s.totalEnemyExp()
+	if s.expBoostActive && !s.isBossBattle() {
+		total *= 2
+	}
+	return total
+}
+
 func (s *BattleScene) totalEnemySP() int {
 	total := 0
 	for i := range s.enemies {

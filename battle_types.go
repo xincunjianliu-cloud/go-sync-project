@@ -482,7 +482,9 @@ type BattleScene struct {
 	battleLog       string
 	gameOverIdx     int
 
-	fleeSucceeded bool
+	fleeSucceeded          bool
+	expBoostActive         bool
+	nextActionCTReductions [partySize]int
 
 	playerPose           [partySize]int
 	playerAnimTimer      [partySize]float64

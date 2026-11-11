@@ -1,7 +1,12 @@
 package main
 
 func (s *BattleScene) battleUsableItems() []InventorySlot {
-	return filterInventory(s.game.Inventory, func(def ItemDef) bool { return def.UsableInBattle })
+	return filterInventory(s.game.Inventory, func(def ItemDef) bool {
+		if !def.UsableInBattle {
+			return false
+		}
+		return !s.isBossBattle() || (!def.DoubleEXP && !def.GuaranteedEscape)
+	})
 }
 
 func (s *BattleScene) hasAnyBattleUsableItem() bool {
@@ -35,7 +40,8 @@ func (s *BattleScene) updateItemMenu() {
 		s.itemIndex = (s.itemIndex - 1 + len(items)) % len(items)
 		s.game.Audio.PlaySEByKey("cursor")
 	}
-	tappedIdx, tappedOk := s.hitTestBattleSubRows(len(items))
+	firstVisible, lastVisible := s.battleItemVisibleRange(len(items))
+	tappedIdx, tappedOk := s.hitTestBattleSubRowsFrom(firstVisible, lastVisible-firstVisible)
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemIndex, s.game.Audio)
 	if isEscapePressed() || (!tappedOk && s.isTapOutsideBattleSubPanel()) {
 		s.game.Audio.PlaySEByKey("cancel")
@@ -53,6 +59,14 @@ func (s *BattleScene) updateItemMenu() {
 	s.game.Audio.PlaySEByKey("decide")
 	s.pendingItemID = def.ID
 	s.itemTargetIndex = 0
+	if def.Target == TargetOther {
+		s.useBattleItemWithoutTarget(def)
+		s.pendingItemID = ""
+		return
+	}
+	if def.Target == TargetAll {
+		s.itemTargetIndex = partySize
+	}
 	s.battlePhase = phaseItemTarget
 }
 
@@ -69,22 +83,28 @@ func (s *BattleScene) updateItemTargetSelect() {
 		s.battlePhase = phaseItemMenu
 		return
 	}
-	allowAll := def.Target == TargetAll || def.Target == TargetBoth
+	allowSingle, allowAll := itemTargetModes(def)
 
 	cycleLen := partySize
-	if allowAll {
+	if allowSingle && allowAll {
 		cycleLen = partySize + 1
+	} else if !allowSingle {
+		cycleLen = 1
+		s.itemTargetIndex = partySize
 	}
-	if isMenuUpPressed() {
+	if allowSingle && isMenuUpPressed() {
 		s.itemTargetIndex = (s.itemTargetIndex - 1 + cycleLen) % cycleLen
 		s.game.Audio.PlaySEByKey("cursor")
 	}
-	if isMenuDownPressed() {
+	if allowSingle && isMenuDownPressed() {
 		s.itemTargetIndex = (s.itemTargetIndex + 1) % cycleLen
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 
 	tappedIdx, tappedOk := s.hitTestItemTargets(allowAll)
+	if tappedOk && !allowSingle && tappedIdx != partySize {
+		tappedOk = false
+	}
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemTargetIndex, s.game.Audio)
 
 	hadTouch := len(justPressedTouchPoints()) > 0
@@ -99,6 +119,7 @@ func (s *BattleScene) updateItemTargetSelect() {
 	}
 
 	used := false
+	ctReductionTarget := -1
 	if s.itemTargetIndex == partySize {
 		for i := range partySize {
 			if s.applyItemToTargetInBattle(def, i) {
@@ -113,6 +134,9 @@ func (s *BattleScene) updateItemTargetSelect() {
 		}
 		if s.applyItemToTargetInBattle(def, target) {
 			used = true
+			if def.NextActionCTReduction > 0 {
+				ctReductionTarget = target
+			}
 		}
 	}
 
@@ -122,31 +146,41 @@ func (s *BattleScene) updateItemTargetSelect() {
 	}
 
 	s.game.Audio.PlaySEByKey("decide")
-	s.game.ConsumeItem(s.pendingItemID, 1)
-	s.battleLog = def.Name
-	s.battleLogTimer = battleLogDuration
+	s.finishUsingBattleItem(def, ctReductionTarget)
 	s.pendingItemID = ""
-	s.finishPlayerTurn(itemUseReturnPosition)
 }
 
 func (s *BattleScene) applyItemToTargetInBattle(def ItemDef, target int) bool {
 	if target < 0 || target >= partySize {
 		return false
 	}
-	hpHealed, mpHealed, applied := applyItemEffect(s.game, def, target)
+	if def.DoubleEXP {
+		if s.isBossBattle() {
+			return false
+		}
+		s.expBoostActive = true
+		return true
+	}
+	if def.NextActionCTReduction > 0 {
+		return s.game.PlayerHP[target] > 0
+	}
+	_, mpHealed, applied := applyItemEffect(s.game, def, target)
 	if def.CureDebuff {
 		s.PlayerDebuffs[target] = nil
 	}
 	if !applied {
 		// In battle, an HP restorative can still be spent as an action even
 		// when the target is already at full HP. Field use remains effect-only.
-		return !def.Revive && s.game.PlayerHP[target] > 0 &&
-			(def.HealHP > 0 || def.HealHPPercent > 0)
+		if def.Revive || s.game.PlayerHP[target] <= 0 ||
+			(def.HealHP <= 0 && def.HealHPPercent <= 0) {
+			return false
+		}
 	}
 
-	if hpHealed > 0 {
+	displayHPHeal := def.HealHP + s.game.PlayerMaxHP[target]*def.HealHPPercent/100
+	if displayHPHeal > 0 {
 		s.spawnDamagePop(DamagePop{
-			Value:  hpHealed,
+			Value:  displayHPHeal,
 			X:      s.partyScreenX[target] + spriteFrameW/2,
 			Y:      s.partyScreenY[target] - partyDamagePopOffsetY,
 			Vy:     -45.0,
@@ -166,4 +200,32 @@ func (s *BattleScene) applyItemToTargetInBattle(def ItemDef, target int) bool {
 		})
 	}
 	return true
+}
+
+func (s *BattleScene) useBattleItemWithoutTarget(def ItemDef) {
+	if def.GuaranteedEscape {
+		if s.isBossBattle() {
+			s.game.Audio.PlaySEByKey("error")
+			s.battlePhase = phaseItemMenu
+			return
+		}
+		s.game.ConsumeItem(def.ID, 1)
+		s.fleeSucceeded = true
+		s.battleLog = "逃げきれた！"
+		s.battleLogTimer = 1.5
+		s.battlePhase = phaseMessage
+		return
+	}
+	s.finishUsingBattleItem(def, -1)
+}
+
+func (s *BattleScene) finishUsingBattleItem(def ItemDef, ctReductionTarget int) {
+	s.game.ConsumeItem(def.ID, 1)
+	s.addGaugePoint(def.GaugePoint)
+	s.battleLog = def.Name
+	s.battleLogTimer = battleLogDuration
+	s.finishPlayerTurn(def.ReturnPosition)
+	if ctReductionTarget >= 0 && ctReductionTarget < partySize {
+		s.nextActionCTReductions[ctReductionTarget] += def.NextActionCTReduction
+	}
 }

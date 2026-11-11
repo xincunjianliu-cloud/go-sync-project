@@ -124,7 +124,7 @@ func (s *BattleScene) drawResultPanel(screen *ebiten.Image) {
 	expValueOp.GeoM.Translate(resultExpValueX, resultExpY)
 	expValueOp.ColorScale.ScaleWithColor(uiColorText)
 	expValueOp.ColorScale.ScaleAlpha(panelAlpha)
-	text.Draw(screen, fmt.Sprintf("%d", s.totalEnemyExp()), s.game.FontFace(resultExpFontSize), expValueOp)
+	text.Draw(screen, fmt.Sprintf("%d", s.totalBattleExp()), s.game.FontFace(resultExpFontSize), expValueOp)
 
 	spLabelOp := &text.DrawOptions{}
 	spLabelOp.GeoM.Translate(resultSpLabelX, resultSpY)

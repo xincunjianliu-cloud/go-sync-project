@@ -138,7 +138,7 @@ func TestLegacySkillLevelsFollowSkillNames(t *testing.T) {
 			old[c][j] = 1
 		}
 	}
-	old[0][3] = 3 // 旧並びの4番目＝回復
+	old[0][3] = 3 // 旧並びの4番目＝ヒールウィンド
 	old[1][1] = 2 // 旧並びの2番目＝妖艶の舞
 
 	got := skillLevelsFromNames(skillLevelsByName(old, legacySkillOrderOf))
@@ -146,7 +146,7 @@ func TestLegacySkillLevelsFollowSkillNames(t *testing.T) {
 		for j, sk := range characterSkillSets[c] {
 			want := 1
 			switch sk.Name {
-			case "回復":
+			case "ヒールウィンド":
 				want = 3
 			case "妖艶の舞":
 				want = 2
@@ -161,6 +161,58 @@ func TestLegacySkillLevelsFollowSkillNames(t *testing.T) {
 	back := skillLevelsFromNames(skillLevelsByName(got, currentSkillOrder))
 	if back != got {
 		t.Errorf("round trip changed levels: %v -> %v", got, back)
+	}
+}
+
+func TestLegacySkillNameAliases(t *testing.T) {
+	var byName [partySize]map[string]int
+	for c := range partySize {
+		byName[c] = map[string]int{}
+	}
+	byName[0]["回復"] = 3
+	byName[1]["レイズ"] = 2
+	byName[2]["ねこキック"] = 3
+
+	got := skillLevelsFromNames(byName)
+	for _, tc := range []struct {
+		charIdx, skillIdx, want int
+	}{
+		{0, 4, 3}, // ヒールウィンド
+		{1, 1, 2}, // 再起の光
+		{2, 3, 3}, // 黒蹴爆裂
+	} {
+		if got[tc.charIdx][tc.skillIdx] != tc.want {
+			t.Errorf("char %d skill %d level = %d, want %d", tc.charIdx, tc.skillIdx, got[tc.charIdx][tc.skillIdx], tc.want)
+		}
+	}
+}
+
+func TestSkillDesignSpecifics(t *testing.T) {
+	smash := Player1Skills[0].Levels
+	if smash[1].Knockback != 7 || smash[1].KnockbackPerTG != 2 ||
+		smash[2].Knockback != 20 || smash[2].KnockbackPerTG != 4 {
+		t.Errorf("smash knockback = %+v / %+v", smash[1], smash[2])
+	}
+	circle := Player1Skills[1].Levels[2]
+	if circle.TGPowerLevel != 5 || circle.TGPowerAll != 300 {
+		t.Errorf("crash circle TG power = %d/%d, want 5/300", circle.TGPowerLevel, circle.TGPowerAll)
+	}
+	heal := Player1Skills[4].Levels
+	if heal[0].HealMultiplierSingle != 0.5 || heal[0].HealMultiplierAll != 0.3 ||
+		heal[2].HealMultiplierSingle != 2 || heal[2].HealMultiplierAll != 1.5 {
+		t.Errorf("heal wind multipliers = %+v", heal)
+	}
+	if got := Player2Skills[1].Levels[2].ReviveHPPercent; got != 20 {
+		t.Errorf("全体蘇生HP = %d%%, want 20%%", got)
+	}
+	if got := Player2Skills[4].Levels[0].PowerAll; got != 0 {
+		t.Errorf("フィナーレソング damage power = %d, want 0", got)
+	}
+	if got := Player3Skills[4].Levels[2].StatBonus.HP; got != 40 {
+		t.Errorf("守りの祈りLv3 HP bonus = %d, want 40", got)
+	}
+	if !Player4Skills[0].Levels[2].Physical {
+		t.Error("フレイムアックスLv3 must remain physical")
 	}
 }
 

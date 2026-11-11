@@ -31,7 +31,9 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 		return
 	}
 
-	for i, slot := range items {
+	firstVisible, lastVisible := s.battleItemVisibleRange(len(items))
+	for i := firstVisible; i < lastVisible; i++ {
+		slot := items[i]
 		def, ok := GetItemDef(slot.ItemID)
 		if !ok {
 			continue
@@ -44,7 +46,7 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 
 		itemFace := s.game.FontFace(18)
 		baseX := battleSubPanelTextLeft(windowX)
-		baseY := windowY + battleSubLabelOffsetY + float64(i)*battleSubRowHeight
+		baseY := windowY + battleSubLabelOffsetY + float64(i-firstVisible)*battleSubRowHeight
 		if selected {
 			arrowOp := &text.DrawOptions{}
 			arrowOp.GeoM.Translate(baseX, baseY)

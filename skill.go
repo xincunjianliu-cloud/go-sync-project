@@ -8,6 +8,8 @@ const (
 	TargetBoth
 	// TargetSelf skills act on the user only and skip target selection.
 	TargetSelf
+	// TargetOther items do not select a party member.
+	TargetOther
 )
 
 type Element int
@@ -61,9 +63,12 @@ type SkillLevelData struct {
 	Physical    bool
 	PowerSingle int
 	PowerAll    int
-	MPCost      int
-	Effects     []SkillEffect
-	IsHeal      bool
+	// Heal multipliers are applied to the caster's MagicAtk for HP recovery.
+	HealMultiplierSingle float64
+	HealMultiplierAll    float64
+	MPCost               int
+	Effects              []SkillEffect
+	IsHeal               bool
 	// Ally makes a non-heal skill (buffs, guards) target party members.
 	Ally bool
 	// ReturnPosition is where the actor's timeline icon reappears (0-100)
@@ -196,13 +201,19 @@ func (g *Game) SkillAtDisplayRow(charIdx, row int) (int, bool) {
 	return 0, false
 }
 
-// legacySkillOrder は2026-10-06に技表の番号順へ並べ替える前のスキルの並び。
-// それより前のセーブデータは player_skill_lv をこの並びの位置で持っている。
+// legacySkillOrder preserves the original positional order used by old saves.
 var legacySkillOrder = [partySize][]string{
-	{"スマッシュ", "みやぶる", "フレイム", "回復", "クラッシュサークル", "バフ"},
-	{"スーパーヒーリング", "妖艶の舞", "フィナーレソング", "氷のつぶて", "聖なる魔法", "レイズ"},
-	{"かばう", "ねこキック", "エレクトロパンチ", "防御バフ", "カウンター", "守りの祈り"},
+	{"スマッシュ", "みやぶる", "フレイム", "ヒールウィンド", "クラッシュサークル", "ブレイブアップ"},
+	{"スーパーヒーリング", "妖艶の舞", "フィナーレソング", "ヒャッコルマジック", "聖攻魔攻", "再起の光"},
+	{"かばう", "黒蹴爆裂", "エレクトロパンチ", "ビルドアップ", "カウンター", "守りの祈り"},
 	{"フレイムアックス", "ドレインアックス", "ヒャッコルアックス", "エレクトロアックス", "ウィンガアックス", "アックスメテオ"},
+}
+
+var legacySkillNameAliases = [partySize]map[string]string{
+	{"回復": "ヒールウィンド", "バフ": "ブレイブアップ"},
+	{"氷のつぶて": "ヒャッコルマジック", "聖なる魔法": "聖攻魔攻", "レイズ": "再起の光"},
+	{"ねこキック": "黒蹴爆裂", "防御バフ": "ビルドアップ"},
+	nil,
 }
 
 // skillLevelsByName は位置で持っているスキルレベルを、order(キャラ)の並びに
@@ -230,7 +241,16 @@ func skillLevelsFromNames(byName [partySize]map[string]int) [partySize][8]int {
 			out[c][j] = 1
 		}
 		for j, sk := range characterSkillSets[c] {
-			if lv, ok := byName[c][sk.Name]; ok && lv >= 1 && j < len(out[c]) {
+			lv, ok := byName[c][sk.Name]
+			if !ok {
+				for oldName, newName := range legacySkillNameAliases[c] {
+					if newName == sk.Name {
+						lv, ok = byName[c][oldName]
+						break
+					}
+				}
+			}
+			if ok && lv >= 1 && j < len(out[c]) {
 				out[c][j] = lv
 			}
 		}
