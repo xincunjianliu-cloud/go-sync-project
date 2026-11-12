@@ -1165,7 +1165,7 @@
                          "name":"\u51fa\u308b\u6575",
                          "propertytype":"\u6575",
                          "type":"string",
-                         "value":"\u30b9\u30e9\u30a4\u30e01"
+                         "value":"\u30b9\u30e9\u30a4\u30e01,\u30b9\u30e9\u30a4\u30e02"
                         }],
                  "rotation":0,
                  "type":"\u6575\u304c\u51fa\u308b\u5834\u6240",
