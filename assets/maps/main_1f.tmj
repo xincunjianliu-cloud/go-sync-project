@@ -1211,6 +1211,41 @@
                  "width":32,
                  "x":448,
                  "y":640
+                }, 
+                {
+                 "height":64,
+                 "id":62,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"\u7740\u5730\u70b9",
+                         "type":"string",
+                         "value":"\u3069\u3042"
+                        }, 
+                        {
+                         "name":"\u884c\u304d\u5148\u30de\u30c3\u30d7",
+                         "type":"file",
+                         "value":"dungeon_1_a.tmj"
+                        }],
+                 "rotation":0,
+                 "type":"\u30c9\u30a2",
+                 "visible":true,
+                 "width":64,
+                 "x":960,
+                 "y":640
+                }, 
+                {
+                 "height":32,
+                 "id":63,
+                 "name":"\u3069\u30422",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"\u7740\u5730\u70b9",
+                 "visible":true,
+                 "width":32,
+                 "x":992,
+                 "y":640
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -1501,7 +1536,7 @@
          "y":0
         }],
  "nextlayerid":24,
- "nextobjectid":60,
+ "nextobjectid":64,
  "orientation":"orthogonal",
  "properties":[
         {

@@ -909,7 +909,42 @@
          "draworder":"topdown",
          "id":5,
          "name":"\u3057\u304b\u3051",
-         "objects":[],
+         "objects":[
+                {
+                 "height":64,
+                 "id":26,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"\u7740\u5730\u70b9",
+                         "type":"string",
+                         "value":"\u3069\u30422"
+                        }, 
+                        {
+                         "name":"\u884c\u304d\u5148\u30de\u30c3\u30d7",
+                         "type":"file",
+                         "value":"main_1f.tmj"
+                        }],
+                 "rotation":0,
+                 "type":"\u30c9\u30a2",
+                 "visible":true,
+                 "width":96,
+                 "x":256,
+                 "y":256
+                }, 
+                {
+                 "height":32,
+                 "id":27,
+                 "name":"\u3069\u3042",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"\u7740\u5730\u70b9",
+                 "visible":true,
+                 "width":32,
+                 "x":288,
+                 "y":256
+                }],
          "opacity":1,
          "type":"objectgroup",
          "visible":true,
@@ -1415,7 +1450,7 @@
          "y":0
         }],
  "nextlayerid":16,
- "nextobjectid":24,
+ "nextobjectid":28,
  "orientation":"orthogonal",
  "properties":[
         {

@@ -503,8 +503,8 @@ func (s *BattleScene) drawPartyName(screen *ebiten.Image, i int, xPos, winY, alp
 }
 
 // drawMyTurnOverlay draws the command-selection highlight image for whichever
-// party member is currently acting. Called after every other battle UI so it
-// always renders on top (e.g. above the command menu panel).
+// party member is currently acting. It is drawn before the status bar so the
+// name and HP/MP display remain in front of the highlight.
 func (s *BattleScene) drawMyTurnOverlay(screen *ebiten.Image) {
 	i := s.waitingActor
 	isMyTurn := i >= 0 && i < partySize &&

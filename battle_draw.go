@@ -202,6 +202,9 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 
 func (s *BattleScene) drawUI(screen *ebiten.Image) {
 	s.drawTimeline(screen)
+	if !s.introActive {
+		s.drawMyTurnOverlay(screen)
+	}
 	s.drawStatusBar(screen)
 	s.drawGaugeTriangle(screen)
 
@@ -322,8 +325,6 @@ func (s *BattleScene) drawUI(screen *ebiten.Image) {
 		s.drawItemTargetUI(screen)
 		s.drawBottomDescription(screen, s.itemTargetDescription())
 	}
-
-	s.drawMyTurnOverlay(screen)
 }
 
 // playerMenuDescription returns the bottom description for the command menu.
