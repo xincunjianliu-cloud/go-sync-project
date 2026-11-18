@@ -191,10 +191,10 @@ const (
 	// formation (dead enemies included), so the gap looks the same for 2-4
 	// enemies and the box never moves mid-battle.
 	allTargetRowW = 120.0
-	allTargetRowH = 24.0
+	allTargetRowH = 39.0
 	// Slightly nudge the "全体" target row upward so it sits just under the
 	// party/enemy portraits instead of feeling too low.
-	allyAllTargetRowY        = 398.0
+	allyAllTargetRowY        = 383.0
 	allyAllTargetRowCenterX  = 720.0
 	enemyAllTargetRowCenterX = 240.0
 	enemyAllTargetRowGapY    = 6.0
