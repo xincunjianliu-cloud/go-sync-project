@@ -13,12 +13,13 @@ const (
 	creditLineGap               = 32.0
 	creditSectionGap            = 24.0
 	creditFontSize              = 20.0
-	creditMusicFadeOutDuration  = 2.0
 	creditFallbackMusicDuration = 90.0
 	endingLogoFadeInDuration    = 0.8
 	endingLogoHoldDuration      = 3.0
 	endingLogoFadeOutDuration   = 0.8
-	endingLogoDuration          = endingLogoFadeInDuration + endingLogoHoldDuration + endingLogoFadeOutDuration
+	endingLogoFadeOutStart      = endingLogoFadeInDuration + endingLogoHoldDuration
+	endingLogoDuration          = endingLogoFadeOutStart + endingLogoFadeOutDuration
+	endingBGMFinishBeforeLogo   = 0.5
 )
 
 type CreditPage struct {
@@ -59,12 +60,12 @@ type EndingScene struct {
 	creditElapsed         float64
 	creditFallbackElapsed float64
 	creditPlaybackStarted bool
-	creditFadeOutStarted  bool
 	creditPlaybackWarned  bool
 
 	phase             int
 	logoElapsed       float64
 	logoMissingWarned bool
+	endingBGMStopped  bool
 
 	skipConfirm    bool
 	skipConfirmIdx int
@@ -149,7 +150,12 @@ func (s *EndingScene) Update(dt float64) Scene {
 		if isSkipKeyPressed() || isSkipHintJustPressed(s.game) {
 			s.skipConfirm = true
 			s.skipConfirmIdx = 0
-			s.game.Audio.PlaySEByKey("decide")
+			if s.game != nil {
+				if s.game.Audio != nil {
+					s.game.Audio.PauseBGM()
+					s.game.Audio.PlaySEByKey("decide")
+				}
+			}
 			return s
 		}
 	}
@@ -159,6 +165,12 @@ func (s *EndingScene) Update(dt float64) Scene {
 		s.updateCredits(dt)
 	case endingPhaseLogo:
 		s.logoElapsed += dt
+		if !s.endingBGMStopped && s.logoElapsed >= endingLogoDuration-endingBGMFinishBeforeLogo {
+			if s.game != nil && s.game.Audio != nil {
+				s.game.Audio.StopBGM()
+			}
+			s.endingBGMStopped = true
+		}
 		if s.logoElapsed >= endingLogoDuration {
 			s.enterAskSave()
 		}
@@ -197,22 +209,9 @@ func (s *EndingScene) updateCredits(dt float64) {
 	}
 
 	remaining := s.creditDuration - s.creditElapsed
-	if remaining <= creditMusicFadeOutDuration {
-		s.fadeEndingBGM(creditMusicFadeOutDuration)
-	}
-	if remaining <= 0 {
+	if remaining <= endingLogoDuration-endingBGMFinishBeforeLogo {
 		s.enterEndingLogo()
 	}
-}
-
-func (s *EndingScene) fadeEndingBGM(duration float64) {
-	if s.creditFadeOutStarted {
-		return
-	}
-	if s.game != nil && s.game.Audio != nil {
-		s.game.Audio.FadeOutBGM(duration)
-	}
-	s.creditFadeOutStarted = true
 }
 
 func (s *EndingScene) updateSkipConfirm() {
@@ -222,6 +221,7 @@ func (s *EndingScene) updateSkipConfirm() {
 	}
 	if isEscapePressed() {
 		s.skipConfirm = false
+		s.resumeCredits()
 		s.game.Audio.PlaySEByKey("cancel")
 		return
 	}
@@ -229,6 +229,7 @@ func (s *EndingScene) updateSkipConfirm() {
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skipConfirmIdx, s.game.Audio)
 	if !tappedOk && unrelatedTapOutsideRects(confirmDialogRect()) {
 		s.skipConfirm = false
+		s.resumeCredits()
 		s.game.Audio.PlaySEByKey("cancel")
 		return
 	}
@@ -237,13 +238,21 @@ func (s *EndingScene) updateSkipConfirm() {
 	}
 	if s.skipConfirmIdx == 1 {
 		s.skipConfirm = false
+		s.resumeCredits()
 		s.game.Audio.PlaySEByKey("cancel")
 		return
 	}
 	s.game.Audio.PlaySEByKey("decide")
 	s.skipConfirm = false
-	s.fadeEndingBGM(creditMusicFadeOutDuration)
+	s.game.Audio.StopBGM()
+	s.endingBGMStopped = true
 	s.enterEndingLogo()
+}
+
+func (s *EndingScene) resumeCredits() {
+	if s.game != nil && s.game.Audio != nil {
+		s.game.Audio.ResumeBGM()
+	}
 }
 
 func (s *EndingScene) enterEndingLogo() {
@@ -433,10 +442,6 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		progress := creditScrollProgress(s.creditElapsed, s.creditDuration)
 		scrollOffset := s.creditScrollDistance * progress
 		alpha := 1.0
-		remaining := s.creditDuration - s.creditElapsed
-		if remaining < creditMusicFadeOutDuration {
-			alpha = max(0, remaining/creditMusicFadeOutDuration)
-		}
 		col := color.RGBA{255, 255, 255, uint8(alpha * 255)}
 		lineY := float64(gameHeight) - scrollOffset
 		for _, page := range s.pages {
@@ -455,7 +460,7 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 	}
 	if s.skipConfirm {
 		drawConfirmDialog(screen, s.game,
-			"スタッフロールをスキップしますか？\n※最後にロゴを表示します。",
+			"エンディングをスキップしますか？",
 			s.skipConfirmIdx, confirmImageOffsetX)
 	}
 }
@@ -477,8 +482,7 @@ func endingLogoAlpha(elapsed float64) float64 {
 	if elapsed < endingLogoFadeInDuration {
 		return max(0, elapsed/endingLogoFadeInDuration)
 	}
-	fadeOutStart := endingLogoFadeInDuration + endingLogoHoldDuration
-	if elapsed > fadeOutStart {
+	if elapsed > endingLogoFadeOutStart {
 		return max(0, (endingLogoDuration-elapsed)/endingLogoFadeOutDuration)
 	}
 	return 1

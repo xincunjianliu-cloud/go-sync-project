@@ -23,6 +23,6 @@
     { "lines": ["ENGINE", "Ebitengine v2.9.9"] },
     { "lines": ["MAP EDITOR", "Tiled 1.12+"] },
     { "lines": ["FONT", "k8x12", "Copyright (C) 2015–2021 Num Kadoma"] },
-    { "lines": ["Special Thanks", "やぎ、はな、あいら、ゆいら、たかやま"] }
+    { "lines": ["Special Thanks", "やぎ", "はな", "あいら", "ゆいら", "たかやま"] }
   ]
 }

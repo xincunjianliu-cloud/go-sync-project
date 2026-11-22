@@ -162,7 +162,6 @@ type AudioManager struct {
 	fadeOutNextPath   string
 	fadeOutNextFadeIn float64
 	fadeOutHardCut    bool
-
 	// pcmCache/pcmLoading/pcmFailedはバックグラウンドのデコードgoroutineと
 	// メインゴルーチンの両方から触るためpcmMuで保護する。
 	pcmMu      sync.Mutex
@@ -579,7 +578,13 @@ func (a *AudioManager) playBGM(path string, fadeIn float64) {
 
 	a.pendingBGM = path
 	a.startWhenDecoded(func() {
-		p, err := a.loadLoopPlayer(path)
+		var p *audio.Player
+		var err error
+		if path == bgmEnding {
+			p, err = a.loadStreamPlayer(path)
+		} else {
+			p, err = a.loadLoopPlayer(path)
+		}
 		if err != nil {
 			return
 		}
@@ -692,6 +697,20 @@ func (a *AudioManager) StopBGM() {
 		return
 	}
 	a.stopCurrent()
+}
+
+func (a *AudioManager) PauseBGM() {
+	if a == nil || a.bgmPlayer == nil || !a.bgmPlayer.IsPlaying() {
+		return
+	}
+	a.bgmPlayer.Pause()
+}
+
+func (a *AudioManager) ResumeBGM() {
+	if a == nil || a.bgmPlayer == nil || a.bgmPlayer.IsPlaying() {
+		return
+	}
+	a.bgmPlayer.Play()
 }
 
 func (a *AudioManager) stopCurrent() {
@@ -835,7 +854,13 @@ func (a *AudioManager) Update(dt float64) {
 				a.stopCurrent()
 				return
 			}
-			a.startNext(a.fadeOutNextPath, a.fadeOutNextFadeIn, a.fadeOutHardCut)
+			nextPath := a.fadeOutNextPath
+			fadeIn := a.fadeOutNextFadeIn
+			hardCut := a.fadeOutHardCut
+			a.fadeOutNextPath = ""
+			a.fadeOutNextFadeIn = 0
+			a.fadeOutHardCut = false
+			a.startNext(nextPath, fadeIn, hardCut)
 		} else {
 			a.bgmPlayer.SetVolume(cur)
 		}
