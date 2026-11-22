@@ -2,8 +2,16 @@
   "battle": {
     "commands": [
       {
+        "speaker": "SYSTEM_COMMAND",
+        "text": "PLAY_BGM_talk_tense"
+      },
+      {
         "speaker": "player1",
         "text": "あれが噂のボスか...油断するなよ！"
+      },
+      {
+        "speaker": "SYSTEM_COMMAND",
+        "text": "STOP_BGM"
       },
       {
         "speaker": "boss1",
@@ -11,11 +19,14 @@
         "expression": 2
       },
       {
+        "speaker": "SYSTEM_COMMAND",
+        "text": "STOP_BGM"
+      },
+      {
         "speaker": "player1",
         "text": "覚悟しろ、ここで倒す！"
       }
     ],
-    "bgm": "talk_tense",
     "speakerSlots": {
       "boss1": 1,
       "player1": 0
@@ -24,14 +35,21 @@
   "clear": {
     "commands": [
       {
+        "speaker": "SYSTEM_COMMAND",
+        "text": "PLAY_BGM_talk_peaceful"
+      },
+      {
         "speaker": "boss1",
         "text": "馬鹿な...この俺が..."
+      },
+      {
+        "speaker": "SYSTEM_COMMAND",
+        "text": "STOP_BGM"
       },
       {
         "speaker": "player1",
         "text": "これで一つ、片付いたな"
       }
-    ],
-    "bgm": "talk_peaceful"
+    ]
   }
 }

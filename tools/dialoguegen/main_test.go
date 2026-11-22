@@ -145,13 +145,37 @@ func TestBuildFileJSONRejectsBadPhase(t *testing.T) {
 	}
 }
 
-func TestBuildFileJSONRejectsMissingID(t *testing.T) {
+func TestBuildFileJSONSkipsMissingID(t *testing.T) {
 	rows := [][]string{
 		{"id", "text"},
 		{"", "hi"},
 	}
-	if _, err := buildFileJSON(rows); err == nil {
-		t.Fatalf("expected an error when id is blank but text is not")
+	out, err := buildFileJSON(rows)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out) != 0 {
+		t.Fatalf("expected blank-id row to be skipped, got %+v", out)
+	}
+}
+
+func TestBuildFileJSONKeepsValidRowsWhenAnotherRowIsBlank(t *testing.T) {
+	rows := [][]string{
+		{"id", "phase", "text"},
+		{"opening", "first", "テスト"},
+		{"", "first", "無効な行"},
+		{"opening", "first", "次の文章"},
+	}
+	out, err := buildFileJSON(rows)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	entry, ok := out["opening"]
+	if !ok || entry.First == nil {
+		t.Fatalf("expected opening entry, got %+v", out)
+	}
+	if len(entry.First.Commands) != 4 {
+		t.Fatalf("expected 2 valid lines, got %+v", entry.First.Commands)
 	}
 }
 

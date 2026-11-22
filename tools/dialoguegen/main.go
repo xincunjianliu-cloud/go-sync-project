@@ -30,7 +30,7 @@
 //   - "story" (default): becomes assets/dialogues/story/<name>.json, and
 //     can hold any number of dialogue ids. Columns:
 //     id          required. The dialogue id (event_story_<id> in Tiled).
-//                 Repeat it on every row of the same conversation.
+//     Repeat it on every row of the same conversation.
 //     phase       "first" or "repeat" (default "first").
 //   - "boss": becomes assets/dialogues/<name>.json directly, and the tab
 //     name must be boss_1..boss_4 (one tab = one boss's whole file, no id
@@ -376,7 +376,8 @@ func buildFileJSON(rows [][]string) (map[string]storyDialogueFileJSON, error) {
 			continue // tolerate a stray blank row from the spreadsheet
 		}
 		if id == "" {
-			return nil, fmt.Errorf("row %d: id is empty", lineNo)
+			fmt.Printf("warning: row %d: id is empty; row skipped (%q)\n", lineNo, text)
+			continue
 		}
 
 		phase := strings.ToLower(cell(row, phaseCol))
