@@ -42,18 +42,22 @@ func (s *FieldScene) moveLogCursor(delta int) {
 }
 
 // applyFieldDebugCheats mirrors BattleScene.applyDebugCheats (Shift+key,
-// gated by debugModeEnabled) for the one field-scene tutorial, so it can be
-// checked without grinding 100 SP and winning a battle first.
-func (s *FieldScene) applyFieldDebugCheats() {
+// gated by debugModeEnabled) for field-scene tutorials and ending checks.
+func (s *FieldScene) applyFieldDebugCheats() bool {
 	if !debugModeEnabled {
-		return
+		return false
 	}
 	if !ebiten.IsKeyPressed(ebiten.KeyShift) {
-		return
+		return false
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyE) {
+		s.game.ChangeSceneWithFade(NewEndingScene(s.game, s), fadeTimeBossOut)
+		return true
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyU) {
 		s.skillUpgradeTutorialActive = true
 	}
+	return false
 }
 
 func (s *FieldScene) Update(dt float64) Scene {
@@ -62,7 +66,9 @@ func (s *FieldScene) Update(dt float64) Scene {
 	}
 	s.tileAnimMs += dt * 1000
 
-	s.applyFieldDebugCheats()
+	if s.applyFieldDebugCheats() {
+		return s
+	}
 
 	if s.mapNameBannerActive {
 		s.mapNameBannerElapsed += dt

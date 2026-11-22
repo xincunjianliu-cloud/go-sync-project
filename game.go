@@ -30,10 +30,10 @@ type Scene interface {
 }
 
 var PlayerNames = [partySize]string{
-	"ブロリー",
-	"パラガス",
-	"ベジータ",
-	"トランクスルー",
+	"史郎",
+	"いのり",
+	"慎二",
+	"凛葉",
 }
 
 var BossNames = [4]string{

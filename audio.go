@@ -484,6 +484,22 @@ func (a *AudioManager) IsSwitching() bool {
 	return a.pendingStart != nil || (a.fadeOutActive && a.fadeOutNextPath != "")
 }
 
+// BGMPlaybackInfo returns the monotonic playback position and decoded duration
+// for path while it is the active BGM.
+func (a *AudioManager) BGMPlaybackInfo(path string) (time.Duration, time.Duration, bool) {
+	if a == nil || a.bgmName != path || a.bgmPlayer == nil || !a.bgmPlayer.IsPlaying() {
+		return 0, 0, false
+	}
+	a.pcmMu.Lock()
+	pcm, ok := a.pcmCache[path]
+	a.pcmMu.Unlock()
+	if !ok || len(pcm) == 0 {
+		return 0, 0, false
+	}
+	duration := time.Duration(int64(len(pcm)) * int64(time.Second) / int64(sampleRate*4))
+	return a.bgmPlayer.Position(), duration, true
+}
+
 // trimTrailingSilence はmp3→PCM変換後の完全な無音区間(エンコーダーが
 // ファイル末尾に付与するパディング)を取り除く。これを残したまま
 // NewInfiniteLoopで無限ループさせると、曲が実質的に終わった後も

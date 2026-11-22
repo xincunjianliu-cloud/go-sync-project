@@ -10,12 +10,15 @@ import (
 )
 
 const (
-	creditFadeInTime      = 1.0
-	creditFirstFadeInTime = 3.0
-	creditHoldTime        = 2.5
-	creditFadeOutTime     = 1.0
-	creditLineGap         = 32.0
-	creditFontSize        = 20.0
+	creditLineGap               = 32.0
+	creditSectionGap            = 24.0
+	creditFontSize              = 20.0
+	creditMusicFadeOutDuration  = 2.0
+	creditFallbackMusicDuration = 90.0
+	endingLogoFadeInDuration    = 0.8
+	endingLogoHoldDuration      = 3.0
+	endingLogoFadeOutDuration   = 0.8
+	endingLogoDuration          = endingLogoFadeInDuration + endingLogoHoldDuration + endingLogoFadeOutDuration
 )
 
 type CreditPage struct {
@@ -37,9 +40,8 @@ func loadCredits(path string) ([]CreditPage, error) {
 }
 
 const (
-	endingPhaseFadeIn = iota
-	endingPhaseHold
-	endingPhaseFadeOut
+	endingPhaseCredits = iota
+	endingPhaseLogo
 	endingPhaseAskSave
 	endingPhaseSaveSlot
 	endingPhaseSlotConfirm
@@ -50,13 +52,20 @@ type EndingScene struct {
 	game  *Game
 	field *FieldScene
 
-	pages     []CreditPage
-	pageIndex int
+	pages                 []CreditPage
+	creditScrollDistance  float64
+	creditMusicOffset     float64
+	creditDuration        float64
+	creditElapsed         float64
+	creditFallbackElapsed float64
+	creditPlaybackStarted bool
+	creditFadeOutStarted  bool
+	creditPlaybackWarned  bool
 
-	phase int
-	alpha float64
+	phase             int
+	logoElapsed       float64
+	logoMissingWarned bool
 
-	holdElapsed    float64
 	skipConfirm    bool
 	skipConfirmIdx int
 
@@ -85,14 +94,43 @@ func NewEndingScene(game *Game, field *FieldScene) *EndingScene {
 	if err != nil || len(pages) == 0 {
 		pages = []CreditPage{{Lines: []string{"THE END"}}}
 	}
-	return &EndingScene{game: game, field: field, pages: pages, phase: endingPhaseFadeIn}
+	return &EndingScene{
+		game:                 game,
+		field:                field,
+		pages:                pages,
+		creditScrollDistance: creditRollDistance(pages),
+		creditDuration:       creditFallbackMusicDuration,
+		phase:                endingPhaseCredits,
+	}
 }
 
-// desiredBGM はボス撃破後の暗転(fadeTimeBossOut)が明けた瞬間に、余韻を
-// 持たせて2秒かけてエンディング曲をフェードインさせる。暗転の長さに
-// 関わらずこの秒数は固定でよい(締めの演出なので画面遷移と揃える必要はない)。
+// desiredBGM starts the ending track as the transition reveals the credits.
 func (s *EndingScene) desiredBGM(transitionDuration float64) (string, float64, bool) {
+	s.creditMusicOffset = transitionDuration
 	return bgmEnding, 2.0, false
+}
+
+func creditRollDistance(pages []CreditPage) float64 {
+	lineCount := 0
+	sectionCount := 0
+	for _, page := range pages {
+		if len(page.Lines) == 0 {
+			continue
+		}
+		lineCount += len(page.Lines)
+		sectionCount++
+	}
+	sectionGaps := max(sectionCount-1, 0)
+	contentHeight := float64(lineCount)*creditLineGap + float64(sectionGaps)*creditSectionGap
+	return float64(gameHeight) + contentHeight
+}
+
+func creditScrollProgress(elapsed, duration float64) float64 {
+	if duration <= 0 {
+		return 1
+	}
+	progress := elapsed / duration
+	return max(0, min(progress, 1))
 }
 
 func (s *EndingScene) Update(dt float64) Scene {
@@ -103,7 +141,7 @@ func (s *EndingScene) Update(dt float64) Scene {
 		return s.nextScene
 	}
 
-	if s.phase == endingPhaseFadeIn || s.phase == endingPhaseHold || s.phase == endingPhaseFadeOut {
+	if s.phase == endingPhaseCredits {
 		if s.skipConfirm {
 			s.updateSkipConfirm()
 			return s
@@ -117,32 +155,12 @@ func (s *EndingScene) Update(dt float64) Scene {
 	}
 
 	switch s.phase {
-	case endingPhaseFadeIn:
-		fadeInTime := creditFadeInTime
-		if s.pageIndex == 0 {
-			fadeInTime = creditFirstFadeInTime
-		}
-		s.alpha += dt / fadeInTime
-		if s.alpha >= 1.0 {
-			s.alpha = 1.0
-			s.phase = endingPhaseHold
-			s.holdElapsed = 0
-		}
-	case endingPhaseHold:
-		s.holdElapsed += dt
-		if s.holdElapsed >= creditHoldTime {
-			s.phase = endingPhaseFadeOut
-		}
-	case endingPhaseFadeOut:
-		s.alpha -= dt / creditFadeOutTime
-		if s.alpha <= 0 {
-			s.alpha = 0
-			s.pageIndex++
-			if s.pageIndex >= len(s.pages) {
-				s.enterAskSave()
-			} else {
-				s.phase = endingPhaseFadeIn
-			}
+	case endingPhaseCredits:
+		s.updateCredits(dt)
+	case endingPhaseLogo:
+		s.logoElapsed += dt
+		if s.logoElapsed >= endingLogoDuration {
+			s.enterAskSave()
 		}
 	case endingPhaseAskSave:
 		s.updateAskSave()
@@ -154,6 +172,47 @@ func (s *EndingScene) Update(dt float64) Scene {
 		s.updateSaveDone()
 	}
 	return s
+}
+
+func (s *EndingScene) updateCredits(dt float64) {
+	playbackAvailable := false
+	if s.game != nil && s.game.Audio != nil {
+		if position, musicDuration, ok := s.game.Audio.BGMPlaybackInfo(bgmEnding); ok {
+			s.creditDuration = musicDuration.Seconds() - s.creditMusicOffset
+			s.creditElapsed = max(0, min(position.Seconds()-s.creditMusicOffset, s.creditDuration))
+			s.creditPlaybackStarted = s.creditDuration > 0
+			playbackAvailable = s.creditPlaybackStarted
+		}
+	}
+	if !playbackAvailable && s.creditPlaybackStarted {
+		s.creditElapsed = min(s.creditElapsed+dt, s.creditDuration)
+	} else if !playbackAvailable {
+		if !s.creditPlaybackWarned {
+			loadTrace("エンディング曲の再生位置を取得できないため、スタッフロールを%.0f秒で再生", creditFallbackMusicDuration)
+			s.creditPlaybackWarned = true
+		}
+		s.creditDuration = creditFallbackMusicDuration
+		s.creditFallbackElapsed += dt
+		s.creditElapsed = min(s.creditFallbackElapsed, s.creditDuration)
+	}
+
+	remaining := s.creditDuration - s.creditElapsed
+	if remaining <= creditMusicFadeOutDuration {
+		s.fadeEndingBGM(creditMusicFadeOutDuration)
+	}
+	if remaining <= 0 {
+		s.enterEndingLogo()
+	}
+}
+
+func (s *EndingScene) fadeEndingBGM(duration float64) {
+	if s.creditFadeOutStarted {
+		return
+	}
+	if s.game != nil && s.game.Audio != nil {
+		s.game.Audio.FadeOutBGM(duration)
+	}
+	s.creditFadeOutStarted = true
 }
 
 func (s *EndingScene) updateSkipConfirm() {
@@ -183,8 +242,13 @@ func (s *EndingScene) updateSkipConfirm() {
 	}
 	s.game.Audio.PlaySEByKey("decide")
 	s.skipConfirm = false
-	s.pageIndex = len(s.pages)
-	s.enterAskSave()
+	s.fadeEndingBGM(creditMusicFadeOutDuration)
+	s.enterEndingLogo()
+}
+
+func (s *EndingScene) enterEndingLogo() {
+	s.phase = endingPhaseLogo
+	s.logoElapsed = 0
 }
 
 func (s *EndingScene) enterAskSave() {
@@ -348,6 +412,9 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 	case endingPhaseAskSave:
 		drawConfirmDialog(screen, s.game, "クリアデータを保存しますか？", s.askSaveIndex, confirmImageOffsetX)
 		return
+	case endingPhaseLogo:
+		s.drawEndingLogo(screen)
+		return
 	case endingPhaseSaveSlot:
 		drawSlotList(screen, s.game, s.slotIndex, s.slotData, s.slotThumbs, s.slotScrollTop, slotCardStartX-80, slotCardStartY, s.slotDragAccum)
 		return
@@ -361,27 +428,58 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	if s.phase == endingPhaseFadeIn || s.phase == endingPhaseHold || s.phase == endingPhaseFadeOut {
+	if s.phase == endingPhaseCredits {
 		drawSkipHint(screen, s.game)
-	}
-	if s.pageIndex >= len(s.pages) {
-		return
-	}
-	page := s.pages[s.pageIndex]
-	totalH := float64(len(page.Lines)) * creditLineGap
-	startY := float64(gameHeight)/2 - totalH/2
-	col := color.RGBA{255, 255, 255, uint8(s.alpha * 255)}
-
-	for i, line := range page.Lines {
-		op := &text.DrawOptions{}
-		op.GeoM.Translate(float64(gameWidth)/2, startY+float64(i)*creditLineGap)
-		op.PrimaryAlign = text.AlignCenter
-		op.ColorScale.ScaleWithColor(col)
-		text.Draw(screen, line, s.game.FontFace(creditFontSize), op)
+		progress := creditScrollProgress(s.creditElapsed, s.creditDuration)
+		scrollOffset := s.creditScrollDistance * progress
+		alpha := 1.0
+		remaining := s.creditDuration - s.creditElapsed
+		if remaining < creditMusicFadeOutDuration {
+			alpha = max(0, remaining/creditMusicFadeOutDuration)
+		}
+		col := color.RGBA{255, 255, 255, uint8(alpha * 255)}
+		lineY := float64(gameHeight) - scrollOffset
+		for _, page := range s.pages {
+			for _, line := range page.Lines {
+				op := &text.DrawOptions{}
+				op.GeoM.Translate(float64(gameWidth)/2, lineY)
+				op.PrimaryAlign = text.AlignCenter
+				op.ColorScale.ScaleWithColor(col)
+				text.Draw(screen, line, s.game.FontFace(creditFontSize), op)
+				lineY += creditLineGap
+			}
+			if len(page.Lines) > 0 {
+				lineY += creditSectionGap
+			}
+		}
 	}
 	if s.skipConfirm {
 		drawConfirmDialog(screen, s.game,
-			"エンディングをスキップしますか？\n※スタッフロールは表示されなくなります。",
+			"スタッフロールをスキップしますか？\n※最後にロゴを表示します。",
 			s.skipConfirmIdx, confirmImageOffsetX)
 	}
+}
+
+func (s *EndingScene) drawEndingLogo(screen *ebiten.Image) {
+	if s.game == nil || s.game.TitleBgImg == nil {
+		if !s.logoMissingWarned {
+			loadTrace("エンディングロゴを表示できません: assets/images/title/title_bg.png が未読み込みです")
+			s.logoMissingWarned = true
+		}
+		return
+	}
+	op := &ebiten.DrawImageOptions{}
+	op.ColorScale.ScaleAlpha(float32(endingLogoAlpha(s.logoElapsed)))
+	screen.DrawImage(s.game.TitleBgImg, op)
+}
+
+func endingLogoAlpha(elapsed float64) float64 {
+	if elapsed < endingLogoFadeInDuration {
+		return max(0, elapsed/endingLogoFadeInDuration)
+	}
+	fadeOutStart := endingLogoFadeInDuration + endingLogoHoldDuration
+	if elapsed > fadeOutStart {
+		return max(0, (endingLogoDuration-elapsed)/endingLogoFadeOutDuration)
+	}
+	return 1
 }
