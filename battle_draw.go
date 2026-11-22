@@ -164,7 +164,7 @@ func (s *BattleScene) drawPartySprites(screen *ebiten.Image) {
 
 		op := &ebiten.DrawImageOptions{}
 		baseX := 640.0
-		baseY := 142.0
+		baseY := partyBaseY
 		centerX := baseX + float64(i)*32.0
 		centerY := baseY + float64(i)*52.0
 

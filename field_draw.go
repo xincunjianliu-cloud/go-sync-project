@@ -674,7 +674,7 @@ func (s *FieldScene) drawPromptWithIcon(screen *ebiten.Image, icon *ebiten.Image
 
 const (
 	enemyBaseX = 200.0
-	partyBaseY = 142.0
+	partyBaseY = 127.0
 
 	partyLikeSpacingY = 52.0
 
