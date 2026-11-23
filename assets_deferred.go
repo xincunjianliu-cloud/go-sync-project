@@ -363,8 +363,17 @@ func deferredAssetAssignments() []deferredAssetAssign {
 
 	add(assetTierField, "assets/images/menu/メニュー画面.png", func(g *Game, img *ebiten.Image) { g.MenuBgImg = img })
 	add(assetTierField, "assets/images/menu/メニュー画面拡張.png", func(g *Game, img *ebiten.Image) { g.MenuSkillPanelImg = img })
-	for i := range 4 {
+	for i := range partySize {
 		add(assetTierField, fmt.Sprintf("assets/images/menu/party_icon_%d.png", i+1), func(g *Game, img *ebiten.Image) { g.PartyIconImgs[i] = img })
+	}
+	statusPortraitFiles := [4]string{
+		"protagonist_status.png",
+		"girl1_status.png",
+		"boy2_status.png",
+		"girl2_status.png",
+	}
+	for i := range partySize {
+		add(assetTierField, fmt.Sprintf("assets/images/menu/%s", statusPortraitFiles[i]), func(g *Game, img *ebiten.Image) { g.StatusPortraitImgs[i] = img })
 	}
 	add(assetTierField, "assets/images/menu/セーブスロット選択中.png", func(g *Game, img *ebiten.Image) { g.SaveThumbFrameSelImg = img })
 	add(assetTierField, "assets/images/menu/セーブスロット.png", func(g *Game, img *ebiten.Image) { g.SaveThumbFrameImg = img })

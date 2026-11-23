@@ -12,14 +12,18 @@ import (
 const (
 	creditLineGap               = 32.0
 	creditSectionGap            = 24.0
+	creditBlockGap              = 96.0
 	creditFontSize              = 20.0
 	creditFallbackMusicDuration = 90.0
+	endingCreditsClearPause     = 1.5
+	endingLogoFadeInDelay       = 0.8
 	endingLogoFadeInDuration    = 0.8
 	endingLogoHoldDuration      = 3.0
 	endingLogoFadeOutDuration   = 0.8
-	endingLogoFadeOutStart      = endingLogoFadeInDuration + endingLogoHoldDuration
+	endingLogoFadeOutStart      = endingLogoFadeInDelay + endingLogoFadeInDuration + endingLogoHoldDuration
 	endingLogoDuration          = endingLogoFadeOutStart + endingLogoFadeOutDuration
-	endingBGMFinishBeforeLogo   = 0.5
+	endingBGMFinishBeforeLogo   = 1.5
+	endingCreditTailDuration    = endingCreditsClearPause + endingLogoDuration - endingBGMFinishBeforeLogo
 )
 
 type CreditPage struct {
@@ -42,6 +46,7 @@ func loadCredits(path string) ([]CreditPage, error) {
 
 const (
 	endingPhaseCredits = iota
+	endingPhaseCreditPause
 	endingPhaseLogo
 	endingPhaseAskSave
 	endingPhaseSaveSlot
@@ -62,10 +67,11 @@ type EndingScene struct {
 	creditPlaybackStarted bool
 	creditPlaybackWarned  bool
 
-	phase             int
-	logoElapsed       float64
-	logoMissingWarned bool
-	endingBGMStopped  bool
+	phase              int
+	creditPauseElapsed float64
+	logoElapsed        float64
+	logoMissingWarned  bool
+	endingBGMStopped   bool
 
 	skipConfirm    bool
 	skipConfirmIdx int
@@ -83,7 +89,6 @@ type EndingScene struct {
 	confirmIndex  int
 	pendingSlot   int
 	saveResultMsg string
-	saveDoneIndex int
 
 	inputLockTicks int
 
@@ -113,17 +118,29 @@ func (s *EndingScene) desiredBGM(transitionDuration float64) (string, float64, b
 
 func creditRollDistance(pages []CreditPage) float64 {
 	lineCount := 0
-	sectionCount := 0
-	for _, page := range pages {
+	sectionGapDistance := 0.0
+	for i, page := range pages {
 		if len(page.Lines) == 0 {
 			continue
 		}
 		lineCount += len(page.Lines)
-		sectionCount++
+		if i > 0 {
+			if isWideCreditBlock(page) {
+				sectionGapDistance += creditBlockGap
+			} else {
+				sectionGapDistance += creditSectionGap
+			}
+		}
 	}
-	sectionGaps := max(sectionCount-1, 0)
-	contentHeight := float64(lineCount)*creditLineGap + float64(sectionGaps)*creditSectionGap
+	contentHeight := float64(lineCount)*creditLineGap + sectionGapDistance
 	return float64(gameHeight) + contentHeight
+}
+
+func isWideCreditBlock(page CreditPage) bool {
+	if len(page.Lines) == 0 {
+		return false
+	}
+	return page.Lines[0] == "ENGINE" || page.Lines[0] == "Special Thanks"
 }
 
 func creditScrollProgress(elapsed, duration float64) float64 {
@@ -163,6 +180,11 @@ func (s *EndingScene) Update(dt float64) Scene {
 	switch s.phase {
 	case endingPhaseCredits:
 		s.updateCredits(dt)
+	case endingPhaseCreditPause:
+		s.creditPauseElapsed += dt
+		if s.creditPauseElapsed >= endingCreditsClearPause {
+			s.enterEndingLogo()
+		}
 	case endingPhaseLogo:
 		s.logoElapsed += dt
 		if !s.endingBGMStopped && s.logoElapsed >= endingLogoDuration-endingBGMFinishBeforeLogo {
@@ -190,7 +212,7 @@ func (s *EndingScene) updateCredits(dt float64) {
 	playbackAvailable := false
 	if s.game != nil && s.game.Audio != nil {
 		if position, musicDuration, ok := s.game.Audio.BGMPlaybackInfo(bgmEnding); ok {
-			s.creditDuration = musicDuration.Seconds() - s.creditMusicOffset
+			s.creditDuration = endingCreditRollDuration(musicDuration.Seconds(), s.creditMusicOffset)
 			s.creditElapsed = max(0, min(position.Seconds()-s.creditMusicOffset, s.creditDuration))
 			s.creditPlaybackStarted = s.creditDuration > 0
 			playbackAvailable = s.creditPlaybackStarted
@@ -200,18 +222,21 @@ func (s *EndingScene) updateCredits(dt float64) {
 		s.creditElapsed = min(s.creditElapsed+dt, s.creditDuration)
 	} else if !playbackAvailable {
 		if !s.creditPlaybackWarned {
-			loadTrace("エンディング曲の再生位置を取得できないため、スタッフロールを%.0f秒で再生", creditFallbackMusicDuration)
+			loadTrace("エンディング曲の再生位置を取得できないため、スタッフロールを%.0f秒で再生", endingCreditRollDuration(creditFallbackMusicDuration, 0))
 			s.creditPlaybackWarned = true
 		}
-		s.creditDuration = creditFallbackMusicDuration
+		s.creditDuration = endingCreditRollDuration(creditFallbackMusicDuration, 0)
 		s.creditFallbackElapsed += dt
 		s.creditElapsed = min(s.creditFallbackElapsed, s.creditDuration)
 	}
 
-	remaining := s.creditDuration - s.creditElapsed
-	if remaining <= endingLogoDuration-endingBGMFinishBeforeLogo {
-		s.enterEndingLogo()
+	if s.creditElapsed >= s.creditDuration {
+		s.enterCreditPause()
 	}
+}
+
+func endingCreditRollDuration(musicDuration, musicOffset float64) float64 {
+	return max(0, musicDuration-musicOffset-endingCreditTailDuration)
 }
 
 func (s *EndingScene) updateSkipConfirm() {
@@ -258,6 +283,11 @@ func (s *EndingScene) resumeCredits() {
 func (s *EndingScene) enterEndingLogo() {
 	s.phase = endingPhaseLogo
 	s.logoElapsed = 0
+}
+
+func (s *EndingScene) enterCreditPause() {
+	s.phase = endingPhaseCreditPause
+	s.creditPauseElapsed = 0
 }
 
 func (s *EndingScene) enterAskSave() {
@@ -394,7 +424,6 @@ func (s *EndingScene) updateSlotConfirm() {
 			s.saveResultMsg = "セーブしました"
 		}
 	}
-	s.saveDoneIndex = 0
 	s.phase = endingPhaseSaveDone
 	lockDialogInput(&s.inputLockTicks)
 }
@@ -441,10 +470,19 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 		drawSkipHint(screen, s.game)
 		progress := creditScrollProgress(s.creditElapsed, s.creditDuration)
 		scrollOffset := s.creditScrollDistance * progress
-		alpha := 1.0
-		col := color.RGBA{255, 255, 255, uint8(alpha * 255)}
+		col := color.RGBA{255, 255, 255, 255}
 		lineY := float64(gameHeight) - scrollOffset
-		for _, page := range s.pages {
+		for pageIndex, page := range s.pages {
+			if len(page.Lines) == 0 {
+				continue
+			}
+			if pageIndex > 0 {
+				if isWideCreditBlock(page) {
+					lineY += creditBlockGap
+				} else {
+					lineY += creditSectionGap
+				}
+			}
 			for _, line := range page.Lines {
 				op := &text.DrawOptions{}
 				op.GeoM.Translate(float64(gameWidth)/2, lineY)
@@ -452,9 +490,6 @@ func (s *EndingScene) Draw(screen *ebiten.Image) {
 				op.ColorScale.ScaleWithColor(col)
 				text.Draw(screen, line, s.game.FontFace(creditFontSize), op)
 				lineY += creditLineGap
-			}
-			if len(page.Lines) > 0 {
-				lineY += creditSectionGap
 			}
 		}
 	}
@@ -479,8 +514,12 @@ func (s *EndingScene) drawEndingLogo(screen *ebiten.Image) {
 }
 
 func endingLogoAlpha(elapsed float64) float64 {
-	if elapsed < endingLogoFadeInDuration {
-		return max(0, elapsed/endingLogoFadeInDuration)
+	if elapsed < endingLogoFadeInDelay {
+		return 0
+	}
+	fadeInElapsed := elapsed - endingLogoFadeInDelay
+	if fadeInElapsed < endingLogoFadeInDuration {
+		return max(0, fadeInElapsed/endingLogoFadeInDuration)
 	}
 	if elapsed > endingLogoFadeOutStart {
 		return max(0, (endingLogoDuration-elapsed)/endingLogoFadeOutDuration)

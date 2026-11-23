@@ -45,7 +45,8 @@ const (
 	statusFaceR        = 78.0
 	statusFaceCYRat    = 0.31
 	statusNameYRat     = 0.60
-	statusNameFontSize = 25.0
+	statusNameYOffset  = 20.0
+	statusNameFontSize = 30.0
 
 	statusLeftLabelX = 220.0
 	statusLeftValueX = 500.0
@@ -118,17 +119,15 @@ func (m *MenuScene) drawStatusScreen(screen *ebiten.Image) {
 	faceCX := statusFaceBoxX + statusFaceBoxW/2
 	faceCY := statusFaceBoxY + statusFaceBoxH*statusFaceCYRat
 
-	img := g.PartyIconImgs[i]
+	img := g.StatusPortraitImgs[i]
 	iw := float64(img.Bounds().Dx())
 	ih := float64(img.Bounds().Dy())
-	const faceIconScale = 2.0
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(faceIconScale, faceIconScale)
-	op.GeoM.Translate(faceCX-iw*faceIconScale/2, faceCY-ih*faceIconScale/2)
+	op.GeoM.Translate(faceCX-iw/2, faceCY-ih/2)
 	screen.DrawImage(img, op)
 
 	nameOp := &text.DrawOptions{}
-	nameOp.GeoM.Translate(faceCX, statusFaceBoxY+statusFaceBoxH*statusNameYRat)
+	nameOp.GeoM.Translate(faceCX, statusFaceBoxY+statusFaceBoxH*statusNameYRat+statusNameYOffset)
 	nameOp.PrimaryAlign = text.AlignCenter
 	nameOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, PlayerNames[i], g.FontFace(statusNameFontSize), nameOp)

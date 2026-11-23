@@ -145,7 +145,8 @@ type Game struct {
 
 	MenuSkillPanelImg *ebiten.Image
 
-	PartyIconImgs [4]*ebiten.Image
+	PartyIconImgs      [4]*ebiten.Image
+	StatusPortraitImgs [4]*ebiten.Image
 
 	ExamineIconImg *ebiten.Image
 

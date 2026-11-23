@@ -15,24 +15,24 @@
           "text": "STOP_BGM"
         },
         {
-          "speaker": "",
-          "text": ""
+          "speaker": "player2",
+          "text": "テスト"
         },
         {
           "speaker": "SYSTEM_COMMAND",
           "text": "STOP_BGM"
         },
         {
-          "speaker": "",
-          "text": ""
+          "speaker": "player3",
+          "text": "テスト"
         },
         {
           "speaker": "SYSTEM_COMMAND",
           "text": "STOP_BGM"
         },
         {
-          "speaker": "",
-          "text": ""
+          "speaker": "player4",
+          "text": "テスト"
         },
         {
           "speaker": "SYSTEM_COMMAND",
