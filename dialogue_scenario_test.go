@@ -165,13 +165,20 @@ func TestBeginMessageActivatesForNonEmptyDialogue(t *testing.T) {
 // (exactly what title_scene.go does for a new game) must actually open
 // the message box once real content exists for that id.
 func TestOpeningDialogueActivatesMessageBox(t *testing.T) {
+	originalOpening, hadOriginalOpening := storyDialogues["opening"]
 	storyDialogues["opening"] = storyDialogueEntry{
 		First: BossDialogue{
 			Commands: []EventCommand{{Speaker: "", Text: "むかしむかし……"}},
 		},
 	}
 
-	defer delete(storyDialogues, "opening")
+	defer func() {
+		if hadOriginalOpening {
+			storyDialogues["opening"] = originalOpening
+		} else {
+			delete(storyDialogues, "opening")
+		}
+	}()
 
 	s := &FieldScene{game: &Game{}}
 	s.applyDialogue(resolveEventDialogue(storyTextPrefix+"opening", "", false))
