@@ -38,15 +38,10 @@ const (
 const (
 	statusFontSize = 30.0
 
-	statusFaceBoxX     = 270.0
-	statusFaceBoxY     = 8.0
-	statusFaceBoxW     = 195.0
-	statusFaceBoxH     = 352.0
-	statusFaceR        = 78.0
-	statusFaceCYRat    = 0.31
-	statusNameYRat     = 0.60
-	statusNameYOffset  = 20.0
-	statusNameFontSize = 30.0
+	statusContentCenterX = 370.0
+	statusPortraitY      = 117.0
+	statusNameY          = 239.0
+	statusNameFontSize   = 30.0
 
 	statusLeftLabelX = 220.0
 	statusLeftValueX = 500.0
@@ -116,18 +111,15 @@ func (m *MenuScene) drawStatusScreen(screen *ebiten.Image) {
 	g := m.game
 	i := m.statusCharIndex
 
-	faceCX := statusFaceBoxX + statusFaceBoxW/2
-	faceCY := statusFaceBoxY + statusFaceBoxH*statusFaceCYRat
-
 	img := g.StatusPortraitImgs[i]
 	iw := float64(img.Bounds().Dx())
 	ih := float64(img.Bounds().Dy())
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(faceCX-iw/2, faceCY-ih/2)
+	op.GeoM.Translate(statusContentCenterX-iw/2, statusPortraitY-ih/2)
 	screen.DrawImage(img, op)
 
 	nameOp := &text.DrawOptions{}
-	nameOp.GeoM.Translate(faceCX, statusFaceBoxY+statusFaceBoxH*statusNameYRat+statusNameYOffset)
+	nameOp.GeoM.Translate(statusContentCenterX, statusNameY)
 	nameOp.PrimaryAlign = text.AlignCenter
 	nameOp.ColorScale.ScaleWithColor(uiColorText)
 	text.Draw(screen, PlayerNames[i], g.FontFace(statusNameFontSize), nameOp)

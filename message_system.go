@@ -15,10 +15,10 @@ const (
 	msgTextSpeedDefault = 5
 	msgTextStartX       = msgWinX + 20
 
-	charaInsideX  = -50.0
+	charaInsideX  = 0.0
 	charaOutsideX = -300.0
 
-	charaRightInsideX  = 50.0
+	charaRightInsideX  = 0.0
 	charaRightOutsideX = 300.0
 
 	charaSlideSpeed = 0.12
