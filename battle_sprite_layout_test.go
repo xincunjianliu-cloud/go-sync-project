@@ -6,14 +6,20 @@ import (
 	"bytes"
 	"fmt"
 	"image/png"
+	"slices"
 	"testing"
 )
 
 // player_attack_N.png と、battle_sprite_layout.go の行ごとのコマ数・
-// スキルの行の表が食い違っていないこと（シートだけ差し替えて表を作り直し
-// 忘れると、存在しないマスを切り出してしまう）。
+// スキルの行の表が食い違っていないことを確認する。
 func TestPartySpriteSheetsMatchLayout(t *testing.T) {
 	skillLists := [partySize][]SkillDef{Player1Skills, Player2Skills, Player3Skills, Player4Skills}
+	wantFrames := [partySize][]int{
+		{2, 2, 2, 10, 14, 14, 7, 16, 17, 31, 16, 14, 26},
+		{2, 2, 2, 10, 14, 14, 12, 24, 26, 12, 27, 27, 14},
+		{2, 2, 2, 10, 14, 14, 10, 17, 16, 10, 10, 16, 16},
+		{2, 2, 2, 10, 14, 14, 17, 32, 30, 31, 31, 31, 24},
+	}
 	for i := range partySize {
 		path := fmt.Sprintf("assets/images/battle/player_attack_%d.png", i+1)
 		raw, err := embeddedAssets.ReadFile(path)
@@ -25,12 +31,18 @@ func TestPartySpriteSheetsMatchLayout(t *testing.T) {
 			t.Fatalf("%s: %v", path, err)
 		}
 		rows := partySpriteRowFrames[i]
-		if cfg.Height != len(rows)*battleSpriteCellH {
-			t.Errorf("%s: 高さ%dが行数%d×%dと合いません", path, cfg.Height, len(rows), battleSpriteCellH)
+		if !slices.Equal(rows, wantFrames[i]) {
+			t.Errorf("%s: 行ごとのコマ数%v、want %v", path, rows, wantFrames[i])
+		}
+		if len(rows) != spriteRowAttack+1+len(skillLists[i]) {
+			t.Errorf("%s: 行数%dが共通アニメとスキル数%dに合いません", path, len(rows), len(skillLists[i]))
 		}
 		for r, n := range rows {
-			if n <= 0 || n*battleSpriteCellW > cfg.Width {
+			if n <= 0 || (n-1)*battleSpriteCellW >= cfg.Width {
 				t.Errorf("%s: 行%dのコマ数%dが幅%dに収まりません", path, r, n, cfg.Width)
+			}
+			if r*battleSpriteCellH >= cfg.Height {
+				t.Errorf("%s: 行%dが高さ%dに収まりません", path, r, cfg.Height)
 			}
 		}
 		if len(rows) <= spriteRowHealRecv {
@@ -38,10 +50,13 @@ func TestPartySpriteSheetsMatchLayout(t *testing.T) {
 		}
 		// アニメの表はスキル名で引くので、名前が技データと一致していること。
 		names := map[string]bool{}
-		for _, sk := range skillLists[i] {
+		for skillIdx, sk := range skillLists[i] {
 			names[sk.Name] = true
-			if _, ok := partySkillSpriteRow[i][sk.Name]; !ok {
+			wantRow := spriteRowAttack + 1 + skillIdx
+			if gotRow, ok := partySkillSpriteRow[i][sk.Name]; !ok {
 				t.Errorf("player%d: スキル「%s」のアニメが battle_sprite_layout.go にありません", i+1, sk.Name)
+			} else if gotRow != wantRow {
+				t.Errorf("player%d: スキル「%s」の行%dは、習得順の行%dと異なります", i+1, sk.Name, gotRow, wantRow)
 			}
 		}
 		for name, r := range partySkillSpriteRow[i] {

@@ -101,7 +101,7 @@ func actionAnimDuration(n int) float64 {
 	return float64(n) * battleActionFrameDur
 }
 
-func glowFrameForLevel(level int, timer float64) int {
+func glowFrameForLevel(level int, timer float64, commandFrames int) int {
 	if level < 0 {
 		level = 0
 	}
@@ -109,6 +109,9 @@ func glowFrameForLevel(level int, timer float64) int {
 		level = 3
 	}
 	start, count := glowLevelRange[level][0], glowLevelRange[level][1]
+	if count == 0 {
+		count = max(commandFrames-start, 1)
+	}
 	if count <= 1 {
 		return start
 	}

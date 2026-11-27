@@ -2,7 +2,6 @@ package main
 
 import (
 	"image/color"
-	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -12,7 +11,7 @@ import (
 const (
 	battleIconR = 12.0
 
-	rewindBtnGapX = 20.0
+	rewindBtnGapX = -25.0
 
 	// battleIconTapMargin widens the tap target for touch input only (not
 	// mouse), since the 12px icon radius alone is too small to hit
@@ -32,8 +31,13 @@ const (
 func rewindButtonCenter(game *Game) (cx, cy float64) {
 	w := float64(game.GaugeImg.Bounds().Dx())
 	h := float64(game.GaugeImg.Bounds().Dy())
-	cx = gaugeTriX + w + rewindBtnGapX + battleIconR
-	cy = gaugeTriY + h/2
+	iconW, iconH := battleIconR*2, battleIconR*2
+	if game.RewindIconImg != nil {
+		iconW = float64(game.RewindIconImg.Bounds().Dx())
+		iconH = float64(game.RewindIconImg.Bounds().Dy())
+	}
+	cx = gaugeTriX + w + rewindBtnGapX + iconW/2
+	cy = gaugeTriY + h - iconH/2
 	return
 }
 
@@ -54,43 +58,18 @@ func drawIconSelectedRing(screen *ebiten.Image, cx, cy, r float64) {
 	vector.StrokeCircle(screen, float32(cx), float32(cy), float32(r+4), 2, color.White, true)
 }
 
-func drawRewindIcon(screen *ebiten.Image, cx, cy, r float64, selected bool) {
-	drawIconBackdrop(screen, cx, cy, r)
-	fg := color.Color(color.White)
-	if selected {
-		drawIconSelectedRing(screen, cx, cy, r)
-	} else {
-		v := uint8(255 * commandDimScale)
-		fg = color.RGBA{v, v, v, 255}
+func drawRewindIcon(screen *ebiten.Image, img *ebiten.Image, cx, cy float64, selected bool) {
+	if img == nil {
+		return
 	}
-
-	radius := r * 0.55
-	startAngle := -20.0 * math.Pi / 180
-	endAngle := 250.0 * math.Pi / 180
-
-	var path vector.Path
-	path.Arc(float32(cx), float32(cy), float32(radius), float32(startAngle), float32(endAngle), vector.Clockwise)
-
-	strokeOpts := &vector.StrokeOptions{Width: 2.5}
-	drawOpts := &vector.DrawPathOptions{AntiAlias: true}
-	drawOpts.ColorScale.ScaleWithColor(fg)
-	vector.StrokePath(screen, &path, strokeOpts, drawOpts)
-
-	sx := cx + radius*math.Cos(startAngle)
-	sy := cy + radius*math.Sin(startAngle)
-	tipAngle := startAngle - math.Pi/2.2
-	tipLen := r * 0.32
-	tx := sx + tipLen*math.Cos(tipAngle)
-	ty := sy + tipLen*math.Sin(tipAngle)
-
-	perp := startAngle + math.Pi/2
-	baseHalf := r * 0.16
-	b1x := sx + baseHalf*math.Cos(perp)
-	b1y := sy + baseHalf*math.Sin(perp)
-	b2x := sx - baseHalf*math.Cos(perp)
-	b2y := sy - baseHalf*math.Sin(perp)
-
-	fillTriPath(screen, fg, [][2]float64{{tx, ty}, {b1x, b1y}, {b2x, b2y}})
+	w := float64(img.Bounds().Dx())
+	h := float64(img.Bounds().Dy())
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(cx-w/2, cy-h/2)
+	if !selected {
+		op.ColorScale.Scale(commandDimScale, commandDimScale, commandDimScale, 1)
+	}
+	screen.DrawImage(img, op)
 }
 
 // drawItemIcon dims the icon when not selected, matching drawCommandMenu.
@@ -110,14 +89,18 @@ func drawItemIcon(screen *ebiten.Image, img *ebiten.Image, cx, cy float64, selec
 
 func isRewindButtonJustPressed(game *Game) bool {
 	cx, cy := rewindButtonCenter(game)
+	radius := battleIconR
+	if game.RewindIconImg != nil {
+		radius = float64(game.RewindIconImg.Bounds().Dx()) / 2
+	}
 	touches, mouse := justPressedTouchAndMousePoints()
 	for _, p := range touches {
-		if p.inCircle(cx, cy, battleIconR+battleIconTapMargin) {
+		if p.inCircle(cx, cy, radius+battleIconTapMargin) {
 			return true
 		}
 	}
 	for _, p := range mouse {
-		if p.inCircle(cx, cy, battleIconR) {
+		if p.inCircle(cx, cy, radius) {
 			return true
 		}
 	}
@@ -147,7 +130,7 @@ func isItemButtonJustPressed() bool {
 func (s *BattleScene) drawBattleShortcutButtons(screen *ebiten.Image, rewindSelected, itemSelected bool) {
 	rx, ry := rewindButtonCenter(s.game)
 	if s.gaugeUnlocked {
-		drawRewindIcon(screen, rx, ry, battleIconR, rewindSelected)
+		drawRewindIcon(screen, s.game.RewindIconImg, rx, ry, rewindSelected)
 	}
 
 	hasBattleItem := s.hasAnyBattleUsableItem()
@@ -170,9 +153,13 @@ func (s *BattleScene) drawBattleShortcutButtons(screen *ebiten.Image, rewindSele
 	}
 
 	if !s.game.MobileMode && s.gaugeUnlocked {
+		iconW := battleIconR * 2
+		if s.game.RewindIconImg != nil {
+			iconW = float64(s.game.RewindIconImg.Bounds().Dx())
+		}
 		op := &text.DrawOptions{}
-		op.GeoM.Translate(rx, ry+battleIconR+4)
-		op.PrimaryAlign = text.AlignCenter
+		op.GeoM.Translate(rx-iconW/2-4, ry)
+		op.PrimaryAlign = text.AlignEnd
 		op.SecondaryAlign = text.AlignCenter
 		op.ColorScale.ScaleWithColor(uiColorText)
 		text.Draw(screen, "F", s.game.FontFace(ctrlLabelFontSize), op)

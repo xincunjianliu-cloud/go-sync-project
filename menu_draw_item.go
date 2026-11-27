@@ -8,10 +8,14 @@ import (
 )
 
 const (
-	itemRowStartY     = 42.0
-	itemRowGapY       = 37.5
+	itemRowStartY     = 75.0
+	itemRowGapY       = 55.0
 	itemCountFontSize = 25.0
-	itemCountX        = 922.0
+	itemCountX        = 915.0
+
+	itemScrollBarRightGap = 12.0
+	itemScrollBarMinH     = 24.0
+	itemScrollBarTrackH   = 440.0
 )
 
 func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
@@ -20,12 +24,14 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 		return
 	}
 
-	for i, slot := range items {
+	firstVisible, lastVisible := menuItemVisibleRange(len(items), m.itemListIndex, m.itemListFirstVisible)
+	for i := firstVisible; i < lastVisible; i++ {
+		slot := items[i]
 		def, ok := GetItemDef(slot.ItemID)
 		if !ok {
 			continue
 		}
-		rowCenterY := itemRowStartY + float64(i)*itemRowGapY
+		rowCenterY := itemRowStartY + float64(i-firstVisible)*itemRowGapY
 
 		selected := false
 		switch m.menuState {
@@ -62,5 +68,11 @@ func (m *MenuScene) drawItemListMenu(screen *ebiten.Image) {
 		countOp.PrimaryAlign = text.AlignEnd
 		countOp.ColorScale.ScaleWithColor(nameCol)
 		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), m.game.FontFace(itemCountFontSize), countOp)
+	}
+
+	barX, trackY, trackHeight, thumbY, thumbH, ok := menuItemScrollBarGeometry(len(items), firstVisible, lastVisible)
+	if ok {
+		fillRect(screen, barX, trackY, scrollBarTrackWidth, trackHeight, scrollBarTrackColor)
+		fillRect(screen, barX, thumbY, scrollBarCursorWidth, thumbH, scrollBarCursorColor)
 	}
 }

@@ -252,12 +252,6 @@ func (s *EndingScene) updateSkipConfirm() {
 	}
 	tappedIdx, tappedOk := hitTestConfirmDialog(confirmImageOffsetX)
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.skipConfirmIdx, s.game.Audio)
-	if !tappedOk && unrelatedTapOutsideRects(confirmDialogRect()) {
-		s.skipConfirm = false
-		s.resumeCredits()
-		s.game.Audio.PlaySEByKey("cancel")
-		return
-	}
 	if !isConfirmKeyPressed() && !tapped {
 		return
 	}

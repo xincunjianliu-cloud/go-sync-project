@@ -64,6 +64,12 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 		countOp.ColorScale.ScaleWithColor(labelCol)
 		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), itemFace, countOp)
 	}
+
+	barX, trackY, trackHeight, thumbY, thumbH, ok := s.battleItemScrollBarGeometry(len(items), firstVisible, lastVisible)
+	if ok {
+		fillRect(screen, barX, trackY, scrollBarTrackWidth, trackHeight, scrollBarTrackColor)
+		fillRect(screen, barX, thumbY, scrollBarCursorWidth, thumbH, scrollBarCursorColor)
+	}
 }
 
 func (s *BattleScene) drawItemTargetUI(screen *ebiten.Image) {

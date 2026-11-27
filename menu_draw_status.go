@@ -32,7 +32,7 @@ const (
 	slotsPerPageView = 4
 
 	scrollBarX    = 800.0
-	scrollBarTopY = 40.0
+	scrollBarTopY = (float64(gameHeight) - scrollBarTrackHeight) / 2
 )
 
 const (
@@ -284,7 +284,7 @@ func drawSlotList(screen *ebiten.Image, g *Game, selectedIndex int, slotData [ma
 	}
 
 	barX := scrollBarX + (cardStartX - slotCardStartX)
-	barTop := scrollBarTopY + (cardStartY - slotCardStartY)
+	barTop := slotScrollBarTop(cardStartY)
 	drawSaveScrollBar(screen, float64(scrollTop)-dragOffsetY/cardH, barX, barTop)
 }
 
@@ -393,7 +393,10 @@ var (
 	scrollBarCursorColor = color.NRGBA{255, 0, 12, 235}
 )
 
-const scrollBarTouchPad = 16.0
+const (
+	scrollBarTouchPad      = 16.0
+	itemScrollBarTouchPadX = 5.0
+)
 
 func slotScrollBarX(cardStartX float64) float64 {
 	return scrollBarX + (cardStartX - slotCardStartX)

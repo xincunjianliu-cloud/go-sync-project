@@ -179,13 +179,12 @@ const (
 )
 
 // spriteFrameW/H は味方1人が画面上で占める枠（足元の位置やタップ判定、
-// ダメージ表示の基準）。スプライトシートのマス（battleSpriteCellW/H）を
-// battleSpriteScale倍にして、この枠の下端・左右中央にそろえて描く。
+// ダメージ表示の基準）。スプライトは元サイズで、この枠の下端・左右中央にそろえて描く。
 const (
 	spriteFrameW = 64
 	spriteFrameH = 96
 
-	battleSpriteScale = 2
+	battleSpriteScale = 1
 )
 
 // damagePopHeadOffsetRatio positions damage/heal popups a fraction of the
@@ -216,16 +215,14 @@ const (
 )
 
 // player_attack_N.png の共通アニメの行。
-// この後ろに専用アニメのあるスキルの行が続き、どのスキルがどの行かは
-// partySkillSpriteRow（スキル名で引く）にある。
 const (
 	spriteRowIdle = iota
-	spriteRowDamage
 	spriteRowWalk
+	spriteRowDamage
 	spriteRowCommand
-	spriteRowAttack
-	spriteRowBuffRecv
 	spriteRowHealRecv
+	spriteRowBuffRecv
+	spriteRowAttack
 )
 
 // battleSpriteFrameDur は待機・歩きなどくり返すアニメを1コマ表示する秒数。
@@ -242,13 +239,12 @@ const (
 	animSkill
 )
 
-// glowLevelRange はスキル選択中のコマンド選択アニメで、スキルレベルごとに
-// 使うコマの{開始, コマ数}。
+// glowLevelRange はコマンド選択アニメで使うコマの{開始, コマ数}。
 var glowLevelRange = [4][2]int{
 	{0, 1},
 	{1, 1},
-	{2, 1},
-	{3, 6},
+	{1, 3},
+	{1, 0}, // zero count selects from the second through last command frame
 }
 
 const (
@@ -531,9 +527,12 @@ type BattleScene struct {
 	pendingSkill   int
 	pendingSynergy bool
 
-	itemIndex       int
-	pendingItemID   string
-	itemTargetIndex int
+	itemIndex         int
+	itemFirstVisible  int
+	itemScrollBarDrag dragScrollState
+	itemScrollAccum   float64
+	pendingItemID     string
+	itemTargetIndex   int
 
 	skillLevelCursors [partySize][8]int
 	healTargetIndex   int

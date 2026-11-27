@@ -25,10 +25,11 @@ const (
 	logTextOffsetX = 180.0
 	logTextOffsetY = 30.0
 
-	logVisibleCount  = 4
-	logScrollStep    = 1.0
-	logScrollBarGap  = 16.0
-	logScrollBarMinH = 24.0
+	logVisibleCount    = 4
+	logScrollStep      = 1.0
+	logScrollBarGap    = 16.0
+	logScrollBarMinH   = 24.0
+	logScrollBarTrackH = 461.0
 
 	logSelectPulseSpeed = 3.0
 )
@@ -158,15 +159,13 @@ func logScrollBarGeometry(game *Game, entryCount int) (barX, trackY, trackHeight
 	imgH := float64(game.LogEntryImg.Bounds().Dy())
 	colX := (float64(gameWidth) - logColumnWidth) / 2
 	barX = colX + logColumnWidth + logScrollBarGap
-	trackHeight = float64(logVisibleCount)*imgH + float64(logVisibleCount-1)*logEntryGap
+	contentHeight := float64(logVisibleCount)*imgH + float64(logVisibleCount-1)*logEntryGap
+	trackHeight = min(logScrollBarTrackH, contentHeight)
 	trackY = (float64(gameHeight) - trackHeight) / 2
 	if entryCount <= 0 {
 		entryCount = 1
 	}
-	thumbH = trackHeight * (float64(logVisibleCount) / float64(entryCount))
-	if thumbH < logScrollBarMinH {
-		thumbH = logScrollBarMinH
-	}
+	thumbH = min(trackHeight, max(logScrollBarMinH, trackHeight*(float64(logVisibleCount)/float64(entryCount))))
 	moveRange = max(trackHeight-thumbH, 0)
 	return
 }

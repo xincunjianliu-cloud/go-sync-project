@@ -501,6 +501,9 @@ func (s *BattleScene) updatePlayerMenu() Scene {
 		if p >= 0 && p < partySize {
 			s.game.Audio.PlaySEByKey("decide")
 			s.itemIndex = 0
+			s.itemFirstVisible = 0
+			s.itemScrollBarDrag = dragScrollState{}
+			s.itemScrollAccum = 0
 			s.battlePhase = phaseItemMenu
 			return nil
 		}

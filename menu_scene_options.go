@@ -216,16 +216,6 @@ func (m *MenuScene) updateOption() {
 		}
 		return
 	}
-
-	if !tappedOk && unrelatedTapOutsideRects(m.optionPanelRect()) {
-		m.game.Audio.PlaySEByKey("cancel")
-		m.finishVolumeInput()
-		if m.titleOptions {
-			m.nextScene = m.backScene
-		} else {
-			m.menuState = menuStateMain
-		}
-	}
 }
 
 func (m *MenuScene) hitTestOptionArrows() (int, int, bool) {

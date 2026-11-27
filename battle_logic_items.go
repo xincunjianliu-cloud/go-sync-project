@@ -1,5 +1,7 @@
 package main
 
+import "github.com/hajimehoshi/ebiten/v2"
+
 func (s *BattleScene) battleUsableItems() []InventorySlot {
 	return filterInventory(s.game.Inventory, func(def ItemDef) bool {
 		if !def.UsableInBattle {
@@ -16,6 +18,11 @@ func (s *BattleScene) hasAnyBattleUsableItem() bool {
 func (s *BattleScene) updateItemMenu() {
 	p := s.waitingActor
 	if p < 0 || p >= partySize {
+		s.battlePhase = phasePlayerMenu
+		return
+	}
+	if isEscapePressed() {
+		s.game.Audio.PlaySEByKey("cancel")
 		s.battlePhase = phasePlayerMenu
 		return
 	}
@@ -41,9 +48,17 @@ func (s *BattleScene) updateItemMenu() {
 		s.game.Audio.PlaySEByKey("cursor")
 	}
 	firstVisible, lastVisible := s.battleItemVisibleRange(len(items))
-	tappedIdx, tappedOk := s.hitTestBattleSubRowsFrom(firstVisible, lastVisible-firstVisible)
+	s.itemFirstVisible = firstVisible
+	if s.updateBattleItemScrollBar(len(items), firstVisible, lastVisible) {
+		return
+	}
+	_, wheelY := ebiten.Wheel()
+	s.scrollBattleItemListByWheel(len(items), wheelY)
+	firstVisible, lastVisible = s.battleItemVisibleRange(len(items))
+	tappedIdx, tappedOk := s.hitTestBattleItemRowsFrom(len(items), firstVisible, lastVisible)
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.itemIndex, s.game.Audio)
-	if isEscapePressed() || (!tappedOk && s.isTapOutsideBattleSubPanel()) {
+	s.itemFirstVisible, _ = s.battleItemVisibleRange(len(items))
+	if !tappedOk && s.isTapOutsideBattleSubPanel() {
 		s.game.Audio.PlaySEByKey("cancel")
 		s.battlePhase = phasePlayerMenu
 		return
@@ -68,6 +83,58 @@ func (s *BattleScene) updateItemMenu() {
 		s.itemTargetIndex = partySize
 	}
 	s.battlePhase = phaseItemTarget
+}
+
+func (s *BattleScene) updateBattleItemScrollBar(itemCount, firstVisible, lastVisible int) bool {
+	barX, trackY, trackHeight, _, thumbH, ok := s.battleItemScrollBarGeometry(itemCount, firstVisible, lastVisible)
+	if !ok {
+		s.itemScrollBarDrag.step(float64(gameWidth)+1, 0, 0, 0)
+		return false
+	}
+
+	dragRectX := barX - itemScrollBarTouchPadX
+	dragRectW := scrollBarCursorWidth + itemScrollBarTouchPadX*2
+	delta := s.itemScrollBarDrag.step(dragRectX, trackY, dragRectW, trackHeight)
+	moveRange := max(trackHeight-thumbH, 0)
+	if delta != 0 && moveRange > 0 {
+		visibleRows := lastVisible - firstVisible
+		maxFirst := itemCount - visibleRows
+		s.itemScrollBarDrag.stepScrollTop(
+			-delta/moveRange*float64(maxFirst),
+			1,
+			&s.itemFirstVisible,
+			maxFirst,
+			&s.itemScrollAccum,
+		)
+		s.itemFirstVisible = max(0, min(s.itemFirstVisible, maxFirst))
+		last := s.itemFirstVisible + visibleRows
+		s.itemIndex = max(s.itemFirstVisible, min(s.itemIndex, last-1))
+	}
+	return s.itemScrollBarDrag.active || s.itemScrollBarDrag.justTapped
+}
+
+func (s *BattleScene) scrollBattleItemListByWheel(itemCount int, wheelY float64) {
+	firstVisible, lastVisible := s.battleItemVisibleRange(itemCount)
+	visibleRows := lastVisible - firstVisible
+	maxFirst := itemCount - visibleRows
+	if maxFirst <= 0 || wheelY == 0 {
+		return
+	}
+
+	stepScrollTopByWheel(
+		wheelY,
+		battleSubRowHeight,
+		&s.itemFirstVisible,
+		maxFirst,
+		&s.itemScrollAccum,
+	)
+	s.itemFirstVisible = max(0, min(s.itemFirstVisible, maxFirst))
+	if s.itemFirstVisible == 0 && s.itemScrollAccum > 0 ||
+		s.itemFirstVisible == maxFirst && s.itemScrollAccum < 0 {
+		s.itemScrollAccum = 0
+	}
+	last := s.itemFirstVisible + visibleRows
+	s.itemIndex = max(s.itemFirstVisible, min(s.itemIndex, last-1))
 }
 
 func (s *BattleScene) updateItemTargetSelect() {

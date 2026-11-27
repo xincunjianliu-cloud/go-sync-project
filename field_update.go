@@ -129,15 +129,6 @@ func (s *FieldScene) Update(dt float64) Scene {
 				}
 			}
 		}
-		imgW := float64(s.game.LogEntryImg.Bounds().Dx())
-		imgH := float64(s.game.LogEntryImg.Bounds().Dy())
-		contentH := float64(logVisibleCount)*imgH + float64(logVisibleCount-1)*logEntryGap
-		logRect := tapRect{x: logImageStartX, y: logImageStartY, w: imgW, h: contentH}
-		barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
-		if unrelatedTapOutsideRects(logRect, barRect) {
-			s.isLogActive = false
-			s.game.Audio.PlaySEByKey("menu_toggle")
-		}
 		if isConfirmKeyPressed() || isEscapePressed() || isLogTogglePressed() {
 			s.isLogActive = false
 			s.game.Audio.PlaySEByKey("menu_toggle")
@@ -1348,11 +1339,6 @@ func (s *FieldScene) updateMessageSkipConfirm() Scene {
 	}
 	tappedIdx, tappedOk := hitTestConfirmDialog(confirmImageOffsetX)
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &s.msgSkipConfirmIdx, s.game.Audio)
-	if !tappedOk && unrelatedTapOutsideRects(confirmDialogRect()) {
-		s.msgSkipConfirm = false
-		s.game.Audio.PlaySEByKey("cancel")
-		return s
-	}
 	if !isConfirmKeyPressed() && !tapped {
 		return s
 	}

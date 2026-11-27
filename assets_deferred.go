@@ -399,6 +399,7 @@ func deferredAssetAssignments() []deferredAssetAssign {
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/%s.png", name), func(g *Game, img *ebiten.Image) { g.CommandIcons[i] = img })
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/%s_selected.png", name), func(g *Game, img *ebiten.Image) { g.CommandIconsSelected[i] = img })
 	}
+	add(assetTierBattle, "assets/images/battle/rewind.png", func(g *Game, img *ebiten.Image) { g.RewindIconImg = img })
 
 	for i := range 4 {
 		add(assetTierBattle, fmt.Sprintf("assets/images/battle/timeline_p%d.png", i+1), func(g *Game, img *ebiten.Image) { g.TimelineIcons[i] = img })

@@ -1,17 +1,130 @@
 package main
 
+import "github.com/hajimehoshi/ebiten/v2"
+
 func (m *MenuScene) hitTestItemListRows(rowCount int) (int, bool) {
-	rects := make([]tapRect, rowCount)
-	for i := range rowCount {
+	firstVisible, lastVisible := menuItemVisibleRange(rowCount, m.itemListIndex, m.itemListFirstVisible)
+	rects := make([]tapRect, lastVisible-firstVisible)
+	rowRight := itemCountX + 20
+	if _, _, _, _, _, hasScrollBar := menuItemScrollBarGeometry(rowCount, firstVisible, lastVisible); hasScrollBar {
+		barX := menuFrameRight - itemScrollBarRightGap - scrollBarTrackWidth
+		rowRight = min(rowRight, barX-itemScrollBarTouchPadX)
+	}
+	for i := range rects {
 		y := itemRowStartY + float64(i)*itemRowGapY
 		rects[i] = tapRect{
 			x: skillNameX - 4,
 			y: y - itemRowGapY/2,
-			w: itemCountX - skillNameX + 20,
+			w: rowRight - (skillNameX - 4),
 			h: itemRowGapY,
 		}
 	}
-	return hitTestTapRects(rects)
+	row, ok := hitTestTapRects(rects)
+	if !ok {
+		return 0, false
+	}
+	return firstVisible + row, true
+}
+
+func menuItemVisibleRowCount(itemCount int) int {
+	if itemCount <= 0 {
+		return 0
+	}
+
+	availableHeight := menuFrameBottom - itemRowStartY - itemRowGapY/2
+	visibleRows := max(1, int(availableHeight/itemRowGapY)+1)
+	return min(visibleRows, itemCount)
+}
+
+func menuItemVisibleRange(itemCount, selectedIndex, requestedFirst int) (first, last int) {
+	visibleRows := menuItemVisibleRowCount(itemCount)
+	if visibleRows <= 0 {
+		return 0, 0
+	}
+
+	selectedIndex = max(0, min(selectedIndex, itemCount-1))
+	first = max(0, min(requestedFirst, itemCount-visibleRows))
+	if selectedIndex < first {
+		first = selectedIndex
+	} else if selectedIndex >= first+visibleRows {
+		first = selectedIndex - visibleRows + 1
+	}
+	return first, first + visibleRows
+}
+
+func (m *MenuScene) syncItemListFirstVisible(itemCount int) {
+	m.itemListFirstVisible, _ = menuItemVisibleRange(itemCount, m.itemListIndex, m.itemListFirstVisible)
+}
+
+func (m *MenuScene) updateItemListScrollBar(itemCount int) bool {
+	firstVisible, lastVisible := menuItemVisibleRange(itemCount, m.itemListIndex, m.itemListFirstVisible)
+	barX, trackY, trackHeight, _, thumbH, ok := menuItemScrollBarGeometry(itemCount, firstVisible, lastVisible)
+	if !ok {
+		m.itemScrollBarDrag.step(float64(gameWidth)+1, 0, 0, 0)
+		return false
+	}
+
+	dragRectX := barX - itemScrollBarTouchPadX
+	dragRectW := scrollBarCursorWidth + itemScrollBarTouchPadX*2
+	delta := m.itemScrollBarDrag.step(dragRectX, trackY, dragRectW, trackHeight)
+	moveRange := max(trackHeight-thumbH, 0)
+	if delta != 0 && moveRange > 0 {
+		visibleRows := lastVisible - firstVisible
+		maxFirst := itemCount - visibleRows
+		m.itemScrollBarDrag.stepScrollTop(
+			-delta/moveRange*float64(maxFirst),
+			1,
+			&m.itemListFirstVisible,
+			maxFirst,
+			&m.itemScrollAccum,
+		)
+		m.itemListFirstVisible = max(0, min(m.itemListFirstVisible, maxFirst))
+		last := m.itemListFirstVisible + visibleRows
+		m.itemListIndex = max(m.itemListFirstVisible, min(m.itemListIndex, last-1))
+	}
+	return m.itemScrollBarDrag.active || m.itemScrollBarDrag.justTapped
+}
+
+func (m *MenuScene) scrollItemListByWheel(itemCount int, wheelY float64) {
+	firstVisible, lastVisible := menuItemVisibleRange(itemCount, m.itemListIndex, m.itemListFirstVisible)
+	visibleRows := lastVisible - firstVisible
+	maxFirst := itemCount - visibleRows
+	if maxFirst <= 0 || wheelY == 0 {
+		return
+	}
+
+	stepScrollTopByWheel(
+		wheelY,
+		itemRowGapY,
+		&m.itemListFirstVisible,
+		maxFirst,
+		&m.itemScrollAccum,
+	)
+	m.itemListFirstVisible = max(0, min(m.itemListFirstVisible, maxFirst))
+	if m.itemListFirstVisible == 0 && m.itemScrollAccum > 0 ||
+		m.itemListFirstVisible == maxFirst && m.itemScrollAccum < 0 {
+		m.itemScrollAccum = 0
+	}
+	last := m.itemListFirstVisible + visibleRows
+	m.itemListIndex = max(m.itemListFirstVisible, min(m.itemListIndex, last-1))
+}
+
+func menuItemScrollBarGeometry(itemCount, firstVisible, lastVisible int) (barX, trackY, trackHeight, thumbY, thumbH float64, ok bool) {
+	visibleRows := lastVisible - firstVisible
+	if itemCount <= visibleRows || visibleRows <= 0 {
+		return 0, 0, 0, 0, 0, false
+	}
+
+	barX = menuFrameRight - itemScrollBarRightGap - scrollBarTrackWidth
+	trackHeight = min(itemScrollBarTrackH, menuFrameBottom-menuFrameTop)
+	trackY = menuFrameTop + (menuFrameBottom-menuFrameTop-trackHeight)/2
+	thumbH = min(trackHeight, max(itemScrollBarMinH, trackHeight*float64(visibleRows)/float64(itemCount)))
+	moveRange := max(trackHeight-thumbH, 0)
+	maxStart := itemCount - visibleRows
+	ratio := float64(firstVisible) / float64(maxStart)
+	ratio = max(0, min(ratio, 1))
+	thumbY = trackY + ratio*moveRange
+	return barX, trackY, trackHeight, thumbY, thumbH, true
 }
 
 func (m *MenuScene) menuItems() []InventorySlot {
@@ -39,6 +152,7 @@ func nextItemListIndex(itemCount, from, dir int) (int, bool) {
 func (m *MenuScene) clampItemListIndex(itemCount int) {
 	if itemCount <= 0 {
 		m.itemListIndex = 0
+		m.itemListFirstVisible = 0
 		return
 	}
 	if m.itemListIndex >= itemCount {
@@ -61,10 +175,6 @@ func (m *MenuScene) updateItemList() {
 		if isConfirmKeyPressed() {
 			m.game.Audio.PlaySEByKey("error")
 		}
-		if unrelatedTapOutsideRects(menuMainContentRect()) {
-			m.game.Audio.PlaySEByKey("cancel")
-			m.menuState = menuStateMain
-		}
 		return
 	}
 	m.clampItemListIndex(len(items))
@@ -81,19 +191,23 @@ func (m *MenuScene) updateItemList() {
 			m.game.Audio.PlaySEByKey("cursor")
 		}
 	}
+	m.syncItemListFirstVisible(len(items))
+	if m.updateItemListScrollBar(len(items)) {
+		return
+	}
+	_, wheelY := ebiten.Wheel()
+	m.scrollItemListByWheel(len(items), wheelY)
+
 	tapped := false
 	if idx, ok := m.hitTestItemListRows(len(items)); ok {
 		if idx != m.itemListIndex {
 			m.game.Audio.PlaySEByKey("cursor")
 		}
 		m.itemListIndex = idx
+		m.syncItemListFirstVisible(len(items))
 		tapped = true
 	}
 	if !isConfirmKeyPressed() && !tapped {
-		if unrelatedTapOutsideRects(menuMainContentRect()) {
-			m.game.Audio.PlaySEByKey("cancel")
-			m.menuState = menuStateMain
-		}
 		return
 	}
 
@@ -144,6 +258,12 @@ func (m *MenuScene) updateItemTarget() {
 	def.CureDebuff = false
 
 	items := m.menuItems()
+	m.syncItemListFirstVisible(len(items))
+	if m.updateItemListScrollBar(len(items)) {
+		return
+	}
+	_, wheelY := ebiten.Wheel()
+	m.scrollItemListByWheel(len(items), wheelY)
 	if idx, ok := m.hitTestItemListRows(len(items)); ok {
 		if items[idx].ItemID != m.pendingItemID {
 			if !itemUsableInField(items[idx]) {
@@ -151,6 +271,7 @@ func (m *MenuScene) updateItemTarget() {
 			}
 			m.game.Audio.PlaySEByKey("decide")
 			m.itemListIndex = idx
+			m.syncItemListFirstVisible(len(items))
 			m.beginItemTarget(items[idx].ItemID)
 		}
 		return

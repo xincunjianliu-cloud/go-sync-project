@@ -1,6 +1,28 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+func TestBattleItemScrollBarTrackCenteredInVisiblePanel(t *testing.T) {
+	panel := ebiten.NewImage(190, 253)
+	defer panel.Deallocate()
+	scene := &BattleScene{game: &Game{SkillPanelImg: panel}}
+
+	_, panelTop, _, panelHeight := scene.battleSubPanelOrigin()
+	panelBottom := min(panelTop+panelHeight, float64(gameHeight))
+	panelCenter := (panelTop + panelBottom) / 2
+	_, trackY, trackHeight, _, _, ok := scene.battleItemScrollBarGeometry(10, 0, 6)
+	if !ok {
+		t.Fatal("scrollbar hidden when items overflow")
+	}
+	if trackHeight != battleItemScrollBarTrackH || trackY+trackHeight/2 != panelCenter {
+		t.Errorf("battle scrollbar track = y %.1f h %.1f, want height %.1f centered at y %.1f",
+			trackY, trackHeight, battleItemScrollBarTrackH, panelCenter)
+	}
+}
 
 func TestBattleCanUseHPItemAtFullHealth(t *testing.T) {
 	g := &Game{}
@@ -181,6 +203,21 @@ func TestBattleItemListOnlyCountsRowsVisibleOnScreen(t *testing.T) {
 	start := max(0, lastItemIndex-rows+1)
 	if start+rows != len(ItemDatabase) {
 		t.Fatalf("visible range [%d, %d) does not include last item", start, start+rows)
+	}
+}
+
+func TestBattleItemVisibleRangeHonorsScrollbarPosition(t *testing.T) {
+	panel := ebiten.NewImage(190, 253)
+	defer panel.Deallocate()
+	scene := &BattleScene{game: &Game{SkillPanelImg: panel}}
+	rows := visibleBattleItemRowCount(12, 313.5, float64(gameHeight))
+	scene.itemFirstVisible = 3
+	scene.itemIndex = scene.itemFirstVisible + rows/2
+
+	first, last := scene.battleItemVisibleRange(12)
+	if first != scene.itemFirstVisible || last != scene.itemFirstVisible+rows {
+		t.Errorf("visible range after scrollbar move = [%d, %d), want [%d, %d)",
+			first, last, scene.itemFirstVisible, scene.itemFirstVisible+rows)
 	}
 }
 

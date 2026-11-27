@@ -65,6 +65,7 @@ type Game struct {
 	PlayerAttackSprites  [4]*ebiten.Image
 	CommandIcons         [4]*ebiten.Image
 	CommandIconsSelected [4]*ebiten.Image
+	RewindIconImg        *ebiten.Image
 	ItemButtonImg        *ebiten.Image
 	TimelineIcons        [4]*ebiten.Image
 	TimelineIconsLarge   [4]*ebiten.Image

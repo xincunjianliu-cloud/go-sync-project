@@ -477,13 +477,6 @@ func (s *LoadSlotScene) Update(dt float64) Scene {
 		return s
 	}
 
-	cardW := float64(s.game.SaveThumbFrameImg.Bounds().Dx())
-	cardRect := tapRect{x: slotCardStartX - 80, y: slotCardStartY, w: cardW, h: dragArea}
-	barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
-	if unrelatedTapOutsideRects(cardRect, barRect) {
-		s.game.Audio.PlaySEByKey("cancel")
-		return s.backScene
-	}
 	return s
 }
 

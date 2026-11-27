@@ -15,14 +15,16 @@ const (
 
 	// パネル画像の左上を (0, 0) とした配置座標。
 	// スキル名・アイテム名・MP・Lvの位置はこの値だけで調整できる。
-	battleSubTextLocalX    = 7.0
-	battleSubLabelLocalY   = 22.0
-	battleSubRowHeight     = 35.0
-	battleSubMPLocalX      = 157.0
-	battleSubLevelLocalX   = 115.0
-	battleSubLvGap         = 2.0
-	battleSubLvHitPadX     = 5.0
-	battleSubSkillFontSize = 18.0
+	battleSubTextLocalX         = 7.0
+	battleSubLabelLocalY        = 18.0
+	battleSubRowHeight          = 35.0
+	battleSubMPLocalX           = 160.0
+	battleSubLevelLocalX        = 117.0
+	battleSubLvGap              = 2.0
+	battleSubLvHitPadX          = 5.0
+	battleSubSkillFontSize      = 18.0
+	battleItemScrollBarRightGap = 6.0
+	battleItemScrollBarTrackH   = 198.5
 
 	skillLvLeftArrow  = "◀"
 	skillLvRightArrow = "▶"
@@ -118,17 +120,73 @@ func (s *BattleScene) hitTestBattleSubRowsFrom(firstRow, rowCount int) (int, boo
 	return 0, false
 }
 
+func (s *BattleScene) hitTestBattleItemRowsFrom(itemCount, firstVisible, lastVisible int) (int, bool) {
+	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
+	barX, _, _, _, _, hasScrollBar := s.battleItemScrollBarGeometry(itemCount, firstVisible, lastVisible)
+	rowRight := windowX + windowW
+	if hasScrollBar {
+		rowRight = min(rowRight, barX-itemScrollBarTouchPadX)
+	}
+	rects := make([]tapRect, lastVisible-firstVisible)
+	for row := range rects {
+		_, y := battleSubPanelTextPoint(windowX, windowY, firstVisible+row)
+		rects[row] = tapRect{
+			x: windowX,
+			y: y - battleSubRowHeight/2,
+			w: rowRight - windowX,
+			h: battleSubRowHeight,
+		}
+	}
+	if row, ok := hitTestTapRects(rects); ok {
+		return firstVisible + row, true
+	}
+	return 0, false
+}
+
 func (s *BattleScene) battleItemVisibleRange(itemCount int) (start, end int) {
+	if itemCount <= 0 {
+		return 0, 0
+	}
 	_, panelTop, _, panelHeight := s.battleSubPanelOrigin()
 	panelBottom := min(panelTop+panelHeight, float64(gameHeight))
 	visibleRows := visibleBattleItemRowCount(itemCount, panelTop, panelBottom)
-	start = max(0, min(s.itemIndex-visibleRows+1, itemCount-visibleRows))
+	start = max(0, min(s.itemFirstVisible, itemCount-visibleRows))
+	if s.itemIndex < start {
+		start = s.itemIndex
+	} else if s.itemIndex >= start+visibleRows {
+		start = s.itemIndex - visibleRows + 1
+	}
 	return start, start + visibleRows
 }
 
 func visibleBattleItemRowCount(itemCount int, panelTop, panelBottom float64) int {
 	visibleRows := max(1, int((panelBottom-panelTop-battleSubLabelLocalY-battleSubRowHeight/2)/battleSubRowHeight)+1)
 	return min(visibleRows, itemCount)
+}
+
+func (s *BattleScene) battleItemScrollBarGeometry(itemCount, firstVisible, lastVisible int) (barX, trackY, trackHeight, thumbY, thumbH float64, ok bool) {
+	visibleRows := lastVisible - firstVisible
+	if itemCount <= visibleRows || visibleRows <= 0 {
+		return 0, 0, 0, 0, 0, false
+	}
+
+	windowX, windowY, windowW, windowH := s.battleSubPanelOrigin()
+	panelBottom := min(windowY+windowH, float64(gameHeight))
+	panelHeight := max(panelBottom-windowY, 0)
+	trackHeight = min(battleItemScrollBarTrackH, panelHeight)
+	trackY = windowY + (panelHeight-trackHeight)/2
+	barX = windowX + windowW - battleItemScrollBarRightGap - scrollBarTrackWidth
+
+	thumbH = min(trackHeight, max(24.0, trackHeight*(float64(visibleRows)/float64(itemCount))))
+	moveRange := max(trackHeight-thumbH, 0)
+	maxStart := itemCount - visibleRows
+	ratio := 0.0
+	if maxStart > 0 {
+		ratio = float64(firstVisible) / float64(maxStart)
+		ratio = max(0, min(ratio, 1))
+	}
+	thumbY = trackY + ratio*moveRange
+	return barX, trackY, trackHeight, thumbY, thumbH, true
 }
 
 func (s *BattleScene) skillLevelArrowRects(row, lv int, face text.Face) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {

@@ -85,9 +85,12 @@ type MenuScene struct {
 	pendingSkill        int
 	pendingSkillLevel   int
 
-	itemListIndex   int
-	pendingItemID   string
-	itemTargetIndex int
+	itemListIndex        int
+	itemListFirstVisible int
+	itemScrollBarDrag    dragScrollState
+	itemScrollAccum      float64
+	pendingItemID        string
+	itemTargetIndex      int
 }
 
 func NewMenuScene(game *Game, backScene Scene) *MenuScene {
@@ -268,10 +271,6 @@ func (m *MenuScene) updateMain() {
 		tapped = true
 	}
 	if !isConfirmKeyPressed() && !tapped {
-		if unrelatedTapOutsideRects(menuMainContentRect()) {
-			m.game.Audio.PlaySEByKey("menu_toggle")
-			m.nextScene = m.backScene
-		}
 		return
 	}
 	m.game.Audio.PlaySEByKey("decide")
@@ -362,10 +361,6 @@ func (m *MenuScene) updateStatus() {
 		m.game.LastStatusCharIndex = m.statusCharIndex
 		m.game.Audio.PlaySEByKey("cursor")
 	}
-	if unrelatedTapOutsideRects(menuMainContentRect()) {
-		m.game.Audio.PlaySEByKey("cancel")
-		m.menuState = m.statusBackState()
-	}
 }
 
 func (m *MenuScene) enterSlotScreen(save bool) {
@@ -451,13 +446,6 @@ func (m *MenuScene) updateSlot() {
 	}
 
 	if !isConfirmKeyPressed() && !tapped {
-		cardW := float64(m.game.SaveThumbFrameImg.Bounds().Dx())
-		cardRect := tapRect{x: slotCardStartX, y: slotCardStartY, w: cardW, h: dragArea}
-		barRect := tapRect{x: barX, y: barY, w: barW, h: barH}
-		if unrelatedTapOutsideRects(cardRect, barRect) {
-			m.game.Audio.PlaySEByKey("cancel")
-			m.menuState = menuStateMain
-		}
 		return
 	}
 

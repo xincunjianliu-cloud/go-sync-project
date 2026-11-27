@@ -119,10 +119,6 @@ func (m *MenuScene) updateSkillCharSel() {
 		tapped = true
 	}
 	if !isConfirmKeyPressed() && !tapped {
-		if unrelatedTapOutsideRects(menuMainContentRect()) {
-			m.game.Audio.PlaySEByKey("cancel")
-			m.menuState = menuStateMain
-		}
 		return
 	}
 	m.game.Audio.PlaySEByKey("decide")
@@ -186,8 +182,6 @@ func (m *MenuScene) updateSkillSub() {
 		}
 		return
 	}
-	areaTapped := tapInsideRect(menuMainContentRect())
-
 	skills := m.game.CharacterSkills(m.skillCharIndex)
 	n := len(skills)
 	if n == 0 {
@@ -200,9 +194,7 @@ func (m *MenuScene) updateSkillSub() {
 
 	if m.skillLevelSelecting {
 		tappedLvConfirm := false
-		levelAreaTapped := false
 		if rowT, lvT, ok := m.hitTestAnySkillLevelCell(skills); ok && m.isSkillRowUnlocked(rowT) {
-			levelAreaTapped = true
 			rowReachable := m.reachableSkillLevel(m.skillCharIndex, rowT)
 			if lvT > rowReachable {
 				lvT = rowReachable
@@ -224,7 +216,6 @@ func (m *MenuScene) updateSkillSub() {
 			tappedLvConfirm = tapSelectOrConfirm(lvT, true, &m.skillLevelCursor, m.game.Audio)
 			m.game.LastSkillLevelCursor = m.skillLevelCursor
 		} else if rowT, ok := m.hitTestSkillNameRows(n); ok && m.isSkillRowUnlocked(rowT) {
-			levelAreaTapped = true
 			if rowT != m.skillSubIndex {
 				m.skillSubIndex = rowT
 				newCurLv := max(m.game.PlayerSkillLv[m.skillCharIndex][rowT], 1)
@@ -244,12 +235,6 @@ func (m *MenuScene) updateSkillSub() {
 			m.upgradeProgress = 0
 		}
 		if isEscapePressed() {
-			m.game.Audio.PlaySEByKey("cancel")
-			m.skillLevelSelecting = false
-			m.upgradeHoldArmed = false
-			return
-		}
-		if unrelatedTapPressed(levelAreaTapped || areaTapped) {
 			m.game.Audio.PlaySEByKey("cancel")
 			m.skillLevelSelecting = false
 			m.upgradeHoldArmed = false
@@ -387,10 +372,6 @@ func (m *MenuScene) updateSkillSub() {
 		return
 	}
 
-	if unrelatedTapPressed(tappedOk || areaTapped) {
-		m.game.Audio.PlaySEByKey("cancel")
-		m.menuState = menuStateSkillCharSel
-	}
 }
 
 func (m *MenuScene) updateHealTarget() {
@@ -412,11 +393,6 @@ func (m *MenuScene) updateHealTarget() {
 	tappedIdx, tappedOk := m.hitTestPartyRowsWithAll(true)
 	tapped := tapSelectOrConfirm(tappedIdx, tappedOk, &m.healTargetIndex, m.game.Audio)
 	if !isConfirmKeyPressed() && !tapped {
-		if unrelatedTapOutsideRects(menuMainContentRect()) {
-			m.game.Audio.PlaySEByKey("cancel")
-			m.pendingSkill = 0
-			m.menuState = menuStateSkillSub
-		}
 		return
 	}
 	caster := m.skillCharIndex

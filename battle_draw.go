@@ -100,11 +100,16 @@ func (s *BattleScene) partySpriteSrcRect(i int) (spriteSheet *ebiten.Image, srcR
 	row, frame := s.partySpriteRowFrame(i)
 	srcX := frame * battleSpriteCellW
 	srcY := row * battleSpriteCellH
-	srcRect = image.Rect(srcX, srcY, srcX+battleSpriteCellW, srcY+battleSpriteCellH)
-
-	if !srcRect.In(spriteSheet.Bounds()) {
-		srcRect = image.Rect(0, 0, battleSpriteCellW, battleSpriteCellH)
+	bounds := spriteSheet.Bounds()
+	if srcX >= bounds.Max.X || srcY >= bounds.Max.Y {
+		return nil, image.Rectangle{}, false
 	}
+	srcRect = image.Rect(
+		srcX,
+		srcY,
+		min(srcX+battleSpriteCellW, bounds.Max.X),
+		min(srcY+battleSpriteCellH, bounds.Max.Y),
+	)
 
 	return spriteSheet, srcRect, true
 }
@@ -127,7 +132,7 @@ func (s *BattleScene) partySpriteRowFrame(i int) (row, frame int) {
 	case poseReady:
 		return spriteRowCommand, 0
 	case poseReadyGlow:
-		return spriteRowCommand, glowFrameForLevel(s.skillGlowLevel, timer)
+		return spriteRowCommand, glowFrameForLevel(s.skillGlowLevel, timer, frames(spriteRowCommand))
 	case poseAttack:
 		return spriteRowAttack, actionFrame(frames(spriteRowAttack), s.attackPhaseTimer)
 	case poseSkill:

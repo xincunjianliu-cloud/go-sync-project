@@ -144,6 +144,25 @@ const (
 	wheelScrollPxPerNotch = 60.0
 )
 
+func stepScrollTopByWheel(wheelY, rowHeight float64, scrollTop *int, maxScrollTop int, accum *float64) {
+	if wheelY == 0 || rowHeight <= 0 || maxScrollTop <= 0 {
+		return
+	}
+
+	*accum += wheelY * wheelScrollPxPerNotch
+	for *accum <= -rowHeight && *scrollTop < maxScrollTop {
+		*scrollTop++
+		*accum += rowHeight
+	}
+	for *accum >= rowHeight && *scrollTop > 0 {
+		*scrollTop--
+		*accum -= rowHeight
+	}
+	if *scrollTop == 0 && *accum > 0 || *scrollTop == maxScrollTop && *accum < 0 {
+		*accum = 0
+	}
+}
+
 func (d *dragScrollState) stepScrollTop(moveAmt, cardH float64, scrollTop *int, maxScrollTop int, accum *float64) {
 	if cardH <= 0 {
 		return
