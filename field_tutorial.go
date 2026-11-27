@@ -233,11 +233,11 @@ func (s *FieldScene) skillUpgradeTutorialBox(page int) *battleTutorialBox {
 		lvW := text.Advance(skillLvText(skillUpgradeTutorialMockLevel), lvFace)
 		leftArrowW := text.Advance(skillLvLeftArrow, lvFace)
 		rightArrowW := text.Advance(skillLvRightArrow, lvFace)
-		blockLeftX := battleSubPanelLevelBlockLeft(windowX)
+		blockLeftX, _ := battleSubPanelLevelPoint(windowX, windowY, 0)
 		leftX := blockLeftX
 		lvX := leftX + leftArrowW + battleSubLvGap
 		blockRightX := lvX + lvW + battleSubLvGap + rightArrowW
-		textY := windowY + battleSubLabelOffsetY
+		_, textY := battleSubPanelTextPoint(windowX, windowY, 0)
 		rowH := lvFace.Metrics().HAscent + lvFace.Metrics().HDescent
 
 		// drawBattleLevelSwitchMockup draws this panel through

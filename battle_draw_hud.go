@@ -425,16 +425,16 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 			textCol = uiColorDisabled
 		}
 
-		baseX := battleSubPanelTextLeft(windowX)
-		baseY := windowY + battleSubLabelOffsetY + float64(s.game.SkillDisplayRow(p, i))*battleSubRowHeight
+		row := s.game.SkillDisplayRow(p, i)
+		baseX, baseY := battleSubPanelTextPoint(windowX, windowY, row)
 		if selected {
 			arrowOp := &text.DrawOptions{}
-			arrowOp.GeoM.Translate(baseX, baseY)
+			arrowOp.GeoM.Translate(baseX-skillListArrowGap, baseY)
 			arrowOp.ColorScale.ScaleWithColor(arrowCol)
 			text.Draw(screen, "▶", skillListFace, arrowOp)
 		}
 		labelOp := &text.DrawOptions{}
-		labelOp.GeoM.Translate(baseX+skillListArrowGap, baseY)
+		labelOp.GeoM.Translate(baseX, baseY)
 		labelOp.ColorScale.ScaleWithColor(textCol)
 		text.Draw(screen, label, skillListFace, labelOp)
 
@@ -466,7 +466,8 @@ func (s *BattleScene) drawSkillSubMenu(screen *ebiten.Image) {
 		}
 
 		mpOp := &text.DrawOptions{}
-		mpOp.GeoM.Translate(battleSubPanelMPX(windowX), baseY)
+		mpX, _ := battleSubPanelMPPoint(windowX, windowY, row)
+		mpOp.GeoM.Translate(mpX, baseY)
 		mpOp.ColorScale.ScaleWithColor(textCol)
 		text.Draw(screen, costText, skillListFace, mpOp)
 	}

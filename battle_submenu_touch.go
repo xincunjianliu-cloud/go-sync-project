@@ -13,11 +13,13 @@ const (
 	battleSubCmdCenterX = 860.0
 	battleSubCmdCenterY = 440.0
 
-	battleSubTextLeftPad   = 4.0
-	battleSubLabelOffsetY  = 22.0
+	// パネル画像の左上を (0, 0) とした配置座標。
+	// スキル名・アイテム名・MP・Lvの位置はこの値だけで調整できる。
+	battleSubTextLocalX    = 7.0
+	battleSubLabelLocalY   = 22.0
 	battleSubRowHeight     = 35.0
-	battleSubMPLeftPad     = 160.0
-	battleSubLevelLeftPad  = 117.0
+	battleSubMPLocalX      = 157.0
+	battleSubLevelLocalX   = 115.0
 	battleSubLvGap         = 2.0
 	battleSubLvHitPadX     = 5.0
 	battleSubSkillFontSize = 18.0
@@ -36,16 +38,19 @@ func skillLvText(lv int) string {
 	return fmt.Sprintf("Lv%d", lv)
 }
 
-func battleSubPanelTextLeft(windowX float64) float64 {
-	return windowX + battleSubTextLeftPad
+func battleSubPanelTextPoint(windowX, windowY float64, row int) (x, y float64) {
+	return windowX + battleSubTextLocalX,
+		windowY + battleSubLabelLocalY + float64(row)*battleSubRowHeight
 }
 
-func battleSubPanelMPX(windowX float64) float64 {
-	return windowX + battleSubMPLeftPad
+func battleSubPanelMPPoint(windowX, windowY float64, row int) (x, y float64) {
+	_, textY := battleSubPanelTextPoint(windowX, windowY, row)
+	return windowX + battleSubMPLocalX, textY
 }
 
-func battleSubPanelLevelBlockLeft(windowX float64) float64 {
-	return windowX + battleSubLevelLeftPad
+func battleSubPanelLevelPoint(windowX, windowY float64, row int) (x, y float64) {
+	_, textY := battleSubPanelTextPoint(windowX, windowY, row)
+	return windowX + battleSubLevelLocalX, textY
 }
 
 // battleSkillPanelPivot is the point drawSkillSubMenuEnlarged scales the panel
@@ -89,7 +94,7 @@ func (s *BattleScene) isTapOutsideBattleSubPanel() bool {
 
 func (s *BattleScene) battleSubRowRect(row int) tapRect {
 	windowX, windowY, windowW, _ := s.battleSubPanelOrigin()
-	y := windowY + battleSubLabelOffsetY + float64(row)*battleSubRowHeight
+	_, y := battleSubPanelTextPoint(windowX, windowY, row)
 	return tapRect{
 		x: windowX,
 		y: y - battleSubRowHeight/2,
@@ -122,19 +127,19 @@ func (s *BattleScene) battleItemVisibleRange(itemCount int) (start, end int) {
 }
 
 func visibleBattleItemRowCount(itemCount int, panelTop, panelBottom float64) int {
-	visibleRows := max(1, int((panelBottom-panelTop-battleSubLabelOffsetY-battleSubRowHeight/2)/battleSubRowHeight)+1)
+	visibleRows := max(1, int((panelBottom-panelTop-battleSubLabelLocalY-battleSubRowHeight/2)/battleSubRowHeight)+1)
 	return min(visibleRows, itemCount)
 }
 
 func (s *BattleScene) skillLevelArrowRects(row, lv int, face text.Face) (leftRect, rightRect tapRect, leftX, lvX, rightX, textY float64) {
 	windowX, windowY, _, _ := s.battleSubPanelOrigin()
-	textY = windowY + battleSubLabelOffsetY + float64(row)*battleSubRowHeight
+	_, textY = battleSubPanelTextPoint(windowX, windowY, row)
 
 	lvW := text.Advance(skillLvText(lv), face)
 	leftArrowW := text.Advance(skillLvLeftArrow, face)
 	rightArrowW := text.Advance(skillLvRightArrow, face)
 
-	blockLeftX := battleSubPanelLevelBlockLeft(windowX)
+	blockLeftX, _ := battleSubPanelLevelPoint(windowX, windowY, row)
 	leftX = blockLeftX
 	lvX = leftX + leftArrowW + battleSubLvGap
 	rightX = lvX + lvW + battleSubLvGap

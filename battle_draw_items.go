@@ -45,21 +45,22 @@ func (s *BattleScene) drawItemSubMenu(screen *ebiten.Image) {
 		}
 
 		itemFace := s.game.FontFace(18)
-		baseX := battleSubPanelTextLeft(windowX)
-		baseY := windowY + battleSubLabelOffsetY + float64(i-firstVisible)*battleSubRowHeight
+		row := i - firstVisible
+		baseX, baseY := battleSubPanelTextPoint(windowX, windowY, row)
 		if selected {
 			arrowOp := &text.DrawOptions{}
-			arrowOp.GeoM.Translate(baseX, baseY)
+			arrowOp.GeoM.Translate(baseX-text.Advance("▶ ", itemFace), baseY)
 			arrowOp.ColorScale.ScaleWithColor(labelCol)
 			text.Draw(screen, "▶", itemFace, arrowOp)
 		}
 		op := &text.DrawOptions{}
-		op.GeoM.Translate(baseX+text.Advance("▶ ", itemFace), baseY)
+		op.GeoM.Translate(baseX, baseY)
 		op.ColorScale.ScaleWithColor(labelCol)
 		text.Draw(screen, def.Name, itemFace, op)
 
 		countOp := &text.DrawOptions{}
-		countOp.GeoM.Translate(battleSubPanelMPX(windowX), baseY)
+		countX, _ := battleSubPanelMPPoint(windowX, windowY, row)
+		countOp.GeoM.Translate(countX, baseY)
 		countOp.ColorScale.ScaleWithColor(labelCol)
 		text.Draw(screen, fmt.Sprintf("x%d", slot.Count), itemFace, countOp)
 	}
