@@ -8,7 +8,7 @@
         },
         {
           "speaker": "",
-          "text": "うわなつかしいな"
+          "text": "久しぶりに入ったその校舎は酷く古びていて、だけどどこか懐かしさを感じさせてくれた"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -16,7 +16,7 @@
         },
         {
           "speaker": "",
-          "text": "だいぶ荒れてるけど本当に妖怪が出たりしてな"
+          "text": "校舎に入った僕たちは"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -24,7 +24,7 @@
         },
         {
           "speaker": "",
-          "text": "ははっ"
+          "text": "まずはどこから行く？"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -32,7 +32,7 @@
         },
         {
           "speaker": "",
-          "text": "まずどこいく？"
+          "text": "やっぱりまずは七不思議といえばのトイレの花子さんでしょ"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -40,7 +40,7 @@
         },
         {
           "speaker": "",
-          "text": "まずは学校の七不思議といえばの場所3階の女子トイレに行きましょう"
+          "text": "七不思議その1"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -48,7 +48,7 @@
         },
         {
           "speaker": "",
-          "text": "当時からトイレの花子さんの噂は流行ってたし"
+          "text": "3階の女子トイレの手前から3番目の個室を3回ノックし、花子さんと呼ぶと、赤い釣りスカートのおかっぱの少女が扉から出てくる"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -56,7 +56,7 @@
         },
         {
           "speaker": "",
-          "text": "行こう！"
+          "text": "3階に行きます"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -64,7 +64,7 @@
         },
         {
           "speaker": "",
-          "text": "今更だけど俺らって女子トイレ入っていいの？"
+          "text": "ついたわね"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -72,7 +72,7 @@
         },
         {
           "speaker": "",
-          "text": "マジで今更何を言ってんだよ"
+          "text": "まあ学校の隅っこにあるから使ったことはほぼないけどね"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -80,7 +80,7 @@
         },
         {
           "speaker": "",
-          "text": "トイレの花子さんの噂を試す"
+          "text": "じゃあさっそく実践してみようぜ"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -88,7 +88,7 @@
         },
         {
           "speaker": "",
-          "text": "やっぱり何も起きないね"
+          "text": "3階ノックすればいいんだよね？"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -96,7 +96,7 @@
         },
         {
           "speaker": "",
-          "text": "そりゃそうだろ"
+          "text": "そう言って扉をノックするが、もちろん何が起こることもない"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -104,7 +104,7 @@
         },
         {
           "speaker": "",
-          "text": "でもトイレといえば鏡の噂もあったよね"
+          "text": "なんかこいよ"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -112,7 +112,7 @@
         },
         {
           "speaker": "",
-          "text": "鏡に向かって祈りを捧げると、鏡の向こうに引き込まれるってやつ？"
+          "text": "なあこんなことやってて虚しくならないか？"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -120,7 +120,7 @@
         },
         {
           "speaker": "",
-          "text": "そうそう"
+          "text": "まあいいじゃん"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -128,7 +128,7 @@
         },
         {
           "speaker": "",
-          "text": "やってみろよ主人公"
+          "text": "とりあえず次の場所に行かない？"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -136,7 +136,7 @@
         },
         {
           "speaker": "",
-          "text": "はいはい"
+          "text": "次は踊り場の鏡に行かない？"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -144,7 +144,7 @@
         },
         {
           "speaker": "",
-          "text": "僕は鏡に向かって祈りを捧げる"
+          "text": "七不思議その2"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -152,7 +152,7 @@
         },
         {
           "speaker": "",
-          "text": "これでいいのか？"
+          "text": "階段の踊り場にある鏡に向かって、祈りを捧げると、怪異の世界に行くことができる"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -160,7 +160,47 @@
         },
         {
           "speaker": "",
-          "text": "その瞬間、空気が変わるのがわかった"
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": ""
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "階段の踊り場に着くとそこには古びてくもったガラスがあった"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "次はお前がやれよ"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "渋々僕は鏡に向かって祈りを捧げる"
+        },
+        {
+          "speaker": "SYSTEM_COMMAND",
+          "text": "STOP_BGM"
+        },
+        {
+          "speaker": "",
+          "text": "その瞬間、空気が変わった"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -176,7 +216,7 @@
         },
         {
           "speaker": "",
-          "text": "それとほぼ同時に後ろの女子トイレのドアが開く音がした"
+          "text": "これって…"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -184,7 +224,7 @@
         },
         {
           "speaker": "",
-          "text": "その中から小学生くらいの女の子が出てきた"
+          "text": "全員が状況を飲み込めず唖然としていると、階段の下から「ズルズル」と何かを引きずるような足音が聞こえてきた。"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -192,7 +232,7 @@
         },
         {
           "speaker": "",
-          "text": "あなた達が私を呼んだの？"
+          "text": "誰かいるの？"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -200,7 +240,7 @@
         },
         {
           "speaker": "",
-          "text": "……"
+          "text": "そうして僕たちの前に姿を現したそいつは化け物だった"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -208,7 +248,7 @@
         },
         {
           "speaker": "",
-          "text": "全員が状況をのみ込めずにいた"
+          "text": "化け物なんてひどく幼い表現だけどそれ以外に表す言葉がなかった"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -216,7 +256,7 @@
         },
         {
           "speaker": "",
-          "text": "あなたが花子さん？"
+          "text": "そいつはうめき声を上げて僕らめがけて突っ込んできた"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -224,7 +264,7 @@
         },
         {
           "speaker": "",
-          "text": "そうだよお姉ちゃん"
+          "text": "逃げるぞ！"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -232,7 +272,7 @@
         },
         {
           "speaker": "",
-          "text": "お姉ちゃん達の体を私にくれない？"
+          "text": "そうして僕たちは全力で階段を駆け上がった"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -240,7 +280,7 @@
         },
         {
           "speaker": "",
-          "text": ""
+          "text": "ドンッ！スタッ"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -248,7 +288,7 @@
         },
         {
           "speaker": "",
-          "text": ""
+          "text": "その音に反応して振り向くといろはが階段に足を引っ掛けて転んでいた"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -256,7 +296,7 @@
         },
         {
           "speaker": "",
-          "text": ""
+          "text": "このままじゃ間に合わない"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -264,7 +304,7 @@
         },
         {
           "speaker": "",
-          "text": ""
+          "text": "逃げることができないなら応戦するしかない"
         },
         {
           "speaker": "SYSTEM_COMMAND",
@@ -272,47 +312,7 @@
         },
         {
           "speaker": "",
-          "text": ""
-        },
-        {
-          "speaker": "SYSTEM_COMMAND",
-          "text": "STOP_BGM"
-        },
-        {
-          "speaker": "",
-          "text": ""
-        },
-        {
-          "speaker": "SYSTEM_COMMAND",
-          "text": "STOP_BGM"
-        },
-        {
-          "speaker": "",
-          "text": ""
-        },
-        {
-          "speaker": "SYSTEM_COMMAND",
-          "text": "STOP_BGM"
-        },
-        {
-          "speaker": "",
-          "text": ""
-        },
-        {
-          "speaker": "SYSTEM_COMMAND",
-          "text": "STOP_BGM"
-        },
-        {
-          "speaker": "",
-          "text": ""
-        },
-        {
-          "speaker": "SYSTEM_COMMAND",
-          "text": "STOP_BGM"
-        },
-        {
-          "speaker": "",
-          "text": ""
+          "text": "そう覚悟を決めて僕らはその化け物に立ち向かった"
         }
       ]
     }
